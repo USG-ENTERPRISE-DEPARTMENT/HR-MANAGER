@@ -7,7 +7,7 @@ const { tmsg }      = require('../helpers/messageStore');
 const { toBigInt, s, safeAlter } = require('../helpers/controllerHelpers');
 const { logActivity, fromReq }   = require('./auditController');
 
-// ── Schema patches (no-ops once applied) ──────────────────────────────────────
+// ─ Schema patches (no-ops once applied) ──────────────────────────────────────
 safeAlter(`ALTER TABLE attendance ADD COLUMN source_in VARCHAR(20) NULL`);
 safeAlter(`ALTER TABLE attendance ADD COLUMN source_out VARCHAR(20) NULL`);
 safeAlter(`ALTER TABLE attendance ADD COLUMN device_id VARCHAR(50) NULL`);

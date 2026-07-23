@@ -13,6 +13,8 @@ function dayAfter(value) {
   return d;
 }
 
+
+
 // ── Log helper (fire-and-forget, safe to call without await) ──────────────────
 async function logActivity({ module, action, entityId = null, entityName = null, userId = null, userName = null, ip = null, details = null } = {}) {
   try {

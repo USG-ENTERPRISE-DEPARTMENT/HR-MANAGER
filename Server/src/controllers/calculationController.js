@@ -12,7 +12,7 @@ function toDecimalString(val) {
   return Number.isFinite(n) ? n.toFixed(4) : null;
 }
 
-// Tagged-template query helpers — portable (Prisma emits the right placeholders per provider).
+// Tagged-template query helpers — portable (Prisma emits the right's placeholders per provider).
 // Call as query`SELECT ... ${value}` (values become bound parameters).
 async function query(strings, ...values) {
   return serialize(await prisma.$queryRaw(strings, ...values));
