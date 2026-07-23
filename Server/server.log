@@ -1,0 +1,155 @@
+prisma:query CREATE TABLE IF NOT EXISTS calculationgroups (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      details TEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrollruns (
+        id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+        name            VARCHAR(200) NOT NULL,
+        pay_frequency   INT NULL,
+        date_start      DATE NULL,
+        date_end        DATE NULL,
+        deduction_group BIGINT NULL,
+        status          ENUM('Draft','Processing','Completed') DEFAULT 'Draft',
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrolldata (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        payroll      BIGINT NOT NULL,
+        employee     BIGINT NOT NULL,
+        payroll_item INT NOT NULL,
+        amount       VARCHAR(25) NULL
+      )
+    
+prisma:query CREATE TABLE IF NOT EXISTS savedcalculations (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      target_type VARCHAR(20) NOT NULL DEFAULT 'component',
+      target_id BIGINT NULL,
+      target_name VARCHAR(200) NULL,
+      calculation_group_id BIGINT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+[payrollRunController] Tables ready
+prisma:query CREATE TABLE IF NOT EXISTS calculationprocessitems (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      saved_calculation_id BIGINT NOT NULL,
+      lower_limit_condition VARCHAR(50) NOT NULL DEFAULT 'NO_LOWER_LIMIT',
+      lower_limit DECIMAL(18,4) NULL,
+      upper_limit_condition VARCHAR(50) NOT NULL DEFAULT 'NO_UPPER_LIMIT',
+      upper_limit DECIMAL(18,4) NULL,
+      value VARCHAR(200) NOT NULL DEFAULT '0',
+      sort_order INT DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query ALTER TABLE `paygrades` MODIFY COLUMN `currency` VARCHAR(50) NOT NULL DEFAULT ''
+prisma:query ALTER TABLE calculationprocessitems MODIFY COLUMN value VARCHAR(200) NOT NULL DEFAULT '0'
+prisma:query ALTER TABLE payrollemployees MODIFY COLUMN currency VARCHAR(20) NULL
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN pay_frequency INT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'pay_frequency'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN calculation_rule INT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'calculation_rule'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN visible TINYINT(1) NOT NULL DEFAULT 1
+prisma:query CREATE TABLE IF NOT EXISTS payfrequencies (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description VARCHAR(200) NULL,
+      sort_order INT NOT NULL DEFAULT 99,
+      is_active TINYINT(1) NOT NULL DEFAULT 1
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query SELECT COUNT(*) AS cnt FROM payfrequencies
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrollruns (
+        id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+        name            VARCHAR(200) NOT NULL,
+        pay_frequency   INT NULL,
+        date_start      DATE NULL,
+        date_end        DATE NULL,
+        deduction_group BIGINT NULL,
+        status          ENUM('Draft','Processing','Completed') DEFAULT 'Draft',
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    
+prisma:query ALTER TABLE `paygrades` MODIFY COLUMN `currency` VARCHAR(50) NOT NULL DEFAULT ''
+prisma:query CREATE TABLE IF NOT EXISTS calculationgroups (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      details TEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrolldata (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        payroll      BIGINT NOT NULL,
+        employee     BIGINT NOT NULL,
+        payroll_item INT NOT NULL,
+        amount       VARCHAR(25) NULL
+      )
+    
+prisma:query CREATE TABLE IF NOT EXISTS savedcalculations (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      target_type VARCHAR(20) NOT NULL DEFAULT 'component',
+      target_id BIGINT NULL,
+      target_name VARCHAR(200) NULL,
+      calculation_group_id BIGINT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+[payrollRunController] Tables ready
+prisma:query CREATE TABLE IF NOT EXISTS calculationprocessitems (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      saved_calculation_id BIGINT NOT NULL,
+      lower_limit_condition VARCHAR(50) NOT NULL DEFAULT 'NO_LOWER_LIMIT',
+      lower_limit DECIMAL(18,4) NULL,
+      upper_limit_condition VARCHAR(50) NOT NULL DEFAULT 'NO_UPPER_LIMIT',
+      upper_limit DECIMAL(18,4) NULL,
+      value VARCHAR(200) NOT NULL DEFAULT '0',
+      sort_order INT DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query ALTER TABLE calculationprocessitems MODIFY COLUMN value VARCHAR(200) NOT NULL DEFAULT '0'
+prisma:query ALTER TABLE payrollemployees MODIFY COLUMN currency VARCHAR(20) NULL
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN pay_frequency INT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'pay_frequency'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN calculation_rule INT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'calculation_rule'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN visible TINYINT(1) NOT NULL DEFAULT 1
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'visible'`
+prisma:query CREATE TABLE IF NOT EXISTS payfrequencies (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description VARCHAR(200) NULL,
+      sort_order INT NOT NULL DEFAULT 99,
+      is_active TINYINT(1) NOT NULL DEFAULT 1
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query SELECT COUNT(*) AS cnt FROM payfrequencies

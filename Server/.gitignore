@@ -1,0 +1,5 @@
+/node_modules
+
+# Uploaded documents (runtime user uploads) — ignore contents, keep the folder
+/uploads/documents/*
+!/uploads/documents/.gitkeep

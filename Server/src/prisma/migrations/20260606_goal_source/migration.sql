@@ -1,0 +1,2 @@
+ALTER TABLE performance_goal
+  ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'hr';

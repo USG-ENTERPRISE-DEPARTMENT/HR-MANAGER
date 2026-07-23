@@ -1,0 +1,4035 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id                         BigInt    @id @default(autoincrement())
+  username                   String?   @db.VarChar(100)
+  password                   String?   @db.VarChar(100)
+  employee                   BigInt?
+  last_login                 DateTime? @db.DateTime(0)
+  last_update                DateTime? @db.DateTime(0)
+  created                    DateTime? @db.DateTime(0)
+  wrong_password_count       Int?      @default(0)
+  last_wrong_attempt_at      DateTime? @db.DateTime(0)
+  last_password_requested_at DateTime? @db.DateTime(0)
+  employeeId                 BigInt?
+  posted_by                  BigInt?
+  status                     String    @default("1") @db.Char(1)
+  theme                      String?   @db.VarChar(10)
+}
+
+model employee {
+  id                  BigInt    @id @default(autoincrement())
+  firstName           String    @default("") @db.VarChar(100)
+  lastName            String    @default("") @db.VarChar(100)
+  email               String    @unique @db.VarChar(100)
+  phone               String?   @db.VarChar(20)
+  status              String    @default("1") @db.Char(1)
+  actionReason        String?   @db.VarChar(500)
+  address1            String?   @db.VarChar(255)
+  approvalStatus      String    @default("PENDING") @db.VarChar(20)
+  branchId            BigInt?
+  city                String?   @db.VarChar(100)
+  confirmationDate    DateTime? @db.Date
+  country             String?   @db.VarChar(100)
+  createdAt           DateTime  @default(now())
+  dateOfBirth         DateTime? @db.Date
+  departmentId        BigInt?
+  employee_id         String?   @unique @db.VarChar(20)
+  employmentStatusId  Int?
+  genderId            Int?
+  hireDate            DateTime? @db.Date
+  jobTitleId          Int?
+  lifecycleStatus     String    @default("PENDING") @db.VarChar(20)
+  middleName          String?   @db.VarChar(100)
+  mobilePhone         String?   @db.VarChar(30)
+  nationalityId       Int?
+  outletId            BigInt?
+  religionId          Int?
+  supervisorId        BigInt?
+  titleId             Int?
+  unitId              BigInt?
+  updatedAt           DateTime  @default(now()) @updatedAt
+  bankAccount         String?   @db.VarChar(50)
+  driverLicenseExp    DateTime? @db.Date
+  driverLicenseNum    String?   @db.VarChar(30)
+  nationalIdExpiry    DateTime? @db.Date
+  nationalIdNumber    String?   @db.VarChar(50)
+  passportExpiry      DateTime? @db.Date
+  passportNumber      String?   @db.VarChar(30)
+  approved_by         BigInt?
+  approved_date       DateTime? @db.Date
+  father_name         String?   @db.VarChar(50)
+  fit_and_proper      String?   @db.VarChar(150)
+  marital_status      String?   @db.VarChar(20)
+  medicalClearance    String?   @db.VarChar(150)
+  mother_name         String?   @db.VarChar(50)
+  notcheId            BigInt?
+  nxt_kin_address     String?   @db.VarChar(255)
+  nxt_kin_email       String?   @db.VarChar(100)
+  nxt_kin_fname       String?   @db.VarChar(100)
+  nxt_kin_phone       String?   @db.VarChar(20)
+  paygradeId          BigInt?
+  personal_email      String?   @unique @db.VarChar(100)
+  place_of_birth      String?   @db.VarChar(50)
+  policeClearance     String?   @db.VarChar(150)
+  posted_by           BigInt?
+  profile_imagebase64 String?   @db.LongText
+  retirement_date     DateTime? @db.Date
+  spouse_name         String?   @db.VarChar(100)
+  ssn_num             String?   @db.VarChar(20)
+  staff_level         Int?
+  staff_role          Int?
+  termination_date         DateTime? @db.Date
+  work_email               String?   @unique @db.VarChar(100)
+  sync_status              String?   @db.VarChar(20)
+  sync_error               String?   @db.VarChar(500)
+  pending_lifecycle_action String?   @db.VarChar(20)
+  resignation_letter       String?   @db.VarChar(150)
+  rmRoType                 String?   @db.VarChar(2)
+}
+
+// Performance Codes (positions/seats). Self-referential hierarchy via reportsToId;
+// `code` is a server-generated 6-digit path (see pcCodeHelper.nextChildCode).
+model pccodes {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @unique @db.VarChar(12)
+  name        String   @db.VarChar(150)
+  reportsToId BigInt?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@map("pccodes")
+}
+
+// Staff <-> PC code occupancy. Open row (endDate NULL) = current holder; one holder per code.
+model pccodeassignments {
+  id         BigInt    @id @default(autoincrement())
+  pcCodeId   BigInt
+  employeeId BigInt
+  startDate  DateTime  @default(now()) @db.Date
+  endDate    DateTime? @db.Date
+  createdAt  DateTime  @default(now())
+
+  @@index([pcCodeId])
+  @@index([employeeId])
+  @@map("pccodeassignments")
+}
+
+model refresh_tokens {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  token      String   @db.VarChar(500)
+  expires_at DateTime
+  revoked    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@index([token], map: "idx_refresh_tokens_token")
+}
+
+model permissions {
+  id                    BigInt                  @id @default(autoincrement())
+  created_at            DateTime                @default(now())
+  guard_name            String                  @db.VarChar(255)
+  name                  String                  @db.VarChar(255)
+  updated_at            DateTime                @updatedAt
+  model_has_permissions model_has_permissions[]
+  role_has_permissions  role_has_permissions[]
+
+  @@unique([name, guard_name], map: "permissions_name_guard_name_unique")
+}
+
+model roles {
+  id                   BigInt                 @id @default(autoincrement())
+  name                 String                 @db.VarChar(255)
+  guard_name           String                 @db.VarChar(255)
+  description          String?                @db.VarChar(255)
+  is_system            Boolean                @default(false)
+  status               String                 @default("1") @db.Char(1)
+  created_at           DateTime               @default(now())
+  updated_at           DateTime               @updatedAt
+  model_has_roles      model_has_roles[]
+  role_has_permissions role_has_permissions[]
+
+  @@unique([name, guard_name], map: "roles_name_guard_name_unique")
+}
+
+model role_has_permissions {
+  permission_id BigInt
+  role_id       BigInt
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "role_has_permissions_permission_id_foreign")
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "role_has_permissions_role_id_foreign")
+
+  @@id([permission_id, role_id])
+  @@index([role_id], map: "role_has_permissions_role_id_fk")
+}
+
+model model_has_permissions {
+  permission_id BigInt
+  model_type    String      @db.VarChar(255)
+  model_id      String
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "model_has_permissions_permission_id_foreign")
+
+  @@id([permission_id, model_id, model_type])
+  @@index([model_id, model_type], map: "model_has_permissions_model_id_model_type_index")
+}
+
+model model_has_roles {
+  role_id    BigInt
+  model_type String @db.VarChar(255)
+  model_id   String
+  roles      roles  @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "model_has_roles_role_id_foreign")
+
+  @@id([role_id, model_id, model_type])
+  @@index([model_id, model_type], map: "model_has_roles_model_id_model_type_index")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model annualrent {
+  id   BigInt
+  name String? @db.VarChar(20)
+
+  @@ignore
+}
+
+model applications {
+  id              BigInt    @id @default(autoincrement())
+  job             BigInt
+  candidate       BigInt?
+  created         DateTime? @db.DateTime(0)
+  referredByEmail String?   @db.VarChar(200)
+  notes           String?   @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model archivedemployees {
+  id                BigInt
+  ref_id            BigInt
+  employee_id       String?   @db.VarChar(50)
+  first_name        String    @default("") @db.VarChar(100)
+  last_name         String    @default("") @db.VarChar(100)
+  gender            String?   @db.VarChar(15)
+  ssn_num           String?   @default("") @db.VarChar(100)
+  nic_num           String?   @default("") @db.VarChar(100)
+  other_id          String?   @default("") @db.VarChar(100)
+  work_email        String?   @db.VarChar(100)
+  joined_date       DateTime? @db.DateTime(0)
+  confirmation_date DateTime? @db.DateTime(0)
+  supervisor        BigInt?
+  department        BigInt?
+  termination_date  DateTime? @db.DateTime(0)
+  notes             String?   @db.Text
+  data              String?   @db.LongText
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model assettypes {
+  id          BigInt
+  name        String    @db.VarChar(35)
+  description String?   @db.Text
+  attachment  String?   @db.VarChar(100)
+  created     DateTime? @db.DateTime(0)
+  updated     DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+model attendance {
+  id               BigInt    @id @default(autoincrement())
+  employee         BigInt
+  department       String    @db.VarChar(100)
+  isInvalid        Int?
+  iAttState        Int?
+  iVerifyMethod    Int?
+  date             DateTime? @db.Date
+  time             DateTime? @db.Time(0)
+  time_stamp       DateTime  @default(now()) @db.Timestamp(0)
+  in_time          DateTime? @db.DateTime(0)
+  out_time         DateTime? @db.DateTime(0)
+  note             String?   @db.VarChar(500)
+  image_in         String?   @db.LongText
+  image_out        String?   @db.LongText
+  map_lat          Decimal?  @db.Decimal(10, 8)
+  map_lng          Decimal?  @db.Decimal(10, 8)
+  map_snapshot     String?   @db.LongText
+  map_out_lat      Decimal?  @db.Decimal(10, 8)
+  map_out_lng      Decimal?  @db.Decimal(10, 8)
+  map_out_snapshot String?   @db.LongText
+  in_ip            String?   @db.VarChar(25)
+  out_ip           String?   @db.VarChar(25)
+  source_in           String?   @db.VarChar(20)
+  source_out          String?   @db.VarChar(20)
+  device_id           String?   @db.VarChar(50)
+  day_status          String?   @db.VarChar(20)
+  worked_minutes      Int?
+  late_minutes        Int?
+  early_leave_minutes Int?
+  overtime_minutes    Int?
+  edited_by           BigInt?
+  edited_at           DateTime? @db.DateTime(0)
+  edit_note           String?   @db.VarChar(500)
+  map_accuracy        Int?
+  map_out_accuracy    Int?
+
+  @@index([employee, date], map: "idx_att_emp_date")
+}
+
+model attendance_punches {
+  id           BigInt    @id @default(autoincrement())
+  employee     BigInt
+  punch_time   DateTime  @db.DateTime(0)
+  direction    String?   @db.VarChar(10)
+  source       String    @db.VarChar(20)
+  device_id    String?   @db.VarChar(50)
+  lat          Decimal?  @db.Decimal(10, 8)
+  lng          Decimal?  @db.Decimal(11, 8)
+  accuracy     Int?
+  ip           String?   @db.VarChar(45)
+  photo        String?   @db.LongText
+  import_batch BigInt?
+  created_by   BigInt?
+  created_at   DateTime  @default(now()) @db.Timestamp(0)
+  dedup_key    String?   @unique(map: "uq_punch_dedup") @db.VarChar(80)
+
+  @@index([employee, punch_time], map: "idx_punch_emp_time")
+}
+
+model attendance_night_shift {
+  employee    BigInt   @id
+  assigned_by BigInt?
+  assigned_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model attendance_import_batches {
+  id          BigInt   @id @default(autoincrement())
+  file_name   String?  @db.VarChar(255)
+  source      String?  @default("csv") @db.VarChar(20)
+  device_id   String?  @db.VarChar(50)
+  total_rows  Int?     @default(0)
+  inserted    Int?     @default(0)
+  duplicates  Int?     @default(0)
+  failed      Int?     @default(0)
+  errors      String?  @db.Text
+  imported_by BigInt?
+  imported_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model auditlog {
+  id         BigInt    @id @default(autoincrement())
+  time       DateTime? @db.DateTime(0)
+  user       BigInt
+  ip         String?   @db.VarChar(100)
+  type       String    @db.VarChar(100)
+  employee   String?   @db.VarChar(300)
+  full_name  String?   @db.VarChar(50)
+  department String?   @db.VarChar(300)
+  details    String?   @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model benifits {
+  id   BigInt
+  name String @default("") @db.VarChar(250)
+
+  @@ignore
+}
+
+model calls {
+  id        BigInt    @id @default(autoincrement())
+  job       BigInt
+  candidate BigInt?
+  phone     String?   @db.VarChar(20)
+  created   DateTime? @db.DateTime(0)
+  updated   DateTime? @db.DateTime(0)
+  status    String?   @db.VarChar(100)
+  notes     String?   @db.Text
+}
+
+model candidates {
+  id                      BigInt                     @id @default(autoincrement())
+  first_name              String                     @default("") @db.VarChar(100)
+  middle_name             String?                    @db.VarChar(50)
+  last_name               String                     @default("") @db.VarChar(100)
+  nationality             BigInt?
+  birthday                DateTime?                  @db.DateTime(0)
+  gender                  String?                    @db.VarChar(15)
+  marital_status          candidates_marital_status?
+  address1                String?                    @default("") @db.VarChar(100)
+  address2                String?                    @default("") @db.VarChar(100)
+  city                    String?                    @default("") @db.VarChar(150)
+  country                 String?                    @db.Char(2)
+  province                BigInt?
+  postal_code             String?                    @db.VarChar(20)
+  email                   String?                    @db.VarChar(200)
+  home_phone              String?                    @db.VarChar(50)
+  mobile_phone            String?                    @db.VarChar(50)
+  cv_title                String                     @default("") @db.VarChar(200)
+  cv                      String?                    @db.VarChar(150)
+  cvtext                  String?                    @db.Text
+  industry                String?                    @db.Text
+  profileImage            String?                    @db.VarChar(150)
+  head_line               String?                    @db.Text
+  objective               String?                    @db.Text
+  work_history            String?                    @db.Text
+  health_history          String?                    @db.Text
+  education               String?                    @db.Text
+  skills                  String?                    @db.Text
+  referees                String?                    @db.Text
+  linkedInUrl             String?                    @db.VarChar(500)
+  linkedInData            String?                    @db.Text
+  totalYearsOfExperience  Int?
+  totalMonthsOfExperience Int?
+  htmlCVData              String?                    @db.LongText
+  generatedCVFile         String?                    @db.VarChar(150)
+  created                 DateTime?                  @db.DateTime(0)
+  updated                 DateTime?                  @db.DateTime(0)
+  expectedSalary          Int?
+  preferedPositions       String?                    @db.Text
+  preferedJobtype         String?                    @db.VarChar(60)
+  preferedCountries       String?                    @db.Text
+  tags                    String?                    @db.Text
+  notes                   String?                    @db.Text
+  calls                   String?                    @db.Text
+  age                     Int?
+  hash                    String?                    @db.VarChar(100)
+  linkedInProfileLink     String?                    @db.VarChar(250)
+  linkedInProfileId       String?                    @db.VarChar(50)
+  facebookProfileLink     String?                    @db.VarChar(250)
+  facebookProfileId       String?                    @db.VarChar(50)
+  twitterProfileLink      String?                    @db.VarChar(250)
+  twitterProfileId        String?                    @db.VarChar(50)
+  googleProfileLink       String?                    @db.VarChar(250)
+  googleProfileId         String?                    @db.VarChar(50)
+  hiringStage             BigInt?
+  jobId                   BigInt?
+  source                  String?                    @db.VarChar(20)
+  emailSent               Int?                       @default(0)
+  rejection_reason        String?                    @db.VarChar(500)
+  offer_amount            Decimal?                   @db.Decimal(12, 2)
+  offer_date              DateTime?                  @db.Date
+  cv_file                 String?                    @db.VarChar(500)
+  hired_employee_id       BigInt?
+}
+
+model certifications {
+  id          BigInt  @id @default(autoincrement())
+  name        String? @db.VarChar(100)
+  description String? @db.VarChar(400)
+}
+
+model clients {
+  id                 BigInt          @id @default(autoincrement())
+  name               String          @db.VarChar(100)
+  details            String?         @db.Text
+  first_contact_date DateTime?       @db.Date
+  created            DateTime?       @db.DateTime(0)
+  address            String?         @db.Text
+  contact_number     String?         @db.VarChar(25)
+  contact_email      String?         @db.VarChar(100)
+  company_url        String?         @db.VarChar(500)
+  status             clients_status? @default(Active)
+  code               String?         @db.VarChar(20)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model companyassets {
+  id          BigInt
+  code        String    @db.VarChar(30)
+  type        BigInt?
+  attachment  String?   @db.VarChar(100)
+  employee    BigInt?
+  department  BigInt?
+  description String?   @db.Text
+  created     DateTime? @db.DateTime(0)
+  updated     DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+model companydocuments {
+  id                BigInt                             @id @default(autoincrement())
+  name              String                             @db.VarChar(100)
+  details           String?                            @db.Text
+  valid_until       DateTime?                          @db.Date
+  status            companydocuments_status?           @default(Active)
+  notify_employees  companydocuments_notify_employees? @default(Yes)
+  attachment        String?                            @db.VarChar(100)
+  share_departments String?                            @db.VarChar(100)
+  share_employees   String?                            @db.VarChar(100)
+  share_userlevel   String?                            @db.VarChar(100)
+}
+
+model companyloans {
+  id      BigInt  @id @default(autoincrement())
+  name    String  @db.VarChar(100)
+  details String? @db.Text
+}
+
+model companystructures {
+  id              BigInt                  @id @default(autoincrement())
+  title           String                  @db.TinyText
+  comp_code       String?                 @unique(map: "comp_code") @db.VarChar(20)
+  description     String                  @db.VarChar(100)
+  address         String?                 @db.Text
+  type            companystructures_type?
+  country         String                  @default("0") @db.VarChar(2)
+  parent2         BigInt?
+  parent          String?                 @db.VarChar(20)
+  timezone        String                  @default("Europe/London") @db.VarChar(100)
+  comp_reg        String?                 @db.VarChar(50)
+  heads           String?                 @db.VarChar(255)
+  nassit          String?                 @db.VarChar(50)
+  tin             String?                 @db.VarChar(50)
+  ref             String?                 @db.VarChar(10)
+  posting_date    DateTime?               @default(now()) @db.Date
+  approval_status String?                 @db.VarChar(20)
+}
+
+model conversations {
+  id         BigInt    @id @default(autoincrement())
+  message    String    @db.LongText
+  type       String    @db.VarChar(35)
+  attachment String?   @db.VarChar(100)
+  employee   BigInt
+  target     BigInt?
+  created    DateTime? @db.DateTime(0)
+  updated    DateTime? @db.DateTime(0)
+  timeint    BigInt
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model conversationuserstatus {
+  id       BigInt
+  employee BigInt
+  status   String?   @db.VarChar(15)
+  seen_at  DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model country {
+  id      BigInt
+  code    String  @default("") @db.Char(2)
+  namecap String? @default("") @db.VarChar(80)
+  name    String  @default("") @db.VarChar(80)
+  iso3    String? @db.Char(3)
+  numcode Int?    @db.SmallInt
+
+  @@ignore
+}
+
+model courses {
+  id           BigInt               @id @default(autoincrement())
+  code         String               @db.VarChar(300)
+  name         String               @db.VarChar(300)
+  category     String?              @db.VarChar(50)
+  description  String?              @db.Text
+  coordinator  BigInt?
+  trainer      String?              @db.VarChar(300)
+  trainer_info String?              @db.Text
+  paymentType  courses_paymentType? @default(Company_Sponsored)
+  currency     String?              @db.VarChar(3)
+  cost         Decimal?             @default(0.00) @db.Decimal(12, 2)
+  status       courses_status?      @default(Active)
+  created      DateTime?            @db.DateTime(0)
+  updated      DateTime?            @db.DateTime(0)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model crons {
+  id        BigInt
+  name      String        @db.VarChar(100)
+  class     String        @db.VarChar(100)
+  lastrun   DateTime?     @db.DateTime(0)
+  frequency Int
+  time      String        @db.VarChar(50)
+  type      crons_type?   @default(Hourly)
+  status    crons_status? @default(Enabled)
+
+  @@ignore
+}
+
+model currencytypes {
+  id             BigInt   @id @default(autoincrement())
+  code           String   @default("") @db.VarChar(3)
+  name           String   @default("") @db.VarChar(70)
+  numeric_code   BigInt?
+  xcg_rate       Decimal? @default(0.00) @db.Decimal(20, 2)
+  imprest_gl     String?  @db.VarChar(50)
+  imprest_contra String?  @db.VarChar(50)
+  description    String?  @db.VarChar(50)
+}
+
+model customfields {
+  id               BigInt                @id @default(autoincrement())
+  type             String                @db.VarChar(20)
+  name             String                @db.VarChar(20)
+  data             String?               @db.Text
+  display          customfields_display? @default(Form)
+  created          DateTime?             @db.DateTime(0)
+  updated          DateTime?             @db.DateTime(0)
+  field_type       String?               @db.VarChar(20)
+  field_label      String?               @db.VarChar(50)
+  field_validation String?               @db.VarChar(50)
+  field_options    String?               @db.VarChar(500)
+  display_order    Int?                  @default(0)
+  display_section  String?               @db.VarChar(50)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model customfieldvalues {
+  id        BigInt
+  type      String    @db.VarChar(20)
+  name      String    @db.VarChar(60)
+  object_id String    @db.VarChar(60)
+  value     String?   @db.Text
+  updated   DateTime? @db.DateTime(0)
+  created   DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model dataentrybackups {
+  id        BigInt
+  tableType String? @db.VarChar(200)
+  data      String? @db.LongText
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model dataimport {
+  id         BigInt
+  name       String    @db.VarChar(60)
+  dataType   String    @db.VarChar(60)
+  details    String?   @db.Text
+  columns    String?   @db.Text
+  updated    DateTime? @db.DateTime(0)
+  created    DateTime? @db.DateTime(0)
+  objectType String?   @db.VarChar(60)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model dataimportfiles {
+  id                     BigInt
+  name                   String    @db.VarChar(60)
+  data_import_definition String    @db.VarChar(200)
+  status                 String?   @db.VarChar(15)
+  file                   String?   @db.VarChar(100)
+  details                String?   @db.Text
+  updated                DateTime? @db.DateTime(0)
+  created                DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+model deductiongroup {
+  id          BigInt @id @default(autoincrement())
+  name        String @db.VarChar(100)
+  description String @db.VarChar(100)
+}
+
+model deductions {
+  id              BigInt  @id @default(autoincrement())
+  name            String  @db.VarChar(100)
+  deduct_gl       String? @db.VarChar(50)
+  componentType   String? @db.VarChar(250)
+  component       String? @db.VarChar(250)
+  payrollColumn   Int?
+  rangeAmounts    String? @db.Text
+  deduction_group BigInt?
+}
+
+model documents {
+  id                        BigInt                               @id @default(autoincrement())
+  name                      String                               @db.VarChar(100)
+  details                   String?                              @db.Text
+  expire_notification       documents_expire_notification?       @default(Yes)
+  expire_notification_month documents_expire_notification_month? @default(Yes)
+  expire_notification_week  documents_expire_notification_week?  @default(Yes)
+  expire_notification_day   documents_expire_notification_day?   @default(Yes)
+  sign                      documents_sign?                      @default(Yes)
+  sign_label                String?                              @db.VarChar(500)
+  created                   DateTime?                            @db.DateTime(0)
+  updated                   DateTime?                            @db.DateTime(0)
+  share_with_employee       documents_share_with_employee?       @default(Yes)
+}
+
+model educationlevel {
+  id   BigInt @id @default(autoincrement())
+  name String @default("") @db.VarChar(250)
+}
+
+model educations {
+  id          BigInt  @id @default(autoincrement())
+  name        String? @db.VarChar(100)
+  description String? @db.VarChar(400)
+}
+
+model emails {
+  id       BigInt         @id @default(autoincrement())
+  subject  String         @db.VarChar(300)
+  toEmail  String         @db.VarChar(300)
+  template String?        @db.Text
+  params   String?        @db.Text
+  cclist   String?        @db.VarChar(500)
+  bcclist  String?        @db.VarChar(500)
+  error    String?        @db.VarChar(500)
+  created  DateTime?      @db.DateTime(0)
+  updated  DateTime?      @db.DateTime(0)
+  status   emails_status? @default(Pending)
+}
+
+model emergencycontacts {
+  id           BigInt  @id @default(autoincrement())
+  employee     BigInt
+  name         String  @db.VarChar(100)
+  relationship String? @db.VarChar(100)
+  home_phone   String? @db.VarChar(15)
+  work_phone   String? @db.VarChar(15)
+  mobile_phone String? @db.VarChar(15)
+}
+
+model employeeapprovals {
+  id       BigInt    @id @default(autoincrement())
+  type     String    @db.VarChar(100)
+  element  BigInt
+  approver BigInt?
+  level    Int?      @default(0)
+  status   Int?      @default(0)
+  active   Int?      @default(0)
+  created  DateTime? @db.DateTime(0)
+  updated  DateTime? @db.DateTime(0)
+}
+
+model employeeapprovalstages {
+  id             BigInt    @id @default(autoincrement())
+  employee_id    BigInt
+  request_type   String    @db.VarChar(40)
+  stage_order    Int
+  stage_name     String    @db.VarChar(100)
+  approver_type  String    @db.VarChar(20)
+  approver_id    String    @db.VarChar(100)
+  approver_label String?   @db.VarChar(150)
+  status         String    @default("Pending") @db.VarChar(20)
+  acted_by       BigInt?
+  acted_at       DateTime? @db.DateTime(0)
+  comment        String?   @db.VarChar(500)
+  created_at     DateTime  @default(now()) @db.DateTime(0)
+
+  @@index([employee_id, stage_order])
+  @@index([status])
+}
+
+model employeeattendancesheets {
+  id         BigInt                           @id @default(autoincrement())
+  employee   BigInt
+  date_start DateTime                         @db.Date
+  date_end   DateTime                         @db.Date
+  status     employeeattendancesheets_status? @default(Pending)
+}
+
+model employeecertifications {
+  id               BigInt    @id @default(autoincrement())
+  certification_id Int?
+  employee         BigInt
+  institute        String?   @db.VarChar(400)
+  date_start       DateTime? @db.Date
+  date_end         DateTime? @db.Date
+}
+
+model employeecompanyloans {
+  id                    BigInt                       @id @default(autoincrement())
+  employee              BigInt
+  loan                  BigInt?
+  start_date            DateTime                     @db.Date
+  last_installment_date DateTime                     @db.Date
+  period_months         BigInt?
+  currency              BigInt?
+  amount                Decimal                      @db.Decimal(10, 2)
+  monthly_installment   Decimal                      @db.Decimal(10, 2)
+  status                employeecompanyloans_status? @default(Approved)
+  details               String?                      @db.Text
+}
+
+model employeedatahistory {
+  id          BigInt    @id @default(autoincrement())
+  type        String    @db.VarChar(100)
+  employee    BigInt
+  field       String    @db.VarChar(100)
+  old_value   String?   @db.VarChar(500)
+  new_value   String?   @db.VarChar(500)
+  description String?   @db.VarChar(800)
+  user        BigInt?
+  updated     DateTime? @db.DateTime(0)
+  created     DateTime? @db.DateTime(0)
+}
+
+model employeedependents {
+  id             BigInt    @id @default(autoincrement())
+  employee       BigInt
+  name           String    @db.VarChar(100)
+  gender         String?   @db.Text
+  place_of_birth String?   @db.VarChar(30)
+  address        Int?
+  relationship   String?   @db.VarChar(100)
+  dob            DateTime? @db.Date
+  id_number      String?   @db.VarChar(25)
+}
+
+model employeedocuments {
+  id                       BigInt                        @id @default(autoincrement())
+  employee                 BigInt
+  document                 BigInt?
+  date_added               DateTime                      @db.Date
+  valid_until              DateTime?                     @db.Date
+  status                   employeedocuments_status?     @default(Active)
+  details                  String?                       @db.Text
+  attachment               String?                       @db.VarChar(100)
+  place_of_issue           String?                       @db.VarChar(50)
+  signature                String?                       @db.Text
+  expire_notification_last Int?
+  visible_to               employeedocuments_visible_to? @default(Owner)
+}
+
+model employeeeducations {
+  id           BigInt    @id @default(autoincrement())
+  education_id Int?
+  employee     BigInt
+  institute    String?   @db.VarChar(400)
+  date_start   DateTime? @db.Date
+  date_end     DateTime? @db.Date
+}
+
+model employeeethnicity {
+  id        BigInt @id @default(autoincrement())
+  employee  BigInt
+  ethnicity BigInt
+}
+
+model employeeexpenses {
+  id               BigInt                   @id @default(autoincrement())
+  employee         BigInt
+  expense_date     DateTime?                @db.Date
+  emp_acc_no       String?                  @db.VarChar(50)
+  cost_unit        String?                  @db.VarChar(50)
+  cost_dept        String?                  @db.VarChar(50)
+  branch           String?                  @db.VarChar(50)
+  business_purpose String?                  @db.VarChar(50)
+  description      String?                  @db.VarChar(100)
+  start_date       DateTime?                @db.Date
+  end_date         DateTime?                @db.Date
+  items            String?                  @db.VarChar(5000)
+  payment_method   BigInt?
+  ref_no           String                   @db.VarChar(50)
+  payee            String?                  @db.VarChar(500)
+  category         BigInt?
+  nontes           String?                  @db.Text
+  notes            String?                  @db.Text
+  amount           Decimal?                 @db.Decimal(10, 2)
+  currency         String?                  @default("GHS") @db.VarChar(20)
+  attachment1      String?                  @db.VarChar(100)
+  attachment2      String?                  @db.VarChar(100)
+  attachment3      String?                  @db.VarChar(100)
+  app_type         String                   @default("EXP") @db.VarChar(10)
+  created          DateTime?                @db.DateTime(0)
+  updated          DateTime?                @db.DateTime(0)
+  documentRef      String?                  @db.VarChar(50)
+  status                 employeeexpenses_status? @default(Pending)
+  submitted_by           BigInt?
+  supervisor_approved_by BigInt?
+  supervisor_approved_at DateTime?                @db.DateTime(0)
+  hr_approved_by         BigInt?
+  hr_approved_at         DateTime?                @db.DateTime(0)
+  rejection_reason       String?                  @db.Text
+  expense_gl             String?                  @db.VarChar(50)
+  contra_gl              String?                  @db.VarChar(50)
+}
+
+model employeeexperience {
+  id            BigInt   @id @default(autoincrement())
+  employee      BigInt
+  organisation  String   @db.VarChar(20)
+  date_start    DateTime @db.Date
+  date_end      DateTime @db.Date
+  position_held String   @db.VarChar(20)
+  salary        Int
+}
+
+model employeeforms {
+  id       BigInt                @id @default(autoincrement())
+  employee BigInt
+  form     BigInt
+  status   employeeforms_status? @default(Pending)
+  created  DateTime?             @db.DateTime(0)
+  updated  DateTime?             @db.DateTime(0)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeeimmigrations {
+  id           BigInt
+  employee     BigInt
+  document     BigInt?
+  documentname String                       @db.VarChar(150)
+  valid_until  DateTime                     @db.Date
+  status       employeeimmigrations_status? @default(Active)
+  details      String?                      @db.Text
+  attachment1  String?                      @db.VarChar(100)
+  attachment2  String?                      @db.VarChar(100)
+  attachment3  String?                      @db.VarChar(100)
+  created      DateTime?                    @db.DateTime(0)
+  updated      DateTime?                    @db.DateTime(0)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeeimmigrationstatus {
+  id       BigInt
+  employee BigInt
+  status   BigInt
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeeimprest {
+  id          BigInt
+  employee    BigInt
+  description String                 @db.VarChar(20)
+  currency    BigInt
+  funding     Decimal?               @default(0.00) @db.Decimal(10, 2)
+  attachment  String?                @db.VarChar(500)
+  status      employeeimprest_status
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeeimprestgl {
+  id                  BigInt
+  currency            String @db.VarChar(50)
+  imprest_acct        String @db.VarChar(50)
+  imprest_acct_contra String @db.VarChar(50)
+
+  @@ignore
+}
+
+model employeelanguages {
+  id            BigInt                           @id @default(autoincrement())
+  language_id   Int?
+  employee      BigInt
+  reading       employeelanguages_reading?
+  speaking      employeelanguages_speaking?
+  writing       employeelanguages_writing?
+  understanding employeelanguages_understanding?
+}
+
+model employeeleavedays {
+  id             BigInt                       @id @default(autoincrement())
+  employee_leave BigInt
+  leave_date     DateTime?                    @db.Date
+  leave_type     employeeleavedays_leave_type
+}
+
+model employeeleavelog {
+  id             BigInt                        @id @default(autoincrement())
+  employee_leave BigInt
+  user_id        BigInt?
+  data           String                        @db.VarChar(500)
+  status_from    employeeleavelog_status_from? @default(Pending)
+  status_to      employeeleavelog_status_to?   @default(Pending)
+  created        DateTime?                     @db.DateTime(0)
+}
+
+model employeeleaves {
+  id               BigInt    @id @default(autoincrement())
+  employee         BigInt
+  leave_type       BigInt
+  posted_date      DateTime  @default(now()) @db.Timestamp(0)
+  leave_period     BigInt
+  date_start       DateTime? @db.Date
+  date_end         DateTime? @db.Date
+  req_allowance    String?   @db.VarChar(20)
+  notice_date      DateTime  @db.Date
+  details          String?   @db.Text
+  position         String?   @db.VarChar(50)
+  emp_acc_no       String?   @db.VarChar(50)
+  allowance_rate   String?   @db.VarChar(10)
+  emp_notch        String?   @db.VarChar(10)
+  leave_gl         String?   @db.VarChar(50)
+  leave_name       String?   @db.VarChar(50)
+  department       String?   @db.VarChar(50)
+  status           String?   @default("Draft") @db.VarChar(50)
+  allowance_status String?   @db.VarChar(50)
+  amount           String?   @db.VarChar(30)
+  documentref      String?   @db.VarChar(20)
+  attachment       String?   @db.VarChar(100)
+  approval_level   Int?
+  submitted_by     BigInt?
+  approved_by      BigInt?
+  rejection_reason String?   @db.Text
+  leave_tax        String?   @db.VarChar(30)
+  api_response     String?   @db.Text
+  branch           String?   @db.VarChar(50)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeeovertime {
+  id         BigInt
+  employee   BigInt
+  start_time DateTime?                @db.DateTime(0)
+  end_time   DateTime?                @db.DateTime(0)
+  category   BigInt
+  project    BigInt?
+  notes      String?                  @db.Text
+  created    DateTime?                @db.DateTime(0)
+  updated    DateTime?                @db.DateTime(0)
+  status     employeeovertime_status? @default(Pending)
+
+  @@ignore
+}
+
+model employeeprojects {
+  id         BigInt                   @id @default(autoincrement())
+  employee   BigInt
+  project    BigInt?
+  date_start DateTime?                @db.Date
+  date_end   DateTime?                @db.Date
+  status     employeeprojects_status? @default(Current)
+  details    String?                  @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeereference {
+  id           BigInt
+  employee     Int
+  referee      String @db.VarChar(50)
+  designation  String @db.VarChar(50)
+  organisation String @db.VarChar(50)
+  address      String @db.VarChar(50)
+  period_known String @db.VarChar(50)
+  email        String @db.VarChar(50)
+  phone        Int
+
+  @@ignore
+}
+
+model employees {
+  id                       BigInt    @id @default(autoincrement())
+  employee_id              String?   @unique(map: "employee_id") @db.VarChar(50)
+  title                    String    @db.VarChar(50)
+  first_name               String    @db.VarChar(50)
+  middle_name              String?   @db.VarChar(50)
+  last_name                String    @db.VarChar(50)
+  nationality              String?   @db.VarChar(50)
+  religion                 String?   @db.VarChar(50)
+  birthday                 DateTime  @db.Date
+  profile_image            String?   @db.Text
+  signature                String?   @db.Text
+  place_of_birth           String?   @db.VarChar(50)
+  spouse_name              String?   @db.VarChar(50)
+  father_name              String?   @db.VarChar(50)
+  mother_name              String?   @db.VarChar(50)
+  retirement_date          DateTime? @db.Date
+  gender                   String?   @db.VarChar(50)
+  marital_status           String?   @db.VarChar(20)
+  nxt_kin_fname            String?   @db.VarChar(50)
+  nxt_kin_email            String?   @db.VarChar(30)
+  nxt_kin_address          String?   @db.VarChar(30)
+  nxt_kin_phone            String?   @db.VarChar(20)
+  bank_name                String?   @db.VarChar(50)
+  bank_acc_no              String?   @db.VarChar(20)
+  customerNumber           String?   @db.VarChar(20)
+  tin_no                   String?   @db.VarChar(20)
+  staff_level              String?   @db.VarChar(20)
+  staff_role               String?   @db.VarChar(20)
+  ssn_num                  String?   @db.VarChar(20)
+  nassit_num               String?   @db.VarChar(20)
+  nic_num                  String?   @db.VarChar(20)
+  nin_expiry_date          DateTime? @db.Date
+  nin_issue_date           DateTime? @db.Date
+  fit_and_proper           String?   @db.Text
+  policeClearance          String?   @db.Text
+  medicalClearance         String?   @db.Text
+  labour_card_num          String?   @db.VarChar(20)
+  other_id                 String?   @db.VarChar(20)
+  driving_license          String?   @db.VarChar(20)
+  driving_license_exp_date DateTime? @db.Date
+  employment_status        BigInt?
+  job_title                BigInt?
+  pay_grade                BigInt?
+  notches                  String?   @db.VarChar(10)
+  work_station_id          String?   @db.VarChar(20)
+  address1                 String?   @db.Text
+  address2                 String?   @db.Text
+  city                     String?   @db.Text
+  country                  String?   @db.VarChar(10)
+  province                 BigInt?
+  postal_code              String?   @db.VarChar(10)
+  home_phone               String?   @db.VarChar(20)
+  mobile_phone             String?   @db.VarChar(20)
+  phone_country            String?   @db.VarChar(20)
+  work_phone               String?   @db.VarChar(20)
+  work_email               String?   @db.VarChar(50)
+  private_email            String?   @db.VarChar(50)
+  recruitment_date         DateTime? @db.Date
+  confirmation_date        DateTime? @db.Date
+  supervisor               BigInt?
+  indirect_supervisors     String?   @db.Text
+  department               String?   @db.VarChar(20)
+  branch                   String?
+  unit                     String?   @db.VarChar(10)
+  outlet                   String?   @db.VarChar(10)
+  start_date               DateTime? @db.Date
+  probation_period         BigInt?
+  initials                 String?   @db.VarChar(10)
+  severance_benefit        String?   @db.Text
+  custom5                  String?   @db.Text
+  custom6                  String?   @db.Text
+  custom7                  String?   @db.Text
+  custom8                  String?   @db.Text
+  custom9                  String?   @db.Text
+  custom10                 String?   @db.Text
+  termination_date         DateTime? @db.Date
+  notes                    String?   @db.Text
+  status                   String    @default("Active") @db.VarChar(20)
+  ethnicity                BigInt?
+  immigration_status       BigInt?
+  approver1                BigInt?
+  approver2                BigInt?
+  approver3                BigInt?
+  previous_work_name       String?   @db.VarChar(50)
+  previous_work_address    String?   @db.VarChar(50)
+  previous_work_tel        String?   @db.VarChar(20)
+  prev_wk_start_date       DateTime? @db.Date
+  prev_wk_end_date         DateTime? @db.Date
+  termination_reason       String?   @db.Text
+  termination_status       String?   @db.VarChar(20)
+  reinstated_date          DateTime? @db.Date
+  nxt_kin_mname            String?   @db.VarChar(30)
+  nxt_kin_lname            String?   @db.VarChar(30)
+  posted_by                BigInt?
+  approval_status          String?   @db.VarChar(20)
+  approved_date            DateTime? @db.Date
+  approved_by              String?   @db.VarChar(30)
+  suspension_reason        String?   @db.Text
+  suspension_start_date    DateTime? @db.Date
+  suspension_end_date      DateTime? @db.Date
+  suspension_salary_rate   String?   @db.VarChar(10)
+  profile_imagebase64      String?   @db.Text
+  signature_base64         String?   @db.Text
+  service_name             String?   @db.VarChar(30)
+  years_of_service         String?   @db.VarChar(30)
+  service_description      String?   @db.VarChar(30)
+  benefits_rate            Decimal?  @default(0.00) @db.Decimal(10, 2)
+  total_benefits_rate      Decimal?  @default(0.00) @db.Decimal(30, 2)
+  posting_date             DateTime? @db.Date
+}
+
+// Per-employee salary component EXCEPTIONS (overrides/excludes/adds) on top of the components an
+// employee inherits from their paygrade/notch. excluded=true removes an inherited component.
+model employeesalary {
+  id              BigInt                        @id @default(autoincrement())
+  employee        BigInt
+  component       BigInt
+  working_days    Int?
+  pay_frequency   employeesalary_pay_frequency?
+  currency        BigInt?
+  amount          Decimal?                      @db.Decimal(30, 2)
+  amount_temp     Decimal?                      @db.Decimal(30, 2)
+  original_amount Decimal?                      @db.Decimal(50, 0)
+  annual_rent     Decimal?                      @default(0.00) @db.Decimal(60, 2)
+  ann_date        DateTime?                     @db.Date
+  excluded        Boolean                       @default(false)
+}
+
+// Salary components assigned to a paygrade — every employee on that paygrade inherits them.
+model paygrade_components {
+  id           BigInt   @id @default(autoincrement())
+  paygrade_id  BigInt
+  component_id BigInt
+  amount       Decimal? @db.Decimal(30, 2)
+  working_days Int?
+
+  @@unique([paygrade_id, component_id], map: "uq_pgc_grade_comp")
+  @@index([component_id], map: "idx_pgc_component")
+}
+
+// Salary components assigned to a notch — employees on that notch inherit them (override paygrade).
+model notch_components {
+  id           BigInt   @id @default(autoincrement())
+  notch_id     BigInt
+  component_id BigInt
+  amount       Decimal? @db.Decimal(30, 2)
+  working_days Int?
+
+  @@unique([notch_id, component_id], map: "uq_ntc_notch_comp")
+  @@index([component_id], map: "idx_ntc_component")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeeseverance {
+  id          BigInt
+  category    String  @db.VarChar(50)
+  description String  @db.VarChar(50)
+  benefit     String? @db.VarChar(50)
+
+  @@ignore
+}
+
+model employeeskills {
+  id       BigInt  @id @default(autoincrement())
+  skill_id Int?
+  employee BigInt
+  details  String? @db.VarChar(400)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model employeetimeentry {
+  id         BigInt
+  project    BigInt?
+  employee   BigInt
+  timesheet  BigInt
+  details    String?                   @db.Text
+  created    DateTime?                 @db.DateTime(0)
+  date_start DateTime?                 @db.DateTime(0)
+  time_start String                    @db.VarChar(10)
+  date_end   DateTime?                 @db.DateTime(0)
+  time_end   String                    @db.VarChar(10)
+  status     employeetimeentry_status? @default(Active)
+
+  @@ignore
+}
+
+model employeetimesheets {
+  id         BigInt                     @id @default(autoincrement())
+  employee   BigInt
+  date_start DateTime                   @db.Date
+  date_end   DateTime                   @db.Date
+  status     employeetimesheets_status? @default(Pending)
+}
+
+model employeetrainingsessions {
+  id              BigInt                           @id @default(autoincrement())
+  employee        BigInt
+  trainingSession BigInt?
+  feedBack        String?                          @db.VarChar(1500)
+  status          employeetrainingsessions_status? @default(Scheduled)
+  proof           String?                          @db.VarChar(300)
+}
+
+model employeetravelrecords {
+  id              BigInt                        @id @default(autoincrement())
+  employee        BigInt
+  imprest_gl      String?                       @db.VarChar(50)
+  type            String?                       @default("") @db.VarChar(200)
+  purpose         String?                       @db.VarChar(200)
+  ref_no          String?                       @db.VarChar(20)
+  emp_acc_no      String                        @db.VarChar(50)
+  cost_unit       String?                       @db.VarChar(50)
+  cost_dept       String?                       @db.VarChar(50)
+  branch          String?                       @db.VarChar(10)
+  xcg_rate        Decimal?                      @default(0.00) @db.Decimal(20, 2)
+  imprest_contra  String?                       @db.VarChar(50)
+  travel_from     String?                       @db.VarChar(200)
+  travel_to       String?                       @db.VarChar(200)
+  travel_date     DateTime?                     @db.DateTime(0)
+  return_date     DateTime?                     @db.DateTime(0)
+  details         String?                       @db.VarChar(500)
+  payment_method  String?                       @db.VarChar(50)
+  funding         Decimal?                      @db.Decimal(10, 2)
+  local_eqv       Decimal?                      @db.Decimal(30, 2)
+  currency        String?                       @default("GHS") @db.VarChar(20)
+  attachment1     String?                       @db.VarChar(100)
+  attachment2     String?                       @db.VarChar(100)
+  attachment3     String?                       @db.VarChar(100)
+  comment         String?                       @db.VarChar(100)
+  created         DateTime?                     @db.DateTime(0)
+  updated         DateTime?                     @db.DateTime(0)
+  beneficiary     BigInt?
+  beneficiary_acc String?                       @db.VarChar(50)
+  app_type        String                        @default("IMP") @db.VarChar(10)
+  posting_date    DateTime?                     @default(now()) @db.DateTime(0)
+  status                 employeetravelrecords_status? @default(Pending)
+  submitted_by           BigInt?
+  supervisor_approved_by BigInt?
+  supervisor_approved_at DateTime?                     @db.DateTime(0)
+  hr_approved_by         BigInt?
+  hr_approved_at         DateTime?                     @db.DateTime(0)
+  rejection_reason       String?                       @db.Text
+}
+
+model employementtype {
+  id   BigInt @id @default(autoincrement())
+  name String @default("") @db.VarChar(250)
+}
+
+model employmentstatus {
+  id          BigInt  @id @default(autoincrement())
+  name        String? @db.VarChar(100)
+  description String? @db.VarChar(400)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ethnicity {
+  id   BigInt
+  name String @db.VarChar(100)
+
+  @@ignore
+}
+
+model expensescategories {
+  id           BigInt                          @id @default(autoincrement())
+  name         String                          @db.VarChar(500)
+  expense_gl   String                          @default("0") @db.VarChar(50)
+  amount_limit Decimal?                        @db.Decimal(60, 0)
+  created      DateTime?                       @db.DateTime(0)
+  updated      DateTime?                       @db.DateTime(0)
+  pre_approve  expensescategories_pre_approve? @default(Yes)
+}
+
+model expensespaymentmethods {
+  id      BigInt    @id @default(autoincrement())
+  name    String    @db.VarChar(500)
+  created DateTime? @db.DateTime(0)
+  updated DateTime? @db.DateTime(0)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model experiencelevel {
+  id   BigInt
+  name String @default("") @db.VarChar(250)
+
+  @@ignore
+}
+
+model fieldnamemappings {
+  id         BigInt                     @id @default(autoincrement())
+  type       String                     @db.VarChar(20)
+  name       String                     @db.VarChar(20)
+  textOrig   String?                    @db.VarChar(200)
+  textMapped String?                    @db.VarChar(200)
+  display    fieldnamemappings_display? @default(Form)
+  created    DateTime?                  @db.DateTime(0)
+  updated    DateTime?                  @db.DateTime(0)
+}
+
+model files {
+  id         BigInt  @id @default(autoincrement())
+  name       String  @db.VarChar(100)
+  filename   String  @db.VarChar(100)
+  employee   BigInt?
+  file_group String  @db.VarChar(100)
+  size       BigInt?
+  size_text  String? @db.VarChar(20)
+}
+
+model forms {
+  id          BigInt    @id @default(autoincrement())
+  name        String    @db.VarChar(50)
+  description String?   @db.VarChar(500)
+  items       String?   @db.Text
+  created     DateTime? @db.DateTime(0)
+  updated     DateTime? @db.DateTime(0)
+}
+
+model holidays {
+  id      BigInt           @id @default(autoincrement())
+  name    String           @db.VarChar(100)
+  dateh   DateTime?        @db.Date
+  status  holidays_status? @default(Full_Day)
+  country BigInt?
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model immigrationdocuments {
+  id                      BigInt
+  name                    String                                    @db.VarChar(100)
+  details                 String?                                   @db.Text
+  required                immigrationdocuments_required?            @default(Yes)
+  alert_on_missing        immigrationdocuments_alert_on_missing?    @default(Yes)
+  alert_before_expiry     immigrationdocuments_alert_before_expiry? @default(Yes)
+  alert_before_day_number Int
+  created                 DateTime?                                 @db.DateTime(0)
+  updated                 DateTime?                                 @db.DateTime(0)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model immigrationstatus {
+  id   BigInt
+  name String @db.VarChar(100)
+
+  @@ignore
+}
+
+model industry {
+  id   BigInt @id @default(autoincrement())
+  name String @default("") @db.VarChar(250)
+}
+
+model interviews {
+  id                    BigInt    @id @default(autoincrement())
+  job                   BigInt
+  candidate             BigInt?
+  level                 String?   @db.VarChar(100)
+  created               DateTime? @db.DateTime(0)
+  updated               DateTime? @db.DateTime(0)
+  scheduled             DateTime? @db.DateTime(0)
+  location              String?   @db.VarChar(500)
+  mapId                 BigInt?
+  status                String?   @db.VarChar(100)
+  notes                 String?   @db.Text
+  scheduleUpdated       Int?      @default(0)
+  interviewers          String?   @db.Text
+  feedback              String?   @db.Text
+  outcome               String?   @db.VarChar(20)
+  schedule_token        String?   @db.VarChar(100)
+  schedule_options      String?   @db.Text
+  schedule_expires      DateTime? @db.DateTime(0)
+  scheduled_end         DateTime? @db.DateTime(0)
+  schedule_link_sent_at DateTime? @db.DateTime(0)
+  invite_sent_at        DateTime? @db.DateTime(0)
+}
+
+model job {
+  id                BigInt          @id @default(autoincrement())
+  title             String          @db.VarChar(200)
+  positionReason    String?         @db.VarChar(100)
+  shortDescription  String?         @db.Text
+  description       String?         @db.Text
+  requirements      String?         @db.Text
+  benefits          String?         @db.Text
+  country           String?         @db.VarChar(100)
+  location          String?         @db.VarChar(50)
+  companyName       String?         @db.VarChar(50)
+  company           BigInt?
+  department        String?         @db.VarChar(100)
+  code              String?         @db.VarChar(20)
+  employementType   String?         @db.VarChar(100)
+  hiringManager     String?         @db.VarChar(200)
+  showHiringManager String?         @db.VarChar(50)
+  industry          BigInt?
+  postalCode        String?         @db.VarChar(20)
+  experienceLevel   String?         @db.VarChar(100)
+  jobFunction       String?         @db.VarChar(100)
+  educationLevel    String?         @db.VarChar(100)
+  currency          String?         @db.VarChar(20)
+  showSalary        job_showSalary?
+  salaryMin         BigInt?
+  salaryMax         BigInt?
+  keywords          String?         @db.Text
+  status            job_status?
+  closingDate       DateTime?       @db.DateTime(0)
+  attachment        String?         @db.VarChar(100)
+  display           String          @db.VarChar(200)
+  postedBy          BigInt?
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model jobfunction {
+  id   BigInt
+  name String @default("") @db.VarChar(250)
+
+  @@ignore
+}
+
+model jobtitles {
+  id            BigInt  @id @default(autoincrement())
+  code          String? @db.VarChar(10)
+  name          String? @db.VarChar(100)
+  category      String? @db.VarChar(30)
+  description   String? @db.VarChar(200)
+  specification String? @db.VarChar(400)
+}
+
+model languages {
+  id          BigInt  @id @default(autoincrement())
+  name        String? @db.VarChar(100)
+  description String? @db.VarChar(400)
+}
+
+model leavegroupemployees {
+  id          BigInt    @id @default(autoincrement())
+  employee    BigInt?
+  leave_group BigInt?
+  created     DateTime? @db.DateTime(0)
+  updated     DateTime? @db.DateTime(0)
+}
+
+model leavegrouppaygrades {
+  id          BigInt    @id
+  leave_group BigInt
+  paygrade_id BigInt
+  created     DateTime? @default(now()) @db.DateTime(0)
+
+  @@unique([leave_group, paygrade_id], map: "uq_lg_pg")
+}
+
+model leavetype_groups {
+  id             BigInt @id
+  leave_type_id  BigInt
+  leave_group_id BigInt
+
+  @@unique([leave_type_id, leave_group_id], map: "uq_ltg")
+}
+
+model leavegroups {
+  id      BigInt    @id @default(autoincrement())
+  name    String    @db.VarChar(100)
+  details String?   @db.Text
+  created DateTime? @db.DateTime(0)
+  updated DateTime? @db.DateTime(0)
+}
+
+model leaveperiods {
+  id         BigInt               @id @default(autoincrement())
+  name       String               @db.VarChar(100)
+  date_start DateTime?            @db.Date
+  date_end   DateTime?            @db.Date
+  status     leaveperiods_status? @default(Inactive)
+  country    BigInt?
+}
+
+model leaverules {
+  id                                 BigInt                                  @id @default(autoincrement())
+  leave_type                         BigInt
+  job_title                          String?                                 @db.VarChar(191)
+  employment_status                  String?                                 @db.VarChar(191)
+  employee                           BigInt?
+  supervisor_leave_assign            leaverules_supervisor_leave_assign?     @default(Yes)
+  employee_can_apply                 leaverules_employee_can_apply?          @default(Yes)
+  apply_beyond_current               leaverules_apply_beyond_current?        @default(Yes)
+  leave_accrue                       leaverules_leave_accrue?                @default(No)
+  carried_forward                    leaverules_carried_forward?             @default(No)
+  default_per_year                   Decimal                                 @db.Decimal(10, 3)
+  carried_forward_percentage         Int?                                    @default(0)
+  carried_forward_leave_availability Int?                                    @default(365)
+  propotionate_on_joined_date        leaverules_propotionate_on_joined_date? @default(No)
+  leave_group                        BigInt?
+  max_carried_forward_amount         Int?                                    @default(0)
+  exp_days                           Int?
+  leave_period                       BigInt?
+  department                         BigInt?
+  employee_leave_period              leaverules_employee_leave_period?       @default(No)
+  accrual_frequency                  String?                                 @default("Monthly") @db.VarChar(20)
+  accrual_rate                       Decimal?                                @db.Decimal(10, 3)
+  leave_allowance                    String                                  @default("No") @db.VarChar(3)
+  leave_allowance_once               String                                  @default("No") @db.VarChar(3)
+}
+
+model leavestartingbalance {
+  id           BigInt    @id @default(autoincrement())
+  leave_type   BigInt
+  employee     BigInt?
+  leave_period BigInt
+  amount       Decimal   @db.Decimal(10, 3)
+  note         String?   @db.Text
+  created      DateTime? @db.DateTime(0)
+  updated      DateTime? @db.DateTime(0)
+}
+
+model leavetypes {
+  id                                 BigInt                                  @id @default(autoincrement())
+  name                               String                                  @db.VarChar(100)
+  leave_gl                           String?                                 @db.VarChar(50)
+  supervisor_leave_assign            leavetypes_supervisor_leave_assign?     @default(Yes)
+  employee_can_apply                 leavetypes_employee_can_apply?          @default(Yes)
+  apply_beyond_current               leavetypes_apply_beyond_current?        @default(Yes)
+  leave_accrue                       leavetypes_leave_accrue?                @default(No)
+  carried_forward                    leavetypes_carried_forward?             @default(No)
+  default_per_year                   Decimal                                 @db.Decimal(10, 3)
+  carried_forward_percentage         Int?                                    @default(0)
+  carried_forward_leave_availability Int?                                    @default(365)
+  propotionate_on_joined_date        leavetypes_propotionate_on_joined_date? @default(No)
+  send_notification_emails           leavetypes_send_notification_emails?    @default(Yes)
+  leave_group                        BigInt?
+  leave_color                        String?                                 @db.VarChar(10)
+  max_carried_forward_amount         Int?                                    @default(0)
+  employee_leave_period              leavetypes_employee_leave_period?       @default(No)
+  accrual_frequency                  String?                                 @default("Monthly") @db.VarChar(20)
+  accrual_rate                       Decimal?                                @db.Decimal(10, 3)
+  gender                             String                                  @default("All") @db.VarChar(5)
+  leave_allowance                    String                                  @default("No") @db.VarChar(3)
+  leave_allowance_once               String                                  @default("No") @db.VarChar(3)
+
+  @@unique([id, name], map: "leavetypes_id_name")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model migrations {
+  id         BigInt
+  file       String             @db.VarChar(50)
+  version    Int
+  created    DateTime?          @db.DateTime(0)
+  updated    DateTime?          @db.DateTime(0)
+  status     migrations_status? @default(Pending)
+  last_error String?            @db.VarChar(500)
+
+  @@ignore
+}
+
+model modules {
+  id                   BigInt          @id @default(autoincrement())
+  menu                 String          @db.VarChar(30)
+  name                 String          @db.VarChar(100)
+  label                String          @db.VarChar(100)
+  icon                 String?         @db.VarChar(50)
+  mod_group            String          @db.VarChar(30)
+  mod_order            Int?
+  status               modules_status? @default(Enabled)
+  version              String?         @default("") @db.VarChar(10)
+  update_path          String?         @default("") @db.VarChar(500)
+  user_levels          String          @db.VarChar(500)
+  user_roles           String?         @db.Text
+  user_roles_blacklist String?         @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model nationality {
+  id   BigInt
+  name String? @db.VarChar(100)
+
+  @@ignore
+}
+
+model notches {
+  id         BigInt   @id @default(autoincrement())
+  name       String   @unique(map: "name") @db.VarChar(50)
+  paygradeId BigInt?
+  currency   String?  @db.VarChar(10)
+  amount     Decimal? @default(0.00) @db.Decimal(20, 2)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model notchmovement {
+  id         BigInt
+  date       DateTime @db.Date
+  employees  String   @db.VarChar(50)
+  no_notches String   @db.VarChar(50)
+
+  @@ignore
+}
+
+model notifications {
+  id           BigInt                @id @default(autoincrement())
+  time         DateTime?             @db.DateTime(0)
+  fromUser     BigInt?
+  fromEmployee BigInt?
+  toUser       BigInt
+  image        String?               @db.VarChar(500)
+  message      String?               @db.Text
+  action       String?               @db.Text
+  type         String?               @db.VarChar(100)
+  status       notifications_status? @default(Unread)
+  employee     BigInt?
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model overtimecategories {
+  id      BigInt
+  name    String    @db.VarChar(500)
+  created DateTime? @db.DateTime(0)
+  updated DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model payfrequency {
+  id   Int
+  name String @db.VarChar(200)
+
+  @@ignore
+}
+
+model paygrades {
+  id         BigInt   @id @default(autoincrement())
+  name       String?  @db.VarChar(100)
+  currency   String   @default("") @db.VarChar(50)
+  min_salary Decimal? @default(0.00) @db.Decimal(12, 2)
+  max_salary Decimal? @default(0.00) @db.Decimal(12, 2)
+}
+
+model payroll {
+  id              BigInt          @id @default(autoincrement())
+  name            String?         @db.VarChar(200)
+  pay_period      BigInt
+  department      BigInt
+  type            String          @db.VarChar(50)
+  column_template BigInt?
+  columns         String?         @db.VarChar(500)
+  pay_month       String          @db.VarChar(8)
+  date_start      DateTime?       @db.Date
+  date_end        DateTime?       @db.Date
+  status          payroll_status? @default(Draft)
+  payslipTemplate BigInt?
+  deduction_group BigInt?
+  documentRef     String?         @db.VarChar(50)
+  payment_log     String?         @db.VarChar(100)
+  posting_date    DateTime?       @default(now()) @db.Date
+  finalized_date  DateTime?       @db.Date
+  verified_by     BigInt?
+  posted_by       String          @db.VarChar(100)
+  approved_by     String?         @db.VarChar(50)
+  approved_date   DateTime?       @db.Date
+}
+
+model payrollcolumns {
+  id                   Int                           @id @default(autoincrement())
+  name                 String?                       @db.VarChar(50)
+  salarycomponent_gl   String?                       @db.VarChar(50)
+  posting_column       String?                       @db.VarChar(10)
+  payment_deduction    String?                       @db.VarChar(20)
+  posting_branch       String?                       @db.VarChar(20)
+  colorder             Int?
+  editable             payrollcolumns_editable?      @default(Yes)
+  enabled              payrollcolumns_enabled?       @default(Yes)
+  default_value        String?                       @db.VarChar(25)
+  calculation_function String?                       @db.Text
+  function_type        payrollcolumns_function_type? @default(Simple)
+  calculation_rule     Int?
+  visible              Boolean                       @default(true)
+  include_in_net       Boolean                       @default(true)
+  payslip_label        String?                       @db.VarChar(100)
+}
+
+// A payroll column's linked salary components (replaces the old salary_components CSV-of-names).
+model payrollcolumn_components {
+  id               BigInt @id @default(autoincrement())
+  payrollcolumn_id Int
+  component_id     BigInt
+
+  @@unique([payrollcolumn_id, component_id], map: "uq_pcc_col_comp")
+  @@index([component_id], map: "idx_pcc_component")
+}
+
+// A payroll column's add/subtract references to other columns (replaces add_columns + sub_columns
+// CSV-of-names). `operation` is 'add' or 'subtract'.
+model payrollcolumn_links {
+  id               BigInt @id @default(autoincrement())
+  payrollcolumn_id Int
+  target_column_id Int
+  operation        String @db.VarChar(10)
+
+  @@unique([payrollcolumn_id, target_column_id, operation], map: "uq_pcl_col_target_op")
+  @@index([target_column_id], map: "idx_pcl_target")
+}
+
+// Junction table: a payroll column can be scoped to many calculation groups (many-to-many).
+// Replaces the old single payrollcolumns.deduction_group BigInt. Empty = column is universal.
+model payrollcolumn_groups {
+  id               BigInt @id @default(autoincrement())
+  payrollcolumn_id Int
+  group_id         BigInt
+
+  @@unique([payrollcolumn_id, group_id], map: "uq_pcg_col_group")
+  @@index([group_id], map: "idx_pcg_group")
+}
+
+model payrollcolumntemplates {
+  id      BigInt  @id @default(autoincrement())
+  name    String? @db.VarChar(50)
+  columns String? @db.VarChar(500)
+}
+
+model payrolldata {
+  id           Int     @id @default(autoincrement())
+  payroll      BigInt
+  employee     BigInt
+  payroll_item Int
+  amount       String? @db.VarChar(25)
+}
+
+model payrollemployees {
+  id                   BigInt  @id @default(autoincrement())
+  employee             BigInt
+  pay_frequency        Int?
+  currency             String? @db.VarChar(20)
+  deduction_exemptions String? @db.VarChar(250)
+  deduction_allowed    String? @db.VarChar(250)
+  deduction_group      BigInt?
+}
+
+model paysliptemplates {
+  id      BigInt                   @id @default(autoincrement())
+  name    String                   @db.VarChar(100)
+  data    String?                  @db.LongText
+  status  paysliptemplates_status? @default(Show)
+  created DateTime?                @db.DateTime(0)
+  updated DateTime?                @db.DateTime(0)
+}
+
+model performancereviews {
+  id                  BigInt    @id @default(autoincrement())
+  name                String    @db.VarChar(150)
+  employee            BigInt?
+  coordinator         BigInt?
+  attendees           String    @db.VarChar(50)
+  form                BigInt?
+  status              String    @db.VarChar(20)
+  review_date         DateTime? @db.DateTime(0)
+  review_period_start DateTime? @db.DateTime(0)
+  review_period_end   DateTime? @db.DateTime(0)
+  self_assessment_due DateTime? @db.DateTime(0)
+  notes               String?   @db.Text
+  created             DateTime? @db.DateTime(0)
+  updated             DateTime? @db.DateTime(0)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model probations {
+  id   BigInt
+  name Int
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model projects {
+  id      BigInt
+  name    String           @db.VarChar(100)
+  client  BigInt?
+  details String?          @db.Text
+  created DateTime?        @db.DateTime(0)
+  status  projects_status? @default(Active)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model province {
+  id      BigInt
+  name    String @default("") @db.VarChar(40)
+  code    String @default("") @db.Char(2)
+  country String @default("US") @db.Char(2)
+
+  @@ignore
+}
+
+model reportfiles {
+  id         BigInt    @id @default(autoincrement())
+  employee   BigInt?
+  name       String    @db.VarChar(100)
+  attachment String    @db.VarChar(100)
+  created    DateTime? @db.DateTime(0)
+}
+
+model reports {
+  id           BigInt        @id @default(autoincrement())
+  name         String        @db.VarChar(100)
+  details      String?       @db.Text
+  parameters   String?       @db.Text
+  query        String?       @db.Text
+  paramOrder   String        @db.VarChar(500)
+  type         reports_type? @default(Query)
+  report_group String?       @db.VarChar(500)
+  output       String        @default("CSV") @db.VarChar(15)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model restaccesstokens {
+  id      BigInt
+  userId  BigInt
+  hash    String?   @db.VarChar(32)
+  token   String?   @db.VarChar(500)
+  created DateTime? @db.DateTime(0)
+  updated DateTime? @db.DateTime(0)
+
+  @@ignore
+}
+
+model reviewfeedbacks {
+  id       BigInt    @id @default(autoincrement())
+  employee BigInt?
+  review   BigInt?
+  subject  BigInt?
+  form     BigInt?
+  status   String    @db.VarChar(20)
+  dueon    DateTime? @db.DateTime(0)
+  created  DateTime? @db.DateTime(0)
+  updated  DateTime? @db.DateTime(0)
+}
+
+model reviewtemplates {
+  id          BigInt    @id @default(autoincrement())
+  name        String    @db.VarChar(50)
+  description String?   @db.VarChar(500)
+  items       String?   @db.Text
+  created     DateTime? @db.DateTime(0)
+  updated     DateTime? @db.DateTime(0)
+}
+
+model salarycomponent {
+  id              BigInt  @id @default(autoincrement())
+  name            String  @db.VarChar(100)
+  salarycomp_gl   String? @db.VarChar(20)
+  branch          String? @db.VarChar(50)
+  summary         String? @db.VarChar(20)
+  processing_code String? @db.VarChar(20)
+  componentType   BigInt?
+  details         String? @db.Text
+  is_notch_linked Boolean @default(false)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model salarycomponenttype {
+  id          BigInt
+  code        String  @db.VarChar(10)
+  name        String  @db.VarChar(100)
+  description String? @db.VarChar(500)
+
+  @@ignore
+}
+
+model employeetransfers {
+  id                          BigInt    @id @default(autoincrement())
+  transfer_number             String    @unique @db.VarChar(40)
+  employee                    BigInt
+  transfer_type               String    @db.VarChar(50)
+  reason                      String?   @db.Text
+  effective_date              DateTime  @db.Date
+  status                      String    @default("Draft") @db.VarChar(30)
+  current_department          BigInt?
+  proposed_department         BigInt?
+  current_branch              BigInt?
+  proposed_branch             BigInt?
+  current_unit                BigInt?
+  proposed_unit               BigInt?
+  current_outlet              BigInt?
+  proposed_outlet             BigInt?
+  current_job_title           Int?
+  proposed_job_title          Int?
+  current_supervisor          BigInt?
+  proposed_supervisor         BigInt?
+  current_paygrade            BigInt?
+  proposed_paygrade           BigInt?
+  current_notch               BigInt?
+  proposed_notch              BigInt?
+  current_values              String?   @db.LongText
+  proposed_values             String?   @db.LongText
+  supporting_document         String?   @db.VarChar(255)
+  initiated_by                BigInt?
+  submitted_at                DateTime? @db.DateTime(0)
+  approved_at                 DateTime? @db.DateTime(0)
+  effective_at                DateTime? @db.DateTime(0)
+  rejected_reason             String?   @db.Text
+  cancelled_reason            String?   @db.Text
+  created_at                  DateTime  @default(now()) @db.DateTime(0)
+  updated_at                  DateTime  @updatedAt @db.DateTime(0)
+
+  @@index([employee])
+  @@index([status])
+  @@index([effective_date])
+}
+
+model employeetransferstages {
+  id                          BigInt    @id @default(autoincrement())
+  transfer_id                 BigInt
+  stage_order                 Int
+  stage_name                  String    @db.VarChar(100)
+  approver_type               String    @db.VarChar(20)
+  approver_id                 String    @db.VarChar(100)
+  approver_label              String?   @db.VarChar(150)
+  status                      String    @default("Pending") @db.VarChar(20)
+  acted_by                    BigInt?
+  acted_at                    DateTime? @db.DateTime(0)
+  comment                     String?   @db.VarChar(500)
+  created_at                  DateTime  @default(now()) @db.DateTime(0)
+
+  @@index([transfer_id, stage_order])
+  @@index([status])
+}
+
+model settings {
+  id          BigInt  @id
+  name        String  @db.VarChar(100)
+  value       String? @db.Text
+  description String? @db.Text
+  meta        String? @db.Text
+  category    String  @db.VarChar(64)
+}
+
+model app_settings {
+  id            BigInt  @id @default(autoincrement())
+  setting_key   String  @unique @db.VarChar(100)
+  setting_value String? @db.Text
+}
+
+model onboarding_submission {
+  id          BigInt   @id @default(autoincrement())
+  data        String   @db.LongText
+  files       String?  @db.Text
+  status      String   @default("New") @db.VarChar(20)
+  employee_id BigInt?
+  created     DateTime @default(now())
+  updated     DateTime @default(now()) @updatedAt
+}
+
+model module_settings {
+  id         BigInt   @id @default(autoincrement())
+  module_id  String   @unique @db.VarChar(50)
+  enabled    Boolean  @default(true)
+  updated_at DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model skills {
+  id          BigInt
+  name        String? @db.VarChar(100)
+  description String? @db.VarChar(400)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model staffinfraction {
+  id           BigInt
+  employee     String   @db.VarChar(20)
+  branch       String   @db.VarChar(20)
+  date         DateTime @db.Date
+  email        String   @db.VarChar(30)
+  ref_no       String   @db.VarChar(25)
+  header       String   @db.VarChar(20)
+  subscription String   @db.VarChar(20)
+
+  @@ignore
+}
+
+model staffmedical {
+  id               BigInt               @id @default(autoincrement())
+  employee         String               @db.VarChar(20)
+  from_date        DateTime             @db.Date
+  to_date          DateTime?            @db.Date
+  admission_type   String               @db.VarChar(20)
+  type_of_illness  String               @db.VarChar(100)
+  medication_given String               @db.VarChar(100)
+  cost             Decimal              @db.Decimal(30, 2)
+  mode_of_payment  String?              @db.VarChar(50)
+  hospital         String               @db.VarChar(50)
+  physician        String?              @db.VarChar(50)
+  status           staffmedical_status? @default(Draft)
+  posted_by        String?              @db.VarChar(20)
+  createdAt        DateTime             @default(now()) @db.Date
+  updatedAt        DateTime             @default(now()) @db.Date
+  approved_date    DateTime?            @db.Date
+  approved_by      String?              @db.VarChar(50)
+  attachment1      String?              @db.Text
+  attachment2      String?              @db.Text
+  attachment3      String?              @db.Text
+  reference        String?              @db.VarChar(50)
+  api_response     String?              @db.VarChar(100)
+  rejection_reason String?              @db.Text
+  submitted_by     BigInt?
+  document_ref     String?              @db.VarChar(100)
+  payment_log      String?              @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model staffseverance {
+  id                       BigInt
+  employee_id              String?   @db.VarChar(20)
+  employee                 String?   @db.VarChar(20)
+  age                      Int?
+  separation_date          DateTime? @db.Date
+  severance_group          String?   @db.VarChar(20)
+  service_years            Int?
+  annual_salary_enterprise Int?
+  annual_salary_others     Int?
+  transition_period        Int?
+  entitlement_period       Int?
+  severance_pay_period     Int?
+  estimated_entitlement    Int?
+  weekly_base_salary       Float?    @default(0) @db.Float
+  total_severance          Float?    @default(0) @db.Float
+  notes                    String?   @db.VarChar(100)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model statuschangelogs {
+  id          BigInt
+  type        String                        @db.VarChar(100)
+  element     BigInt
+  user_id     BigInt?
+  data        String                        @db.VarChar(500)
+  status_from statuschangelogs_status_from? @default(Pending)
+  status_to   statuschangelogs_status_to?   @default(Pending)
+  created     DateTime?                     @db.DateTime(0)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model supportedlanguages {
+  id          BigInt
+  name        String? @db.VarChar(100)
+  description String? @db.VarChar(100)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model tags {
+  id   BigInt
+  name String @default("") @db.VarChar(250)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model timezones {
+  id      BigInt
+  name    String @default("") @db.VarChar(100)
+  details String @default("") @db.VarChar(255)
+
+  @@ignore
+}
+
+model trainingsessions {
+  id               BigInt                           @id @default(autoincrement())
+  name             String                           @db.VarChar(300)
+  course           BigInt
+  description      String?                          @db.Text
+  scheduled        DateTime?                        @db.DateTime(0)
+  dueDate          DateTime?                        @db.DateTime(0)
+  deliveryMethod   trainingsessions_deliveryMethod? @default(Classroom)
+  deliveryLocation String?                          @db.VarChar(500)
+  status           trainingsessions_status?         @default(Pending)
+  attendanceType   trainingsessions_attendanceType? @default(Sign_Up)
+  attachment       String?                          @db.VarChar(300)
+  cost_of_training String?                          @db.VarChar(50)
+  created          DateTime?                        @db.DateTime(0)
+  updated          DateTime?                        @db.DateTime(0)
+  requireProof     trainingsessions_requireProof?   @default(Yes)
+}
+
+model userreports {
+  id           BigInt            @id @default(autoincrement())
+  name         String            @db.VarChar(100)
+  details      String?           @db.Text
+  parameters   String?           @db.Text
+  query        String?           @db.Text
+  paramOrder   String            @db.VarChar(500)
+  type         userreports_type? @default(Query)
+  report_group String?           @db.VarChar(500)
+  output       String            @default("CSV") @db.VarChar(15)
+}
+
+model userroles {
+  id                     BigInt  @id @default(autoincrement())
+  name                   String? @db.VarChar(100)
+  additional_permissions String? @db.Text
+}
+
+model workdays {
+  id      BigInt           @id @default(autoincrement())
+  name    String           @db.VarChar(100)
+  status  workdays_status? @default(Full_Day)
+  country BigInt?
+
+  @@unique([name, country], map: "workdays_name_country")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model month_perm {
+  AFF_ID       String?  @db.VarChar(8)
+  FIRST_NAME   String?  @db.VarChar(14)
+  MIDDLE_NAME  String?  @db.VarChar(27)
+  LAST_NAME    String?  @db.VarChar(16)
+  BASIC_SALARY Decimal? @db.Decimal(8, 2)
+  new_basic    Decimal? @db.Decimal(8, 2)
+
+  @@map("13_month_perm")
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model perm25 {
+  EMPLOYEE_ID  String?  @unique(map: "EMPLOYEE_ID") @db.VarChar(8)
+  BASIC_SALARY Decimal? @db.Decimal(9, 2)
+  TAX          Decimal? @db.Decimal(8, 3)
+
+  @@map("13perm25")
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model account_numbers {
+  id             BigInt
+  employee_id    String @db.VarChar(30)
+  fullname       String @db.VarChar(50)
+  account_number String @db.VarChar(30)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model accounts_update {
+  ID          String? @unique(map: "ID") @db.VarChar(9)
+  BANK_ACC_NO String? @db.VarChar(13)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model benefits {
+  id                 BigInt
+  name               String    @db.VarChar(20)
+  description        String?   @db.VarChar(50)
+  notch              String    @db.VarChar(10)
+  general_ledger     String    @db.VarChar(20)
+  min_yrs_of_service Int
+  max_yrs_of_service Int
+  benefits_rate      String    @db.VarChar(10)
+  amount             Decimal?  @db.Decimal(30, 2)
+  posting_date       DateTime? @default(now()) @db.Date
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model branches {
+  br_code        String  @db.Text
+  br_description String  @db.VarChar(30)
+  address1       String? @db.VarChar(50)
+  address2       String? @db.VarChar(50)
+  address3       String? @db.VarChar(50)
+  telephone      String? @db.VarChar(20)
+  email          String? @db.VarChar(30)
+  date_opened    String? @db.VarChar(20)
+  posting_date   String? @db.VarChar(20)
+  posted_by      String? @db.VarChar(20)
+  posting_ip     String? @db.VarChar(20)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model car_all_new {
+  STAFF_ID String?  @db.VarChar(8)
+  CAR      Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model car_new {
+  STAFF_ID String?  @map("STAFF ID") @db.VarChar(8)
+  CAR      Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model cars {
+  STAFF_ID String? @unique(map: "STAFF_ID") @db.VarChar(9)
+  CAR      String? @db.VarChar(7)
+
+  @@ignore
+}
+
+model cloth_allowance {
+  id          Int      @id @default(autoincrement())
+  Employee_ID String?  @db.VarChar(8)
+  Name        String?  @db.VarChar(40)
+  Branch      String?  @db.VarChar(20)
+  Amount      Decimal? @db.Decimal(30, 2)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model cloth_allowance_contract {
+  id          Int?
+  Employee_ID String?  @db.VarChar(8)
+  Name        String?  @db.VarChar(22)
+  Branch      String?  @db.VarChar(20)
+  Amount      Decimal? @db.Decimal(6, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model clothing_2024 {
+  staff_id String?  @unique(map: "staff_id") @db.VarChar(8)
+  amount   Decimal? @db.Decimal(9, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model clothung_all_26 {
+  employee_id String  @db.VarChar(100)
+  amount      Decimal @db.Decimal(9, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model company {
+  id              BigInt?
+  name            String?   @db.VarChar(50)
+  description     String?   @db.VarChar(100)
+  logo            String?   @db.VarChar(100)
+  email           String?   @db.VarChar(20)
+  branch_code     String?   @db.VarChar(10)
+  address1        String?   @db.VarChar(20)
+  address2        String?   @db.VarChar(20)
+  address3        String?   @db.VarChar(20)
+  telephone       String?   @db.VarChar(20)
+  contact_person  String?   @db.VarChar(30)
+  swift_code      String?   @db.VarChar(20)
+  date_opened     DateTime? @db.Date
+  city            String?   @db.VarChar(30)
+  zip_code        String?   @db.VarChar(10)
+  state_province  String?   @db.VarChar(30)
+  country         String?   @db.VarChar(20)
+  base_currency   String?   @db.VarChar(20)
+  time_zone       String?   @db.VarChar(30)
+  registration_no String?   @db.VarChar(10)
+  fax             String?   @db.VarChar(20)
+  motto           String?   @db.VarChar(30)
+  bank_code       String?   @db.VarChar(10)
+  sort_code       String?   @db.VarChar(20)
+  website         String?   @db.VarChar(30)
+  tin_no          String?   @db.VarChar(20)
+  system_provider String?   @db.VarChar(30)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model contract_1 {
+  staff_id String?  @unique(map: "staff_id") @db.VarChar(9)
+  contract Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model contract_rent {
+  Staff_ID String?  @unique(map: "Staff_ID") @db.VarChar(8)
+  Amount   Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+model cost_all_1 {
+  Staff_ID String   @id @db.VarChar(8)
+  Amount   Decimal? @db.Decimal(7, 2)
+}
+
+model dependentmedical {
+  id                    BigInt                  @id @default(autoincrement())
+  employee              String                  @db.VarChar(20)
+  from_date             DateTime                @db.Date
+  to_date               DateTime?               @db.Date
+  dependant_name        String                  @db.VarChar(20)
+  relation_to_dependent String?                 @db.VarChar(200)
+  dob                   DateTime?               @db.Date
+  admission_type        String                  @db.VarChar(50)
+  type_of_illness       String                  @db.VarChar(50)
+  medication_given      String                  @db.VarChar(50)
+  cost                  Decimal                 @db.Decimal(50, 2)
+  mode_of_payment       String?                 @db.VarChar(50)
+  hospital              String                  @db.VarChar(50)
+  physician             String?                 @db.VarChar(50)
+  status                dependentmedical_status @default(Draft)
+  posted_by             String?                 @db.VarChar(20)
+  approved_date         DateTime?               @db.Date
+  approved_by           String?                 @db.VarChar(50)
+  attachment1           String?                 @db.Text
+  attachment2           String?                 @db.Text
+  attachment3           String?                 @db.Text
+  reference             String?                 @db.VarChar(50)
+  api_response          String?                 @db.VarChar(200)
+  dependent_id          BigInt?
+  rejection_reason      String?                 @db.Text
+  submitted_by          BigInt?
+  document_ref          String?                 @db.VarChar(100)
+  payment_log           String?                 @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model displacement {
+  STAFF_ID     String? @unique(map: "STAFF_ID") @db.VarChar(9)
+  DISPLACEMENT String? @db.VarChar(7)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model displacement_new {
+  STAFF_ID     String?  @unique(map: "STAFF_ID") @db.VarChar(8)
+  DISPLACEMENT Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model duty_2 {
+  STAFF_ID       String?  @db.VarChar(8)
+  DUTY_ALLOWANCE Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model duty_allowance {
+  STAFF_ID       String?  @unique(map: "STAFF_ID") @db.VarChar(9)
+  DUTY_ALLOWANCE Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+model emaillog {
+  id      BigInt           @id @default(autoincrement())
+  subject String           @db.VarChar(300)
+  toEmail String           @db.VarChar(300)
+  body    String?          @db.Text
+  cclist  String?          @db.VarChar(500)
+  bcclist String?          @db.VarChar(500)
+  created DateTime?        @db.DateTime(0)
+  updated DateTime?        @db.DateTime(0)
+  status  emaillog_status? @default(Pending)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model expensesbusinesspurpose {
+  id   BigInt
+  code String @db.VarChar(10)
+  name String @db.VarChar(50)
+
+  @@ignore
+}
+
+model hiringpipeline {
+  id    BigInt               @id @default(autoincrement())
+  name  String?              @db.VarChar(100)
+  type  hiringpipeline_type? @default(Short_Listed)
+  notes String?              @db.Text
+}
+
+model hospitalclaims {
+  id                  Int       @id @default(autoincrement())
+  hospital            BigInt?
+  items               String    @db.LongText
+  total_amount        Decimal   @db.Decimal(30, 2)
+  withholding_tax     Decimal   @default(0.00) @db.Decimal(30, 2)
+  category            Int
+  total_credit_amount Decimal   @default(0.00) @db.Decimal(30, 2)
+  comment             String    @db.Text
+  posted_by           BigInt
+  posted_date         DateTime? @default(now()) @db.Date
+  status              String    @default("Draft") @db.VarChar(20)
+  approved_date       DateTime? @db.Date
+  approved_by         BigInt?
+  reference_no        String?   @db.VarChar(20)
+  response            String?   @db.Text
+  document_ref        String?   @db.VarChar(100)
+  payment_log         String?   @db.Text
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model hospitalclaims_hist {
+  id                  Int
+  hospital            BigInt?
+  items               String    @db.LongText
+  total_amount        Decimal   @db.Decimal(30, 2)
+  withholding_tax     Decimal   @default(0.00) @db.Decimal(30, 2)
+  category            Int
+  total_credit_amount Decimal   @default(0.00) @db.Decimal(30, 2)
+  comment             String    @db.Text
+  posted_by           BigInt
+  status              String    @default("Draft") @db.VarChar(20)
+  approved_date       DateTime? @db.Date
+  approved_by         BigInt?
+  reference_no        String?   @db.VarChar(20)
+  response            String?   @db.Text
+
+  @@ignore
+}
+
+model leaveallowance {
+  id             BigInt    @id @default(autoincrement())
+  leave_type     String    @db.VarChar(20)
+  leave_period   String    @db.VarChar(50)
+  allowance_rate String    @db.VarChar(10)
+  note           String?   @db.VarChar(100)
+  posting_date   DateTime  @db.Date
+  posted_by      String?   @db.VarChar(50)
+  approved_date  DateTime? @db.Date
+  approved_by    String?   @db.VarChar(50)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model live_rokel_cost_center_to_be_loaded_this_saturday {
+  id          String? @db.VarChar(3)
+  employee_id String? @unique(map: "employee_id") @db.VarChar(8)
+  branch_code String? @db.VarChar(3)
+  dept_code   String? @db.VarChar(2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model long_service {
+  STAFF_ID String?  @unique(map: "STAFF_ID") @db.VarChar(8)
+  AMOUNT   Decimal? @db.Decimal(8, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model lunch {
+  STAFF_ID String?  @unique(map: "STAFF ID") @db.VarChar(9)
+  LUNCH    Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model lunch_all {
+  STAFF_ID String?  @unique(map: "STAFF ID") @db.VarChar(8)
+  LUNCH    Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model management_staff {
+  STAFF_ID String? @unique(map: "STAFF_ID") @db.VarChar(8)
+
+  @@ignore
+}
+
+model maritalstatus {
+  id   BigInt  @id @default(autoincrement())
+  code String? @db.VarChar(20)
+  name String  @db.VarChar(20)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model medicalcondition {
+  id   BigInt
+  name String @db.VarChar(100)
+
+  @@ignore
+}
+
+model medicallimit {
+  id            BigInt    @id @default(autoincrement())
+  grade         String    @unique(map: "grade") @db.VarChar(30)
+  amount        Decimal?  @db.Decimal(30, 2)
+  start_date    DateTime? @db.Date
+  end_date      DateTime? @db.Date
+  posting_date  DateTime? @default(now()) @db.Timestamp(0)
+  status        String?   @db.VarChar(20)
+  approved_by   String?   @db.VarChar(50)
+  approved_date DateTime? @db.Date
+  paygrade_id   BigInt?
+  currency      String?   @default("SLE") @db.VarChar(10)
+}
+
+// Year-end closing snapshot of each employee's medical utilization, captured when HR
+// starts a new medical year. Non-destructive: original records are untouched; this is the
+// historical record of what utilization was at the moment of reset.
+model medicalutilizationhistory {
+  id             BigInt   @id @default(autoincrement())
+  period_label   String   @db.VarChar(40)
+  employee_id    BigInt
+  employee_name  String?  @db.VarChar(200)
+  grade          String?  @db.VarChar(60)
+  currency       String?  @db.VarChar(10)
+  medical_limit  Decimal? @db.Decimal(30, 2)
+  staff_utilized Decimal? @db.Decimal(30, 2)
+  dep_utilized   Decimal? @db.Decimal(30, 2)
+  total_utilized Decimal? @db.Decimal(30, 2)
+  limit_balance  Decimal? @db.Decimal(30, 2)
+  closed_at      DateTime @default(now()) @db.DateTime(0)
+  closed_by      BigInt?
+  closed_by_name String?  @db.VarChar(200)
+
+  @@index([period_label], map: "idx_muh_period")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model medicalsymptom {
+  id   BigInt
+  name String @db.VarChar(100)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model mid_month_jan {
+  id             BigInt
+  name           String  @db.VarChar(50)
+  gross          Decimal @db.Decimal(30, 2)
+  tax            Decimal @db.Decimal(30, 2)
+  net            Decimal @db.Decimal(30, 2)
+  account_number String  @db.VarChar(30)
+  emp_id         BigInt
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model month_bonus_cont {
+  aff_id      String?  @db.VarChar(8)
+  first_name  String?  @db.VarChar(10)
+  middle_name String?  @db.VarChar(6)
+  last_name   String?  @db.VarChar(12)
+  amount      Decimal? @db.Decimal(20, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model nat_fees {
+  staff_id String?  @db.VarChar(8)
+  Amount   Decimal? @db.Decimal(30, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model new_grades {
+  id               BigInt
+  name             String?   @db.VarChar(50)
+  recruitment_date DateTime? @db.Date
+  new_id           String?   @db.VarChar(20)
+  notch            String?   @db.VarChar(20)
+  notch_id         String    @db.VarChar(10)
+  gender           String?   @db.VarChar(20)
+  birthday         DateTime? @db.Date
+  department       String?   @db.VarChar(50)
+  account_number   String?   @db.VarChar(50)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model new_paystructure {
+  id     BigInt
+  amount String @db.VarChar(30)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model new_rent {
+  id             Int?
+  name           String? @db.VarChar(25)
+  old            Int?
+  new            Int?
+  backlog        Int?
+  account_number String? @db.VarChar(20)
+  emp_id         BigInt?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model new_salaries {
+  id                 BigInt
+  employee           String   @db.VarChar(100)
+  account_no         String   @db.VarChar(100)
+  basic_salary       String   @db.VarChar(75)
+  car_allowance      String   @db.VarChar(50)
+  honorarium         Decimal  @db.Decimal(10, 2)
+  transport          Decimal  @db.Decimal(10, 2)
+  lunch              Decimal  @db.Decimal(10, 2)
+  rent_witheld       Decimal  @db.Decimal(10, 2)
+  monthly_rent       Decimal  @db.Decimal(10, 2)
+  nassit             Decimal  @db.Decimal(10, 2)
+  medical_excess     Decimal  @db.Decimal(10, 2)
+  union_dues         Decimal  @db.Decimal(10, 2)
+  basic_after_nassit Decimal  @db.Decimal(10, 2)
+  total_allowance    Decimal  @db.Decimal(10, 2)
+  gross_salary       Decimal  @db.Decimal(10, 2)
+  taxable_basic      Decimal  @db.Decimal(10, 2)
+  taxable_income     Decimal  @db.Decimal(10, 2)
+  paye               Decimal  @db.Decimal(10, 2)
+  taxable_allowance  Decimal  @db.Decimal(10, 2)
+  total_deduction    Decimal  @db.Decimal(10, 2)
+  net_salary         Decimal  @db.Decimal(10, 2)
+  date_created       DateTime @default(now()) @db.Timestamp(0)
+
+  @@ignore
+}
+
+model no_department {
+  id          BigInt  @id @default(autoincrement())
+  employee_id String  @db.VarChar(50)
+  first_name  String  @db.VarChar(50)
+  middle_name String? @db.VarChar(50)
+  last_name   String  @db.VarChar(50)
+  department  BigInt?
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model notches_4 {
+  ID    String? @unique(map: "ID") @db.VarChar(9)
+  NOTCH String? @db.VarChar(3)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model paygrades_1 {
+  ID        String? @unique(map: "ID") @db.VarChar(9)
+  pay_grade Int?
+
+  @@ignore
+}
+
+model paymenttype {
+  id               BigInt  @id @default(autoincrement())
+  name             String  @db.VarChar(50)
+  description      String? @db.VarChar(100)
+  generate_payslip Boolean @default(true)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model quarter {
+  employee_id String? @unique(map: "employee_id") @db.VarChar(8)
+
+  @@ignore
+}
+
+model registeredhospitals {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.Text
+  account    String    @unique(map: "account") @db.VarChar(30)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  updated_at DateTime? @db.DateTime(0)
+  type       String    @default("Hospital") @db.VarChar(20)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model rent {
+  Staff_ID String?  @unique(map: "Staff_ID") @db.VarChar(8)
+  Amount   Decimal? @db.Decimal(9, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model rent2022 {
+  id             BigInt
+  name           String  @db.VarChar(50)
+  component      String  @db.VarChar(10)
+  amount         Decimal @db.Decimal(30, 2)
+  account_number String  @db.VarChar(20)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model rent_1 {
+  AFF_ID      String?  @db.VarChar(8)
+  FIRST_NAME  String?  @map("FIRST NAME") @db.VarChar(14)
+  MIDDLE_NAME String?  @map("MIDDLE NAME") @db.VarChar(27)
+  LAST_NAME   String?  @map("LAST NAME") @db.VarChar(16)
+  RENT        Decimal? @map(" 2023_RENT") @db.Decimal(8, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model rent_cont {
+  AFF_ID     String?  @unique(map: "AFF_ID") @db.VarChar(8)
+  FIRST_NAME String?  @map("FIRST NAME") @db.VarChar(10)
+  RENT       Decimal? @map("2023_RENT") @db.Decimal(8, 2)
+
+  @@ignore
+}
+
+model salaries {
+  id                BigInt   @id @default(autoincrement())
+  component         String?  @default("All Notches") @db.VarChar(50)
+  state             String   @db.VarChar(50)
+  percentage_change String   @db.VarChar(20)
+  date              DateTime @default(now()) @db.Timestamp(0)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model salaries1 {
+  id   BigInt
+  name String @db.VarChar(10)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model sewing_cont {
+  aff_id     String? @db.VarChar(8)
+  first_name String? @db.VarChar(10)
+  total      String? @db.VarChar(8)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model sewing_perm {
+  AFF_ID     String? @db.VarChar(8)
+  FIRST_NAME String? @db.VarChar(10)
+  TOTAL      String? @map(" TOTAL") @db.VarChar(8)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model special {
+  STAFF_ID          String?  @unique(map: "STAFF_ID") @db.VarChar(9)
+  SPECIAL_ALLOWANCE Decimal? @db.Decimal(6, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model special_all {
+  STAFF_ID String?  @unique(map: "STAFF_ID") @db.VarChar(8)
+  SPECIAL  Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+model staff_upgrade {
+  id             BigInt @id @default(autoincrement())
+  name           String @db.VarChar(100)
+  branch         String @db.VarChar(50)
+  account_number String @db.VarChar(20)
+  old_id         String @db.VarChar(20)
+  new_id         String @db.VarChar(20)
+  pay_grade      String @db.VarChar(10)
+  notch          String @db.VarChar(10)
+  employee       BigInt
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model staffmedical_hist {
+  id               BigInt
+  employee         String                    @db.VarChar(20)
+  from_date        DateTime                  @db.Date
+  to_date          DateTime?                 @db.Date
+  admission_type   String                    @db.VarChar(20)
+  type_of_illness  String                    @db.VarChar(100)
+  medication_given String                    @db.VarChar(100)
+  cost             Decimal                   @db.Decimal(30, 2)
+  mode_of_payment  String?                   @db.VarChar(50)
+  hospital         String                    @db.VarChar(50)
+  physician        String?                   @db.VarChar(50)
+  status           staffmedical_hist_status? @default(Draft)
+  posted_by        String?                   @db.VarChar(20)
+  approved_date    DateTime?                 @db.Date
+  approved_by      String?                   @db.VarChar(50)
+  attachment1      String?                   @db.Text
+  attachment2      String?                   @db.Text
+  attachment3      String?                   @db.Text
+  reference        String?                   @db.VarChar(50)
+  api_response     String?                   @db.VarChar(100)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model systemdata {
+  id    BigInt
+  name  String  @db.VarChar(50)
+  value String? @db.Text
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model tb_branch {
+  id          BigInt
+  code        String  @db.VarChar(20)
+  description String  @db.VarChar(100)
+  meta        String? @db.VarChar(20)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model temp {
+  id                 BigInt
+  employee           String  @db.VarChar(100)
+  account_no         String  @db.VarChar(100)
+  basic_salary       Decimal @db.Decimal(20, 2)
+  car_allowance      Decimal @db.Decimal(20, 2)
+  honorarium         Decimal @db.Decimal(20, 2)
+  transport          Decimal @db.Decimal(20, 2)
+  lunch              Decimal @db.Decimal(20, 2)
+  rent_witheld       Decimal @db.Decimal(20, 2)
+  monthly_rent       Decimal @db.Decimal(20, 2)
+  nassit             Decimal @db.Decimal(20, 2)
+  medical_excess     Decimal @db.Decimal(20, 2)
+  union_dues         Decimal @db.Decimal(20, 2)
+  basic_after_nassit Decimal @db.Decimal(20, 2)
+  total_allowance    Decimal @db.Decimal(20, 2)
+  gross_salary       Decimal @db.Decimal(20, 2)
+  taxable_income     Decimal @db.Decimal(20, 2)
+  taxable_allowance  Decimal @db.Decimal(20, 2)
+  total_deduction    Decimal @db.Decimal(20, 2)
+  net_salary         Decimal @db.Decimal(20, 2)
+
+  @@ignore
+}
+
+model titles {
+  id   BigInt @id @default(autoincrement())
+  name String @db.VarChar(50)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model transport {
+  STAFF_ID  String?  @unique(map: "STAFF_ID") @db.VarChar(9)
+  TRANSPORT Decimal? @db.Decimal(7, 2)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model upload {
+  first_name      String? @db.VarChar(9)
+  middle_name     String? @db.VarChar(9)
+  last_name       String? @db.VarChar(10)
+  dob             String? @db.VarChar(10)
+  employee_id     String? @unique(map: "employee_id") @db.VarChar(9)
+  nationality     Int?
+  SSN             String? @db.VarChar(17)
+  marital_status  String? @db.VarChar(7)
+  gender          String? @db.VarChar(1)
+  pay_grade       String? @db.VarChar(2)
+  doe             String? @db.VarChar(10)
+  date_appiont    String? @db.VarChar(10)
+  supervisor      String? @db.VarChar(9)
+  sup             Int?
+  staff_category  String? @db.VarChar(15)
+  bank_name       String? @db.VarChar(21)
+  address1        String? @db.VarChar(36)
+  address2        String? @db.VarChar(22)
+  employment_type Int?
+  notch           String? @db.VarChar(14)
+  bank_account    String? @unique(map: "bank_account") @db.VarChar(20)
+  mobile_phone    String? @db.VarChar(9)
+  email           String? @db.VarChar(29)
+  branch          String? @db.VarChar(3)
+  department      String? @db.VarChar(3)
+
+  @@ignore
+}
+
+model CodeList {
+  id          Int             @id @default(autoincrement())
+  code        String          @unique
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  isActive    Boolean         @default(true)
+  name        String          @default("")
+  values      CodeListValue[]
+
+  @@map("codelist")
+}
+
+model CodeListValue {
+  id          Int      @id @default(autoincrement())
+  codeListId  Int
+  label       String
+  code        String?
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  codeList    CodeList @relation(fields: [codeListId], references: [id])
+
+  @@unique([codeListId, code])
+  @@unique([codeListId, label])
+  @@map("codelistvalue")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model vw_departments {
+  id              BigInt?
+  title           String?              @db.TinyText
+  comp_code       String?              @db.VarChar(20)
+  description     String?              @db.Text
+  address         String?              @db.Text
+  type            vw_departments_type?
+  country         String?              @db.VarChar(2)
+  parent          BigInt?
+  timezone        String?              @db.VarChar(100)
+  comp_reg        String?              @db.VarChar(50)
+  heads           String?              @db.VarChar(255)
+  nassit          String?              @db.VarChar(50)
+  tin             String?              @db.VarChar(50)
+  ref             String?              @db.VarChar(10)
+  posting_date    DateTime?            @db.Date
+  approval_status String?              @db.VarChar(20)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model vw_employeeimprest {
+  id              BigInt?
+  employee        BigInt?
+  imprest_gl      String?                    @db.VarChar(50)
+  type            String?                    @db.VarChar(200)
+  purpose         String?                    @db.VarChar(200)
+  ref_no          String?                    @db.VarChar(20)
+  emp_acc_no      String?                    @db.VarChar(50)
+  cost_unit       String?                    @db.VarChar(50)
+  cost_dept       String?                    @db.VarChar(50)
+  branch          String?                    @db.VarChar(10)
+  xcg_rate        Decimal?                   @db.Decimal(20, 2)
+  imprest_contra  String?                    @db.VarChar(50)
+  travel_from     String?                    @db.VarChar(200)
+  travel_to       String?                    @db.VarChar(200)
+  travel_date     DateTime?                  @db.DateTime(0)
+  return_date     DateTime?                  @db.DateTime(0)
+  details         String?                    @db.VarChar(500)
+  payment_method  String?                    @db.VarChar(50)
+  funding         Decimal?                   @db.Decimal(10, 2)
+  local_eqv       Decimal?                   @db.Decimal(30, 2)
+  currency        String?                    @db.VarChar(20)
+  attachment1     String?                    @db.VarChar(100)
+  attachment2     String?                    @db.VarChar(100)
+  attachment3     String?                    @db.VarChar(100)
+  comment         String?                    @db.VarChar(100)
+  created         DateTime?                  @db.DateTime(0)
+  updated         DateTime?                  @db.DateTime(0)
+  beneficiary     BigInt?
+  beneficiary_acc String?                    @db.VarChar(50)
+  app_type        String?                    @db.VarChar(10)
+  posting_date    DateTime?                  @db.DateTime(0)
+  status          vw_employeeimprest_status?
+
+  @@ignore
+}
+
+model workinjuries {
+  id             BigInt    @id @default(autoincrement())
+  employee       BigInt
+  injury_type    String    @db.VarChar(50)
+  details        String?   @db.VarChar(100)
+  injury_date    DateTime? @db.Date
+  off_start_date DateTime? @db.Date
+  off_end_date   DateTime? @db.Date
+  status         String?   @db.VarChar(10)
+}
+
+model auditlogs {
+  id          BigInt    @id @default(autoincrement())
+  module      String    @db.VarChar(60)
+  action      String    @db.VarChar(60)
+  entity_id   String?   @db.VarChar(60)
+  entity_name String?   @db.VarChar(255)
+  user_id     BigInt?
+  user_name   String?   @db.VarChar(200)
+  ip_address  String?   @db.VarChar(60)
+  details     String?   @db.Text
+  created_at  DateTime? @default(now()) @db.DateTime(0)
+}
+
+model calculationgroups {
+  id         BigInt    @id @default(autoincrement())
+  name       String    @db.VarChar(200)
+  details    String?   @db.Text
+  created_at DateTime? @default(now()) @db.DateTime(0)
+  updated_at DateTime? @default(now()) @db.DateTime(0)
+}
+
+model calculationprocessitems {
+  id                    BigInt    @id @default(autoincrement())
+  saved_calculation_id  BigInt
+  lower_limit_condition String    @default("NO_LOWER_LIMIT") @db.VarChar(50)
+  lower_limit           Decimal?  @db.Decimal(18, 4)
+  upper_limit_condition String    @default("NO_UPPER_LIMIT") @db.VarChar(50)
+  upper_limit           Decimal?  @db.Decimal(18, 4)
+  value                 String    @default("0") @db.VarChar(200)
+  sort_order            Int?      @default(0)
+  created_at            DateTime? @default(now()) @db.DateTime(0)
+}
+
+model payfrequencies {
+  id          Int     @id @default(autoincrement())
+  name        String  @db.VarChar(100)
+  description String? @db.VarChar(200)
+  sort_order  Int     @default(99)
+  is_active   Boolean @default(true)
+}
+
+model payrollrunaudit {
+  id         BigInt    @id @default(autoincrement())
+  run_id     BigInt
+  action     String    @db.VarChar(50)
+  user_id    BigInt?
+  user_name  String?   @db.VarChar(200)
+  details    String?   @db.Text
+  created_at DateTime? @default(now()) @db.DateTime(0)
+}
+
+model payrollruns {
+  id               BigInt              @id @default(autoincrement())
+  name             String              @db.VarChar(200)
+  pay_frequency    Int?
+  date_start       DateTime?           @db.Date
+  date_end         DateTime?           @db.Date
+  deduction_group  BigInt?
+  status           payrollruns_status? @default(Draft)
+  created_at       DateTime?           @default(now()) @db.DateTime(0)
+  updated_at       DateTime?           @default(now()) @db.DateTime(0)
+  payment_type_id  BigInt?
+  submitted_by     BigInt?
+  approved_by      BigInt?
+  approved_at      DateTime?           @db.DateTime(0)
+  rejection_reason String?             @db.Text
+  document_ref     String?             @db.VarChar(100)
+  payment_log      String?             @db.Text
+  finalized_at     DateTime?           @db.DateTime(0)
+}
+
+// Per-run snapshot of the configured multi-stage approval flow + each stage's outcome. Written when a
+// run is submitted for approval; the "current" stage is the lowest stage_order still Pending.
+model payrollrun_stages {
+  id            BigInt    @id @default(autoincrement())
+  run_id        BigInt
+  stage_order   Int
+  stage_name    String    @db.VarChar(150)
+  approver_type String    @db.VarChar(10) // 'role' | 'user'
+  approver_id   String    @db.VarChar(64)
+  approver_label String?  @db.VarChar(200)
+  status        String    @default("Pending") @db.VarChar(20) // Pending | Approved | Rejected
+  acted_by      BigInt?
+  acted_at      DateTime? @db.DateTime(0)
+  comment       String?   @db.Text
+  created_at    DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([run_id], map: "idx_prs_run")
+}
+
+model medicalrequest_stages {
+  id            BigInt    @id @default(autoincrement())
+  record_type   String    @db.VarChar(12) // 'staff' | 'dependent' | 'claim'
+  record_id     BigInt                    // claims' Int id fits in BigInt
+  stage_order   Int
+  stage_name    String    @db.VarChar(150)
+  approver_type String    @db.VarChar(10) // 'role' | 'user'
+  approver_id   String    @db.VarChar(64)
+  approver_label String?  @db.VarChar(200)
+  status        String    @default("Pending") @db.VarChar(20) // Pending | Approved | Rejected
+  acted_by      BigInt?
+  acted_at      DateTime? @db.DateTime(0)
+  comment       String?   @db.Text
+  created_at    DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([record_type, record_id], map: "idx_mrs_record")
+}
+
+model employeeleave_stages {
+  id             BigInt    @id @default(autoincrement())
+  leave_id       BigInt
+  stage_order    Int
+  stage_name     String    @db.VarChar(150)
+  approver_type  String    @db.VarChar(10) // 'role' | 'user'
+  approver_id    String    @db.VarChar(64)
+  approver_label String?   @db.VarChar(200)
+  status         String    @default("Pending") @db.VarChar(20) // Pending | Approved | Rejected
+  acted_by       BigInt?
+  acted_at       DateTime? @db.DateTime(0)
+  comment        String?   @db.Text
+  created_at     DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([leave_id], map: "idx_els_leave")
+}
+
+model payslip_settings {
+  id                 Int       @id @default(autoincrement())
+  company_name       String?   @db.VarChar(200)
+  company_address    String?   @db.Text
+  company_logo_url   String?   @db.VarChar(500)
+  header_note        String?   @db.Text
+  footer_note        String?   @db.Text
+  accent_color       String?   @default("#3B82F6") @db.VarChar(20)
+  show_emp_id        Boolean   @default(true)
+  show_department    Boolean   @default(true)
+  show_position      Boolean   @default(true)
+  show_bank_account  Boolean   @default(false)
+  updated_at         DateTime? @default(now()) @db.DateTime(0)
+  template_name      String    @default("Default") @db.VarChar(100)
+  deduction_group_id BigInt?
+  visible_columns    String?   @db.Text
+  net_columns        String?   @db.Text
+  payment_type_id    BigInt?
+}
+
+model salary_history {
+  id             BigInt                @id @default(autoincrement())
+  employee_id    BigInt
+  component_id   BigInt
+  component_name String?               @db.VarChar(200)
+  action         salary_history_action
+  old_amount     String?               @db.VarChar(30)
+  new_amount     String?               @db.VarChar(30)
+  old_currency   String?               @db.VarChar(10)
+  new_currency   String?               @db.VarChar(10)
+  changed_by     String?               @db.VarChar(200)
+  created_at     DateTime?             @default(now()) @db.DateTime(0)
+}
+
+model savedcalculations {
+  id                   BigInt    @id @default(autoincrement())
+  name                 String    @db.VarChar(200)
+  target_type          String    @default("component") @db.VarChar(20)
+  target_id            BigInt?
+  target_name          String?   @db.VarChar(200)
+  calculation_group_id BigInt?
+  created_at           DateTime? @default(now()) @db.DateTime(0)
+  updated_at           DateTime? @default(now()) @db.DateTime(0)
+}
+
+model employee_disciplinary {
+  id             BigInt    @id @default(autoincrement())
+  employee       BigInt
+  incident_date  DateTime  @db.Date
+  incident_type  String    @db.VarChar(100)
+  description    String    @db.Text
+  severity       String    @default("Medium") @db.VarChar(20)
+  action_taken   String?   @db.Text
+  witnesses      String?   @db.Text
+  status         String    @default("Open") @db.VarChar(30)
+  resolution     String?   @db.Text
+  resolved_date  DateTime? @db.Date
+  raised_by      BigInt?
+  raised_by_name String?   @db.VarChar(200)
+  created_at     DateTime? @default(now()) @db.DateTime(0)
+  updated_at     DateTime? @default(now()) @db.DateTime(0)
+}
+
+enum leavetypes_supervisor_leave_assign {
+  Yes
+  No
+}
+
+enum workdays_status {
+  Full_Day        @map("Full Day")
+  Half_Day        @map("Half Day")
+  Non_working_Day @map("Non-working Day")
+}
+
+enum documents_expire_notification {
+  Yes
+  No
+}
+
+enum employeeforms_status {
+  Pending
+  Completed
+}
+
+enum employeelanguages_reading {
+  Elementary_Proficiency           @map("Elementary Proficiency")
+  Limited_Working_Proficiency      @map("Limited Working Proficiency")
+  Professional_Working_Proficiency @map("Professional Working Proficiency")
+  Full_Professional_Proficiency    @map("Full Professional Proficiency")
+  Native_or_Bilingual_Proficiency  @map("Native or Bilingual Proficiency")
+}
+
+enum employeeleavedays_leave_type {
+  Full_Day             @map("Full Day")
+  Half_Day___Morning   @map("Half Day - Morning")
+  Half_Day___Afternoon @map("Half Day - Afternoon")
+  Hour1___Morning      @map("1 Hour - Morning")
+  Hours2___Morning     @map("2 Hours - Morning")
+  Hours3___Morning     @map("3 Hours - Morning")
+  Hour1___Afternoon    @map("1 Hour - Afternoon")
+  Hours2___Afternoon   @map("2 Hours - Afternoon")
+  Hours3___Afternoon   @map("3 Hours - Afternoon")
+}
+
+enum employeesalary_pay_frequency {
+  Hourly
+  Daily
+  Bi_Weekly    @map("Bi Weekly")
+  Weekly
+  Semi_Monthly @map("Semi Monthly")
+  Monthly
+}
+
+enum holidays_status {
+  Full_Day @map("Full Day")
+  Half_Day @map("Half Day")
+}
+
+enum immigrationdocuments_required {
+  Yes
+  No
+}
+
+enum leavetypes_employee_can_apply {
+  Yes
+  No
+}
+
+enum paysliptemplates_status {
+  Show
+  Hide
+}
+
+enum companydocuments_status {
+  Active
+  Inactive
+  Draft
+}
+
+enum customfields_display {
+  Form
+  Table_and_Form @map("Table and Form")
+  Hidden
+}
+
+enum documents_expire_notification_month {
+  Yes
+  No
+}
+
+enum employeeattendancesheets_status {
+  Approved
+  Pending
+  Rejected
+  Submitted
+}
+
+enum employeelanguages_speaking {
+  Elementary_Proficiency           @map("Elementary Proficiency")
+  Limited_Working_Proficiency      @map("Limited Working Proficiency")
+  Professional_Working_Proficiency @map("Professional Working Proficiency")
+  Full_Professional_Proficiency    @map("Full Professional Proficiency")
+  Native_or_Bilingual_Proficiency  @map("Native or Bilingual Proficiency")
+}
+
+enum employeeleavelog_status_from {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum employeetimesheets_status {
+  Approved
+  Pending
+  Rejected
+  Submitted
+}
+
+enum employeetrainingsessions_status {
+  Scheduled
+  Attended
+  Not_Attended @map("Not-Attended")
+  Completed
+}
+
+enum immigrationdocuments_alert_on_missing {
+  Yes
+  No
+}
+
+enum leaveperiods_status {
+  Active
+  Inactive
+}
+
+enum leavetypes_apply_beyond_current {
+  Yes
+  No
+}
+
+enum companydocuments_notify_employees {
+  Yes
+  No
+}
+
+enum documents_expire_notification_week {
+  Yes
+  No
+}
+
+enum employeedocuments_status {
+  Active
+  Inactive
+  Draft
+}
+
+enum employeeimmigrations_status {
+  Active
+  Inactive
+  Draft
+}
+
+enum employeelanguages_writing {
+  Elementary_Proficiency           @map("Elementary Proficiency")
+  Limited_Working_Proficiency      @map("Limited Working Proficiency")
+  Professional_Working_Proficiency @map("Professional Working Proficiency")
+  Full_Professional_Proficiency    @map("Full Professional Proficiency")
+  Native_or_Bilingual_Proficiency  @map("Native or Bilingual Proficiency")
+}
+
+enum employeeleavelog_status_to {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum employeeprojects_status {
+  Current
+  Inactive
+  Completed
+}
+
+enum expensescategories_pre_approve {
+  Yes
+  No
+}
+
+enum fieldnamemappings_display {
+  Form
+  Table_and_Form @map("Table and Form")
+  Hidden
+}
+
+enum immigrationdocuments_alert_before_expiry {
+  Yes
+  No
+}
+
+enum leaverules_supervisor_leave_assign {
+  Yes
+  No
+}
+
+enum leavetypes_leave_accrue {
+  No
+  Yes
+}
+
+enum migrations_status {
+  Pending
+  Up
+  Down
+  UpError
+  DownError
+}
+
+enum projects_status {
+  Active
+  On_Hold   @map("On Hold")
+  Completed
+  Dropped
+}
+
+enum statuschangelogs_status_from {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum candidates_marital_status {
+  Married
+  Single
+  Divorced
+  Widowed
+  Other
+}
+
+enum crons_type {
+  Minutely
+  Hourly
+  Daily
+  Weekly
+  Monthly
+  Yearly
+}
+
+enum documents_expire_notification_day {
+  Yes
+  No
+}
+
+enum employeeimprest_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum employeelanguages_understanding {
+  Elementary_Proficiency           @map("Elementary Proficiency")
+  Limited_Working_Proficiency      @map("Limited Working Proficiency")
+  Professional_Working_Proficiency @map("Professional Working Proficiency")
+  Full_Professional_Proficiency    @map("Full Professional Proficiency")
+  Native_or_Bilingual_Proficiency  @map("Native or Bilingual Proficiency")
+}
+
+enum leaverules_employee_can_apply {
+  Yes
+  No
+}
+
+enum leavetypes_carried_forward {
+  No
+  Yes
+}
+
+enum reports_type {
+  Query
+  Class
+}
+
+enum statuschangelogs_status_to {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum trainingsessions_deliveryMethod {
+  Classroom
+  Self_Study @map("Self Study")
+  Online
+}
+
+enum userreports_type {
+  Query
+  Class
+}
+
+enum crons_status {
+  Enabled
+  Disabled
+}
+
+enum documents_sign {
+  Yes
+  No
+}
+
+enum leaverules_apply_beyond_current {
+  Yes
+  No
+}
+
+enum modules_status {
+  Enabled
+  Disabled
+}
+
+enum courses_paymentType {
+  Company_Sponsored @map("Company Sponsored")
+  Paid_by_Employee  @map("Paid by Employee")
+}
+
+enum leaverules_leave_accrue {
+  No
+  Yes
+}
+
+enum payrollcolumns_editable {
+  Yes
+  No
+}
+
+enum trainingsessions_status {
+  Pending
+  Approved
+  Completed
+  Cancelled
+}
+
+enum clients_status {
+  Active
+  Inactive
+}
+
+enum employeecompanyloans_status {
+  Approved
+  Repayment
+  Paid
+  Suspended
+}
+
+enum employeeleaves_status {
+  Draft
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum employeeovertime_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum leaverules_carried_forward {
+  No
+  Yes
+}
+
+enum notifications_status {
+  Unread
+  Read
+}
+
+enum payrollcolumns_enabled {
+  Yes
+  No
+}
+
+enum trainingsessions_attendanceType {
+  Sign_Up @map("Sign Up")
+  Assign
+}
+
+enum emails_status {
+  Pending
+  Sent
+  Error
+}
+
+enum employeetimeentry_status {
+  Active
+  Inactive
+}
+
+enum leavetypes_propotionate_on_joined_date {
+  No
+  Yes
+}
+
+enum courses_status {
+  Active
+  Inactive
+}
+
+enum leavetypes_send_notification_emails {
+  Yes
+  No
+}
+
+enum leaverules_propotionate_on_joined_date {
+  No
+  Yes
+}
+
+enum trainingsessions_requireProof {
+  Yes
+  No
+}
+
+enum job_showSalary {
+  Yes
+  No
+}
+
+enum employeetravelrecords_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+  Supervisor_Approved    @map("Supervisor Approved")
+  GL_Failed              @map("GL Failed")
+}
+
+enum employeeexpenses_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+  Supervisor_Approved    @map("Supervisor Approved")
+  GL_Failed              @map("GL Failed")
+}
+
+enum job_status {
+  Active
+  On_hold @map("On hold")
+  Closed
+}
+
+enum hiringpipeline_type {
+  Short_Listed @map("Short Listed")
+  Phone_Screen @map("Phone Screen")
+  Assessment
+  Interview
+  Offer
+  Hired
+  Rejected
+  Archived
+}
+
+enum companystructures_type {
+  Head_Office @map("Head Office")
+  Branch
+  Department
+  Unit
+  Outlet
+  Other
+}
+
+enum vw_departments_type {
+  Head_Office @map("Head Office")
+  Branch
+  Department
+  Unit
+  Outlet
+  Other
+}
+
+enum emaillog_status {
+  Pending
+  Sent
+  Failed
+}
+
+enum payroll_status {
+  Draft
+  Completed
+  Processing
+  Rejected
+  Approved
+}
+
+enum documents_share_with_employee {
+  Yes
+  No
+}
+
+enum employeedocuments_visible_to {
+  Owner
+  Manager
+  Admin
+}
+
+enum staffmedical_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+  Submitted
+  Draft
+  Pending_Approval       @map("Pending Approval")
+}
+
+enum staffmedical_hist_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+  Submitted
+  Draft
+  Pending_Approval       @map("Pending Approval")
+}
+
+enum dependentmedical_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+  Submitted
+  Draft
+  Pending_Approval       @map("Pending Approval")
+}
+
+enum leavetypes_employee_leave_period {
+  Yes
+  No
+}
+
+enum payrollcolumns_function_type {
+  Simple
+  Advanced
+}
+
+enum leaverules_employee_leave_period {
+  Yes
+  No
+}
+
+enum vw_employeeimprest_status {
+  Approved
+  Pending
+  Rejected
+  Cancellation_Requested @map("Cancellation Requested")
+  Cancelled
+  Processing
+}
+
+enum candidates_source {
+  Sourced
+  Applied
+}
+
+enum salary_history_action {
+  created
+  updated
+  deleted
+}
+
+enum payrollruns_status {
+  Draft
+  Processing
+  Pending_Approval @map("Pending Approval")
+  Rejected
+  Approved
+  Completed
+}
+
+model performance_cycle {
+  id             BigInt    @id @default(autoincrement())
+  name           String    @db.VarChar(150)
+  type           String    @default("Annual") @db.VarChar(30)
+  period_start   DateTime  @db.Date
+  period_end     DateTime  @db.Date
+  self_due       DateTime? @db.Date
+  supervisor_due DateTime? @db.Date
+  hr_due         DateTime? @db.Date
+  status         String    @default("Draft") @db.VarChar(20)
+  notes          String?   @db.Text
+  created_by     BigInt?
+  created_at     DateTime? @default(now()) @db.DateTime(0)
+  updated_at     DateTime? @default(now()) @db.DateTime(0)
+}
+
+model performance_review {
+  id                   BigInt    @id @default(autoincrement())
+  cycle_id             BigInt
+  employee             BigInt
+  supervisor           BigInt?
+  hr_reviewer          BigInt?
+  status               String    @default("Not Started") @db.VarChar(30)
+  self_score           Decimal?  @db.Decimal(4, 2)
+  self_comments        String?   @db.Text
+  self_submitted       DateTime? @db.DateTime(0)
+  supervisor_score     Decimal?  @db.Decimal(4, 2)
+  supervisor_comments  String?   @db.Text
+  supervisor_reviewed  DateTime? @db.DateTime(0)
+  strengths            String?   @db.Text
+  improvements         String?   @db.Text
+  hr_score             Decimal?  @db.Decimal(4, 2)
+  hr_comments          String?   @db.Text
+  hr_reviewed          DateTime? @db.DateTime(0)
+  overall_score        Decimal?  @db.Decimal(4, 2)
+  development_plan     String?   @db.Text
+  created_at           DateTime? @default(now()) @db.DateTime(0)
+  updated_at           DateTime? @default(now()) @db.DateTime(0)
+}
+
+model performance_goal {
+  id            BigInt    @id @default(autoincrement())
+  employee      BigInt
+  cycle_id      BigInt?
+  title         String    @db.VarChar(200)
+  description   String?   @db.Text
+  weight        Int?
+  target        String?   @db.VarChar(300)
+  progress_note String?   @db.Text
+  status        String    @default("Active") @db.VarChar(20)
+  due_date      DateTime? @db.Date
+  achievement            String?  @db.VarChar(30)
+  actual_result          String?  @db.Text
+  employee_score         Decimal? @db.Decimal(5, 2)
+  supervisor_score       Decimal? @db.Decimal(5, 2)
+  hr_score               Decimal? @db.Decimal(5, 2)
+  source                 String   @default("hr") @db.VarChar(20)
+  comment                String?  @db.Text
+  supervisor_comment     String?  @db.Text
+  hr_comment             String?  @db.Text
+  document_ref           String?  @db.VarChar(150)
+  created_at             DateTime? @default(now()) @db.DateTime(0)
+  updated_at             DateTime? @default(now()) @db.DateTime(0)
+}
+
+model performance_competency {
+  id          BigInt  @id @default(autoincrement())
+  name        String  @db.VarChar(150)
+  category    String  @db.VarChar(100)
+  description String? @db.Text
+  is_active   Boolean @default(true)
+}
+
+model performance_comp_rating {
+  id                BigInt  @id @default(autoincrement())
+  review_id         BigInt
+  competency_id     BigInt
+  self_rating       Int?
+  supervisor_rating Int?
+  hr_rating         Int?
+  self_comment      String? @db.Text
+  supervisor_comment String? @db.Text
+  hr_comment        String? @db.Text
+}
+
+// ── Training & Development ────────────────────────────────────────────────────
+
+model trainingcatalog {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  category    String   @db.VarChar(50)
+  type        String   @db.VarChar(50)
+  provider    String?  @db.VarChar(255)
+  description String?  @db.Text
+  cost        Decimal  @default(0) @db.Decimal(30, 2)
+  currency    String?  @db.VarChar(50)
+  max_seats   Int?
+  is_active   Boolean  @default(true)
+  created_by  String?  @db.VarChar(100)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+}
+
+model trainingcatalogslot {
+  id         BigInt    @id @default(autoincrement())
+  catalog_id BigInt
+  start_date DateTime  @db.Date
+  end_date   DateTime? @db.Date
+  venue      String?   @db.VarChar(255)
+  max_seats  Int?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now()) @updatedAt
+}
+
+model trainingnomination {
+  id                  BigInt    @id @default(autoincrement())
+  employee            BigInt
+  employee_id         String    @db.VarChar(20)
+  training_catalog_id BigInt?
+  training_name       String    @db.VarChar(255)
+  provider            String?   @db.VarChar(255)
+  category            String?   @db.VarChar(50)
+  type                String?   @db.VarChar(50)
+  start_date          DateTime  @db.Date
+  end_date            DateTime? @db.Date
+  venue               String?   @db.VarChar(255)
+  cost                Decimal?  @db.Decimal(30, 2)
+  currency            String?   @db.VarChar(50)
+  nomination_type     String    @default("Self") @db.VarChar(20)
+  status              String    @default("Draft") @db.VarChar(30)
+  notes               String?   @db.Text
+  certificate         String?   @db.VarChar(255)
+  score               Decimal?  @db.Decimal(5, 2)
+  rejection_reason    String?   @db.Text
+  nominated_by        String?   @db.VarChar(100)
+  approved_by         String?   @db.VarChar(100)
+  approved_at         DateTime?
+  completed_at        DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @default(now()) @updatedAt
+}
+
+// ── AI Assistant ───────────────────────────────────────────────────────────────
+// Vector index for offline RAG. content + its embedding (JSON array) and where it came
+// from (help article or a document). Cosine similarity is computed in Node.
+model ai_embeddings {
+  id          BigInt   @id @default(autoincrement())
+  source_type String   @db.VarChar(20)   // 'help' | 'document'
+  source_id   String   @db.VarChar(120)  // article id / document id
+  chunk_index Int      @default(0)
+  title       String?  @db.VarChar(255)
+  content     String   @db.Text
+  embedding   String   @db.LongText       // JSON-encoded number[]
+  updated_at  DateTime @default(now()) @updatedAt
+
+  @@index([source_type], map: "idx_ai_emb_source")
+}
+
+// Per-user assistant chat history.
+model ai_messages {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  role       String   @db.VarChar(16)     // 'user' | 'assistant'
+  content    String   @db.Text
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([user_id], map: "idx_ai_msg_user")
+}
+
+// Cached attrition-risk scorecard results (recomputed on demand / nightly).
+model ai_attrition_scores {
+  id           BigInt   @id @default(autoincrement())
+  employee_id  BigInt   @unique(map: "uq_ai_attr_emp")
+  score        Int                          // 0–100
+  band         String   @db.VarChar(10)     // Low | Medium | High
+  factors      String   @db.Text            // JSON: top contributing factors
+  computed_at  DateTime @default(now()) @db.DateTime(0)
+}
+
+// Admin-managed free-form knowledge the assistant can feed on (in addition to the help file,
+// the knowledge/ folder, and company documents). Indexed into ai_embeddings on reindex.
+model ai_knowledge {
+  id         BigInt   @id @default(autoincrement())
+  title      String   @db.VarChar(255)
+  content    String   @db.LongText
+  enabled    Boolean  @default(true)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+// Admin-editable overrides for system response messages. message_key is the default text (static
+// messages) or the template key (dynamic messages); only edited messages are stored here.
+model message_overrides {
+  id            BigInt   @id @default(autoincrement())
+  message_key   String   @unique @db.VarChar(255)
+  override_text String   @db.Text
+  enabled       Boolean  @default(true)
+  updated_at    DateTime @default(now()) @updatedAt @db.DateTime(0)
+}

@@ -1,0 +1,3980 @@
+[
+  {
+    "key": "AI config",
+    "category": "Ai",
+    "kind": "static",
+    "default": "AI config"
+  },
+  {
+    "key": "AI config saved",
+    "category": "Ai",
+    "kind": "static",
+    "default": "AI config saved"
+  },
+  {
+    "key": "AI document understanding is disabled.",
+    "category": "Ai",
+    "kind": "static",
+    "default": "AI document understanding is disabled."
+  },
+  {
+    "key": "AI drafting is disabled.",
+    "category": "Ai",
+    "kind": "static",
+    "default": "AI drafting is disabled."
+  },
+  {
+    "key": "AI health",
+    "category": "Ai",
+    "kind": "static",
+    "default": "AI health"
+  },
+  {
+    "key": "AI insights are disabled.",
+    "category": "Ai",
+    "kind": "static",
+    "default": "AI insights are disabled."
+  },
+  {
+    "key": "Attrition insights",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Attrition insights"
+  },
+  {
+    "key": "Content is required",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Content is required"
+  },
+  {
+    "key": "context is required",
+    "category": "Ai",
+    "kind": "static",
+    "default": "context is required"
+  },
+  {
+    "key": "Invalid id",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Invalid id"
+  },
+  {
+    "key": "Knowledge entries",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Knowledge entries"
+  },
+  {
+    "key": "Knowledge entry added",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Knowledge entry added"
+  },
+  {
+    "key": "Knowledge entry deleted",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Knowledge entry deleted"
+  },
+  {
+    "key": "Knowledge entry updated",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Knowledge entry updated"
+  },
+  {
+    "key": "Knowledge reindexed",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Knowledge reindexed"
+  },
+  {
+    "key": "message is required",
+    "category": "Ai",
+    "kind": "static",
+    "default": "message is required"
+  },
+  {
+    "key": "No file uploaded",
+    "category": "Ai",
+    "kind": "static",
+    "default": "No file uploaded"
+  },
+  {
+    "key": "Nothing to update",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Nothing to update"
+  },
+  {
+    "key": "OCR complete",
+    "category": "Ai",
+    "kind": "static",
+    "default": "OCR complete"
+  },
+  {
+    "key": "The AI assistant is disabled.",
+    "category": "Ai",
+    "kind": "static",
+    "default": "The AI assistant is disabled."
+  },
+  {
+    "key": "Title is required",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Title is required"
+  },
+  {
+    "key": "Unknown draft kind",
+    "category": "Ai",
+    "kind": "static",
+    "default": "Unknown draft kind"
+  },
+  {
+    "key": "API integration settings",
+    "category": "ApiIntegration",
+    "kind": "static",
+    "default": "API integration settings"
+  },
+  {
+    "key": "API integration settings saved",
+    "category": "ApiIntegration",
+    "kind": "static",
+    "default": "API integration settings saved"
+  },
+  {
+    "key": "A photo is required to clock in — please allow camera access and try again",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "A photo is required to clock in — please allow camera access and try again"
+  },
+  {
+    "key": "A record already exists for this employee on this date — edit it instead",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "A record already exists for this employee on this date — edit it instead"
+  },
+  {
+    "key": "Attendance log",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Attendance log"
+  },
+  {
+    "key": "Attendance recorded",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Attendance recorded"
+  },
+  {
+    "key": "Attendance settings",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Attendance settings"
+  },
+  {
+    "key": "Attendance settings saved",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Attendance settings saved"
+  },
+  {
+    "key": "Attendance summary",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Attendance summary"
+  },
+  {
+    "key": "CSV file is required (field name \"file\")",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "CSV file is required (field name \"file\")"
+  },
+  {
+    "key": "Date is required",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Date is required"
+  },
+  {
+    "key": "Date range cannot exceed one year",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Date range cannot exceed one year"
+  },
+  {
+    "key": "Employee",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Employee"
+  },
+  {
+    "key": "Employee is required",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Employee is required"
+  },
+  {
+    "key": "File is empty",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "File is empty"
+  },
+  {
+    "key": "Import batches",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Import batches"
+  },
+  {
+    "key": "Import processed",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Import processed"
+  },
+  {
+    "key": "In time is required",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "In time is required"
+  },
+  {
+    "key": "Invalid employee",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Invalid employee"
+  },
+  {
+    "key": "Invalid ID",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Invalid ID"
+  },
+  {
+    "key": "Key regenerated — store it now, it will not be shown again",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Key regenerated — store it now, it will not be shown again"
+  },
+  {
+    "key": "Kiosk",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Kiosk"
+  },
+  {
+    "key": "Location is required to clock in — please allow location access in your browser and try again",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Location is required to clock in — please allow location access in your browser and try again"
+  },
+  {
+    "key": "Maximum 5000 punches per request",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Maximum 5000 punches per request"
+  },
+  {
+    "key": "Night shift employees",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Night shift employees"
+  },
+  {
+    "key": "No data rows found — expected employee_no,date,time or employee_no,datetime",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "No data rows found — expected employee_no,date,time or employee_no,datetime"
+  },
+  {
+    "key": "No employee matches that staff ID",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "No employee matches that staff ID"
+  },
+  {
+    "key": "Photo is required",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Photo is required"
+  },
+  {
+    "key": "Punch photos",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Punch photos"
+  },
+  {
+    "key": "Punch policy",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Punch policy"
+  },
+  {
+    "key": "Punches",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Punches"
+  },
+  {
+    "key": "punches array is required",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "punches array is required"
+  },
+  {
+    "key": "Record not found",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Record not found"
+  },
+  {
+    "key": "Record updated",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Record updated"
+  },
+  {
+    "key": "Record voided",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Record voided"
+  },
+  {
+    "key": "Removed from night shift",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Removed from night shift"
+  },
+  {
+    "key": "Select at least one employee",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Select at least one employee"
+  },
+  {
+    "key": "Subordinate attendance",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Subordinate attendance"
+  },
+  {
+    "key": "Sync processed",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Sync processed"
+  },
+  {
+    "key": "Timesheet",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Timesheet"
+  },
+  {
+    "key": "Today",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Today"
+  },
+  {
+    "key": "You just punched — please wait a minute before punching again",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "You just punched — please wait a minute before punching again"
+  },
+  {
+    "key": "Your account is not linked to an employee profile",
+    "category": "Attendance",
+    "kind": "static",
+    "default": "Your account is not linked to an employee profile"
+  },
+  {
+    "key": "Audit logs retrieved",
+    "category": "Audit",
+    "kind": "static",
+    "default": "Audit logs retrieved"
+  },
+  {
+    "key": "Modules",
+    "category": "Audit",
+    "kind": "static",
+    "default": "Modules"
+  },
+  {
+    "key": "A calculation group with this name already exists",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "A calculation group with this name already exists"
+  },
+  {
+    "key": "A column with this name already exists",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "A column with this name already exists"
+  },
+  {
+    "key": "A pay frequency with this name already exists",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "A pay frequency with this name already exists"
+  },
+  {
+    "key": "A saved calculation with this name already exists",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "A saved calculation with this name already exists"
+  },
+  {
+    "key": "Array of {id, colorder} required",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Array of {id, colorder} required"
+  },
+  {
+    "key": "Calculation group created",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Calculation group created"
+  },
+  {
+    "key": "Calculation group deleted",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Calculation group deleted"
+  },
+  {
+    "key": "Calculation group not found",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Calculation group not found"
+  },
+  {
+    "key": "Calculation group updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Calculation group updated"
+  },
+  {
+    "key": "Calculation groups retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Calculation groups retrieved"
+  },
+  {
+    "key": "Cannot delete: frequency is used by payroll employees",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Cannot delete: frequency is used by payroll employees"
+  },
+  {
+    "key": "Cannot delete: group is in use by saved calculations",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Cannot delete: group is in use by saved calculations"
+  },
+  {
+    "key": "Column order updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Column order updated"
+  },
+  {
+    "key": "Currency is required",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Currency is required"
+  },
+  {
+    "key": "Each item needs id and colorder",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Each item needs id and colorder"
+  },
+  {
+    "key": "Invalid target type",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Invalid target type"
+  },
+  {
+    "key": "Name is required",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Name is required"
+  },
+  {
+    "key": "Pay frequencies retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Pay frequencies retrieved"
+  },
+  {
+    "key": "Pay frequency created",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Pay frequency created"
+  },
+  {
+    "key": "Pay frequency deleted",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Pay frequency deleted"
+  },
+  {
+    "key": "Pay frequency is required",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Pay frequency is required"
+  },
+  {
+    "key": "Pay frequency not found",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Pay frequency not found"
+  },
+  {
+    "key": "Pay frequency updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Pay frequency updated"
+  },
+  {
+    "key": "Payroll column created",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll column created"
+  },
+  {
+    "key": "Payroll column deleted",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll column deleted"
+  },
+  {
+    "key": "Payroll column not found",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll column not found"
+  },
+  {
+    "key": "Payroll column updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll column updated"
+  },
+  {
+    "key": "Payroll columns retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll columns retrieved"
+  },
+  {
+    "key": "Payroll employee created",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll employee created"
+  },
+  {
+    "key": "Payroll employee deleted",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll employee deleted"
+  },
+  {
+    "key": "Payroll employee not found",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll employee not found"
+  },
+  {
+    "key": "Payroll employee updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll employee updated"
+  },
+  {
+    "key": "Payroll employees retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payroll employees retrieved"
+  },
+  {
+    "key": "Payslip templates retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Payslip templates retrieved"
+  },
+  {
+    "key": "Saved calculation created",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Saved calculation created"
+  },
+  {
+    "key": "Saved calculation deleted",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Saved calculation deleted"
+  },
+  {
+    "key": "Saved calculation not found",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Saved calculation not found"
+  },
+  {
+    "key": "Saved calculation retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Saved calculation retrieved"
+  },
+  {
+    "key": "Saved calculation updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Saved calculation updated"
+  },
+  {
+    "key": "Saved calculations retrieved",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Saved calculations retrieved"
+  },
+  {
+    "key": "Template created",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Template created"
+  },
+  {
+    "key": "Template deleted",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Template deleted"
+  },
+  {
+    "key": "Template name is required",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Template name is required"
+  },
+  {
+    "key": "Template updated",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "Template updated"
+  },
+  {
+    "key": "This employee already has a payroll record",
+    "category": "Calculation",
+    "kind": "static",
+    "default": "This employee already has a payroll record"
+  },
+  {
+    "key": "A structure cannot be its own parent",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "A structure cannot be its own parent"
+  },
+  {
+    "key": "Company structures fetched",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Company structures fetched"
+  },
+  {
+    "key": "Parent structure not found",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Parent structure not found"
+  },
+  {
+    "key": "Structure created",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Structure created"
+  },
+  {
+    "key": "Structure deleted",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Structure deleted"
+  },
+  {
+    "key": "Structure fetched",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Structure fetched"
+  },
+  {
+    "key": "Structure not found",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Structure not found"
+  },
+  {
+    "key": "Structure types fetched",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Structure types fetched"
+  },
+  {
+    "key": "Structure updated",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "Structure updated"
+  },
+  {
+    "key": "This parent assignment would create a circular reference",
+    "category": "CompanyStructure",
+    "kind": "static",
+    "default": "This parent assignment would create a circular reference"
+  },
+  {
+    "key": "Dashboard summary",
+    "category": "Dashboard",
+    "kind": "static",
+    "default": "Dashboard summary"
+  },
+  {
+    "key": "Module stats",
+    "category": "Dashboard",
+    "kind": "static",
+    "default": "Module stats"
+  },
+  {
+    "key": "Description is required",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Description is required"
+  },
+  {
+    "key": "Disciplinary meta",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Disciplinary meta"
+  },
+  {
+    "key": "Disciplinary record created",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Disciplinary record created"
+  },
+  {
+    "key": "Disciplinary record deleted",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Disciplinary record deleted"
+  },
+  {
+    "key": "Disciplinary record updated",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Disciplinary record updated"
+  },
+  {
+    "key": "Disciplinary records retrieved",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Disciplinary records retrieved"
+  },
+  {
+    "key": "Employee not found",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Employee not found"
+  },
+  {
+    "key": "Incident date is required",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Incident date is required"
+  },
+  {
+    "key": "Incident type is required",
+    "category": "Disciplinary",
+    "kind": "static",
+    "default": "Incident type is required"
+  },
+  {
+    "key": "Company document created",
+    "category": "Document",
+    "kind": "static",
+    "default": "Company document created"
+  },
+  {
+    "key": "Company document deleted",
+    "category": "Document",
+    "kind": "static",
+    "default": "Company document deleted"
+  },
+  {
+    "key": "Company document updated",
+    "category": "Document",
+    "kind": "static",
+    "default": "Company document updated"
+  },
+  {
+    "key": "Company documents",
+    "category": "Document",
+    "kind": "static",
+    "default": "Company documents"
+  },
+  {
+    "key": "Document settings",
+    "category": "Document",
+    "kind": "static",
+    "default": "Document settings"
+  },
+  {
+    "key": "Document settings saved",
+    "category": "Document",
+    "kind": "static",
+    "default": "Document settings saved"
+  },
+  {
+    "key": "Document uploaded",
+    "category": "Document",
+    "kind": "static",
+    "default": "Document uploaded"
+  },
+  {
+    "key": "Employee document created",
+    "category": "Document",
+    "kind": "static",
+    "default": "Employee document created"
+  },
+  {
+    "key": "Employee document deleted",
+    "category": "Document",
+    "kind": "static",
+    "default": "Employee document deleted"
+  },
+  {
+    "key": "Employee document updated",
+    "category": "Document",
+    "kind": "static",
+    "default": "Employee document updated"
+  },
+  {
+    "key": "Employee documents",
+    "category": "Document",
+    "kind": "static",
+    "default": "Employee documents"
+  },
+  {
+    "key": "No employee record linked",
+    "category": "Document",
+    "kind": "static",
+    "default": "No employee record linked"
+  },
+  {
+    "key": "No file provided",
+    "category": "Document",
+    "kind": "static",
+    "default": "No file provided"
+  },
+  {
+    "key": "Not authenticated",
+    "category": "Document",
+    "kind": "static",
+    "default": "Not authenticated"
+  },
+  {
+    "key": "Personal documents",
+    "category": "Document",
+    "kind": "static",
+    "default": "Personal documents"
+  },
+  {
+    "key": "Shared documents",
+    "category": "Document",
+    "kind": "static",
+    "default": "Shared documents"
+  },
+  {
+    "key": "Active employees retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Active employees retrieved"
+  },
+  {
+    "key": "An employee with this personal email already exists",
+    "category": "Employee",
+    "kind": "static",
+    "default": "An employee with this personal email already exists"
+  },
+  {
+    "key": "An employee with this work email already exists",
+    "category": "Employee",
+    "kind": "static",
+    "default": "An employee with this work email already exists"
+  },
+  {
+    "key": "Cannot change status of an unapproved employee",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Cannot change status of an unapproved employee"
+  },
+  {
+    "key": "Cannot edit a terminated or resigned employee",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Cannot edit a terminated or resigned employee"
+  },
+  {
+    "key": "Employee activity retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee activity retrieved"
+  },
+  {
+    "key": "Employee application rejected",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee application rejected"
+  },
+  {
+    "key": "Employee created successfully. Awaiting approval.",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee created successfully. Awaiting approval."
+  },
+  {
+    "key": "Employee ID is already in use by another employee",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee ID is already in use by another employee"
+  },
+  {
+    "key": "Employee is not yet approved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee is not yet approved"
+  },
+  {
+    "key": "Employee reinstated",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee reinstated"
+  },
+  {
+    "key": "Employee retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee retrieved"
+  },
+  {
+    "key": "Employee synced successfully",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee synced successfully"
+  },
+  {
+    "key": "Employee updated",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employee updated"
+  },
+  {
+    "key": "Employees retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Employees retrieved"
+  },
+  {
+    "key": "Invalid employee ID",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Invalid employee ID"
+  },
+  {
+    "key": "Notches retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Notches retrieved"
+  },
+  {
+    "key": "One or more selected options are invalid or inactive",
+    "category": "Employee",
+    "kind": "static",
+    "default": "One or more selected options are invalid or inactive"
+  },
+  {
+    "key": "Only active employees can initiate resignation",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Only active employees can initiate resignation"
+  },
+  {
+    "key": "Only approved employees can be synced",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Only approved employees can be synced"
+  },
+  {
+    "key": "Paygrades retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Paygrades retrieved"
+  },
+  {
+    "key": "Personal email already in use by another employee",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Personal email already in use by another employee"
+  },
+  {
+    "key": "Position impact retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Position impact retrieved"
+  },
+  {
+    "key": "Certification added",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Certification added"
+  },
+  {
+    "key": "Certification is required",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Certification is required"
+  },
+  {
+    "key": "Certification removed",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Certification removed"
+  },
+  {
+    "key": "Certification updated",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Certification updated"
+  },
+  {
+    "key": "Certifications retrieved",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Certifications retrieved"
+  },
+  {
+    "key": "Dependent added",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Dependent added"
+  },
+  {
+    "key": "Dependent removed",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Dependent removed"
+  },
+  {
+    "key": "Dependent updated",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Dependent updated"
+  },
+  {
+    "key": "Dependents retrieved",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Dependents retrieved"
+  },
+  {
+    "key": "Education record added",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Education record added"
+  },
+  {
+    "key": "Education record removed",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Education record removed"
+  },
+  {
+    "key": "Education record updated",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Education record updated"
+  },
+  {
+    "key": "Education retrieved",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Education retrieved"
+  },
+  {
+    "key": "Emergency contact added",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Emergency contact added"
+  },
+  {
+    "key": "Emergency contact removed",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Emergency contact removed"
+  },
+  {
+    "key": "Emergency contact updated",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Emergency contact updated"
+  },
+  {
+    "key": "Emergency contacts retrieved",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Emergency contacts retrieved"
+  },
+  {
+    "key": "Language added",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Language added"
+  },
+  {
+    "key": "Language is required",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Language is required"
+  },
+  {
+    "key": "Language removed",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Language removed"
+  },
+  {
+    "key": "Language updated",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Language updated"
+  },
+  {
+    "key": "Languages retrieved",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Languages retrieved"
+  },
+  {
+    "key": "Skill added",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Skill added"
+  },
+  {
+    "key": "Skill is required",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Skill is required"
+  },
+  {
+    "key": "Skill removed",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Skill removed"
+  },
+  {
+    "key": "Skill updated",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Skill updated"
+  },
+  {
+    "key": "Skills retrieved",
+    "category": "EmployeeRelations",
+    "kind": "static",
+    "default": "Skills retrieved"
+  },
+  {
+    "key": "Resignation submitted for approval",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Resignation submitted for approval"
+  },
+  {
+    "key": "Resigned employees cannot be modified",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Resigned employees cannot be modified"
+  },
+  {
+    "key": "Self-approval is disabled — a different approver must review this employee",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Self-approval is disabled — a different approver must review this employee"
+  },
+  {
+    "key": "Staff organogram retrieved",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Staff organogram retrieved"
+  },
+  {
+    "key": "Terminated employees cannot be modified",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Terminated employees cannot be modified"
+  },
+  {
+    "key": "Work email already in use by another employee",
+    "category": "Employee",
+    "kind": "static",
+    "default": "Work email already in use by another employee"
+  },
+  {
+    "key": "All employee leaves",
+    "category": "Leave",
+    "kind": "static",
+    "default": "All employee leaves"
+  },
+  {
+    "key": "Approval flow settings",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Approval flow settings"
+  },
+  {
+    "key": "Approval flow settings saved",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Approval flow settings saved"
+  },
+  {
+    "key": "Calendar leaves",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Calendar leaves"
+  },
+  {
+    "key": "Calendar settings",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Calendar settings"
+  },
+  {
+    "key": "Calendar settings saved",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Calendar settings saved"
+  },
+  {
+    "key": "Cannot apply leave for an inactive employee",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Cannot apply leave for an inactive employee"
+  },
+  {
+    "key": "Carry forward recalculated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Carry forward recalculated"
+  },
+  {
+    "key": "Employee added to group",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Employee added to group"
+  },
+  {
+    "key": "Employee already in this group",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Employee already in this group"
+  },
+  {
+    "key": "Employee is not eligible for this leave type based on their pay grade",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Employee is not eligible for this leave type based on their pay grade"
+  },
+  {
+    "key": "Employee removed from group",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Employee removed from group"
+  },
+  {
+    "key": "employee_id is required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "employee_id is required"
+  },
+  {
+    "key": "Financial approval granted — GL will post on leave start date",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Financial approval granted — GL will post on leave start date"
+  },
+  {
+    "key": "GL posting already processed or in progress",
+    "category": "Leave",
+    "kind": "static",
+    "default": "GL posting already processed or in progress"
+  },
+  {
+    "key": "GL posting failed again — check server logs",
+    "category": "Leave",
+    "kind": "static",
+    "default": "GL posting failed again — check server logs"
+  },
+  {
+    "key": "GL posting succeeded",
+    "category": "Leave",
+    "kind": "static",
+    "default": "GL posting succeeded"
+  },
+  {
+    "key": "Group employees",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Group employees"
+  },
+  {
+    "key": "Group name is required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Group name is required"
+  },
+  {
+    "key": "Group paygrades",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Group paygrades"
+  },
+  {
+    "key": "Holiday created",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Holiday created"
+  },
+  {
+    "key": "Holiday deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Holiday deleted"
+  },
+  {
+    "key": "Holiday updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Holiday updated"
+  },
+  {
+    "key": "Holidays",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Holidays"
+  },
+  {
+    "key": "Invalid date format",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Invalid date format"
+  },
+  {
+    "key": "Leave allowance settings",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave allowance settings"
+  },
+  {
+    "key": "Leave application submitted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave application submitted"
+  },
+  {
+    "key": "Leave approvals",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave approvals"
+  },
+  {
+    "key": "Leave balance",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave balance"
+  },
+  {
+    "key": "Leave cancelled",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave cancelled"
+  },
+  {
+    "key": "Leave cannot be cancelled after it has started",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave cannot be cancelled after it has started"
+  },
+  {
+    "key": "Leave dates must fall within the selected leave period",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave dates must fall within the selected leave period"
+  },
+  {
+    "key": "Leave deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave deleted"
+  },
+  {
+    "key": "Leave finalized — GL posting in progress",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave finalized — GL posting in progress"
+  },
+  {
+    "key": "Leave GL posting has not failed — no retry needed",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave GL posting has not failed — no retry needed"
+  },
+  {
+    "key": "Leave group created",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave group created"
+  },
+  {
+    "key": "Leave group deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave group deleted"
+  },
+  {
+    "key": "Leave group updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave group updated"
+  },
+  {
+    "key": "Leave groups",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave groups"
+  },
+  {
+    "key": "Leave is not pending financial approval",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave is not pending financial approval"
+  },
+  {
+    "key": "Leave not found",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave not found"
+  },
+  {
+    "key": "Leave period activated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave period activated"
+  },
+  {
+    "key": "Leave period created",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave period created"
+  },
+  {
+    "key": "Leave period deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave period deleted"
+  },
+  {
+    "key": "Leave period not found",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave period not found"
+  },
+  {
+    "key": "Leave period updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave period updated"
+  },
+  {
+    "key": "Leave periods",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave periods"
+  },
+  {
+    "key": "Leave rejected",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave rejected"
+  },
+  {
+    "key": "Leave rule created",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave rule created"
+  },
+  {
+    "key": "Leave rule deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave rule deleted"
+  },
+  {
+    "key": "Leave rule updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave rule updated"
+  },
+  {
+    "key": "Leave rules",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave rules"
+  },
+  {
+    "key": "Leave type created",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave type created"
+  },
+  {
+    "key": "Leave type deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave type deleted"
+  },
+  {
+    "key": "Leave type name is required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave type name is required"
+  },
+  {
+    "key": "Leave type not found",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave type not found"
+  },
+  {
+    "key": "Leave type updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave type updated"
+  },
+  {
+    "key": "Leave types",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave types"
+  },
+  {
+    "key": "Leave updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leave updated"
+  },
+  {
+    "key": "leave_type is required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "leave_type is required"
+  },
+  {
+    "key": "leave_type, leave_period, date_start and date_end are required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "leave_type, leave_period, date_start and date_end are required"
+  },
+  {
+    "key": "Leaves",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Leaves"
+  },
+  {
+    "key": "Name and date are required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Name and date are required"
+  },
+  {
+    "key": "No active leave period",
+    "category": "Leave",
+    "kind": "static",
+    "default": "No active leave period"
+  },
+  {
+    "key": "No employee record linked to your account. Contact HR to link your profile.",
+    "category": "Leave",
+    "kind": "static",
+    "default": "No employee record linked to your account. Contact HR to link your profile."
+  },
+  {
+    "key": "No fields to update",
+    "category": "Leave",
+    "kind": "static",
+    "default": "No fields to update"
+  },
+  {
+    "key": "No prior period found — starting balances cleared",
+    "category": "Leave",
+    "kind": "static",
+    "default": "No prior period found — starting balances cleared"
+  },
+  {
+    "key": "Only Approved leaves can be cancelled",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Only Approved leaves can be cancelled"
+  },
+  {
+    "key": "Only Approved leaves can be finalized",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Only Approved leaves can be finalized"
+  },
+  {
+    "key": "Only Draft or Pending leaves can be submitted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Only Draft or Pending leaves can be submitted"
+  },
+  {
+    "key": "Only HR/admin can retry GL posting",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Only HR/admin can retry GL posting"
+  },
+  {
+    "key": "Only Pending or Draft leaves can be deleted",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Only Pending or Draft leaves can be deleted"
+  },
+  {
+    "key": "Only Pending or Draft leaves can be edited",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Only Pending or Draft leaves can be edited"
+  },
+  {
+    "key": "Paygrade already assigned to this group",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Paygrade already assigned to this group"
+  },
+  {
+    "key": "Paygrade assigned to group",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Paygrade assigned to group"
+  },
+  {
+    "key": "Paygrade removed from group",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Paygrade removed from group"
+  },
+  {
+    "key": "paygrade_id is required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "paygrade_id is required"
+  },
+  {
+    "key": "Settings saved",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Settings saved"
+  },
+  {
+    "key": "Start and end dates are required",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Start and end dates are required"
+  },
+  {
+    "key": "Start date must be on or before end date",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Start date must be on or before end date"
+  },
+  {
+    "key": "Subordinate employees",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Subordinate employees"
+  },
+  {
+    "key": "Subordinate leaves",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Subordinate leaves"
+  },
+  {
+    "key": "Supervisors cannot assign this leave type to subordinates",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Supervisors cannot assign this leave type to subordinates"
+  },
+  {
+    "key": "The selected date range contains no working days (weekends or public holidays only)",
+    "category": "Leave",
+    "kind": "static",
+    "default": "The selected date range contains no working days (weekends or public holidays only)"
+  },
+  {
+    "key": "The selected dates overlap with an existing leave application",
+    "category": "Leave",
+    "kind": "static",
+    "default": "The selected dates overlap with an existing leave application"
+  },
+  {
+    "key": "This leave was approved before allowance was enabled and is not eligible for payout",
+    "category": "Leave",
+    "kind": "static",
+    "default": "This leave was approved before allowance was enabled and is not eligible for payout"
+  },
+  {
+    "key": "Threshold settings",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Threshold settings"
+  },
+  {
+    "key": "Threshold settings saved",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Threshold settings saved"
+  },
+  {
+    "key": "Work week",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Work week"
+  },
+  {
+    "key": "Work week updated",
+    "category": "Leave",
+    "kind": "static",
+    "default": "Work week updated"
+  },
+  {
+    "key": "You are not authorised to approve this allowance",
+    "category": "Leave",
+    "kind": "static",
+    "default": "You are not authorised to approve this allowance"
+  },
+  {
+    "key": "Account is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Account is required"
+  },
+  {
+    "key": "Admission date is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Admission date is required"
+  },
+  {
+    "key": "Amount is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Amount is required"
+  },
+  {
+    "key": "Approved",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Approved"
+  },
+  {
+    "key": "At least one item is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "At least one item is required"
+  },
+  {
+    "key": "Claim approved",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Claim approved"
+  },
+  {
+    "key": "Claim created",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Claim created"
+  },
+  {
+    "key": "Claim not found",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Claim not found"
+  },
+  {
+    "key": "Claim rejected",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Claim rejected"
+  },
+  {
+    "key": "Claim submitted for approval",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Claim submitted for approval"
+  },
+  {
+    "key": "Claim updated",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Claim updated"
+  },
+  {
+    "key": "Cost is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Cost is required"
+  },
+  {
+    "key": "Date attended is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Date attended is required"
+  },
+  {
+    "key": "Deleted",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Deleted"
+  },
+  {
+    "key": "Dependent medical record created",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Dependent medical record created"
+  },
+  {
+    "key": "Dependent medical record updated",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Dependent medical record updated"
+  },
+  {
+    "key": "Dependent medical records",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Dependent medical records"
+  },
+  {
+    "key": "Employee medical enquiry",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Employee medical enquiry"
+  },
+  {
+    "key": "Finalized",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Finalized"
+  },
+  {
+    "key": "GL already posted for this claim",
+    "category": "Medical",
+    "kind": "static",
+    "default": "GL already posted for this claim"
+  },
+  {
+    "key": "GL already posted for this record",
+    "category": "Medical",
+    "kind": "static",
+    "default": "GL already posted for this record"
+  },
+  {
+    "key": "GL retry complete",
+    "category": "Medical",
+    "kind": "static",
+    "default": "GL retry complete"
+  },
+  {
+    "key": "GL settings saved",
+    "category": "Medical",
+    "kind": "static",
+    "default": "GL settings saved"
+  },
+  {
+    "key": "Hospital claims",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospital claims"
+  },
+  {
+    "key": "Hospital is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospital is required"
+  },
+  {
+    "key": "Hospital registered",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospital registered"
+  },
+  {
+    "key": "Hospital removed",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospital removed"
+  },
+  {
+    "key": "Hospital updated",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospital updated"
+  },
+  {
+    "key": "Hospital WHT rate must be 0–100",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospital WHT rate must be 0–100"
+  },
+  {
+    "key": "Hospitals",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Hospitals"
+  },
+  {
+    "key": "Illness type is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Illness type is required"
+  },
+  {
+    "key": "Medical enquiry",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical enquiry"
+  },
+  {
+    "key": "Medical GL posting is disabled in settings",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical GL posting is disabled in settings"
+  },
+  {
+    "key": "Medical GL settings",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical GL settings"
+  },
+  {
+    "key": "Medical limit created",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical limit created"
+  },
+  {
+    "key": "Medical limit updated",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical limit updated"
+  },
+  {
+    "key": "Medical limits",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical limits"
+  },
+  {
+    "key": "Medical settings",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical settings"
+  },
+  {
+    "key": "Medical utilization history",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Medical utilization history"
+  },
+  {
+    "key": "My medical enquiry",
+    "category": "Medical",
+    "kind": "static",
+    "default": "My medical enquiry"
+  },
+  {
+    "key": "Only Draft records can be finalized",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Only Draft records can be finalized"
+  },
+  {
+    "key": "Only Draft records can be submitted",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Only Draft records can be submitted"
+  },
+  {
+    "key": "Only GL Failed claims can retry posting",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Only GL Failed claims can retry posting"
+  },
+  {
+    "key": "Only GL Failed records can retry posting",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Only GL Failed records can retry posting"
+  },
+  {
+    "key": "Pay grade is required",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Pay grade is required"
+  },
+  {
+    "key": "Pharmacy WHT rate must be 0–100",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Pharmacy WHT rate must be 0–100"
+  },
+  {
+    "key": "POSTING_API_URL not configured",
+    "category": "Medical",
+    "kind": "static",
+    "default": "POSTING_API_URL not configured"
+  },
+  {
+    "key": "Record is not pending approval",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Record is not pending approval"
+  },
+  {
+    "key": "Rejected",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Rejected"
+  },
+  {
+    "key": "Self-approval is disabled — a different approver must review this request",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Self-approval is disabled — a different approver must review this request"
+  },
+  {
+    "key": "Staff medical record created",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Staff medical record created"
+  },
+  {
+    "key": "Staff medical record updated",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Staff medical record updated"
+  },
+  {
+    "key": "Staff medical records",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Staff medical records"
+  },
+  {
+    "key": "Submitted for approval",
+    "category": "Medical",
+    "kind": "static",
+    "default": "Submitted for approval"
+  },
+  {
+    "key": "You can only modify medical requests you created",
+    "category": "Medical",
+    "kind": "static",
+    "default": "You can only modify medical requests you created"
+  },
+  {
+    "key": "All marked read",
+    "category": "Notification",
+    "kind": "static",
+    "default": "All marked read"
+  },
+  {
+    "key": "Marked read",
+    "category": "Notification",
+    "kind": "static",
+    "default": "Marked read"
+  },
+  {
+    "key": "Notification cleared",
+    "category": "Notification",
+    "kind": "static",
+    "default": "Notification cleared"
+  },
+  {
+    "key": "Notifications",
+    "category": "Notification",
+    "kind": "static",
+    "default": "Notifications"
+  },
+  {
+    "key": "Notifications cleared",
+    "category": "Notification",
+    "kind": "static",
+    "default": "Notifications cleared"
+  },
+  {
+    "key": "First name, last name and email are required.",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "First name, last name and email are required."
+  },
+  {
+    "key": "Link regenerated",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Link regenerated"
+  },
+  {
+    "key": "Onboarding config",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Onboarding config"
+  },
+  {
+    "key": "Onboarding config saved",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Onboarding config saved"
+  },
+  {
+    "key": "Onboarding form",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Onboarding form"
+  },
+  {
+    "key": "Submission converted",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Submission converted"
+  },
+  {
+    "key": "Submission received",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Submission received"
+  },
+  {
+    "key": "Submission removed",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Submission removed"
+  },
+  {
+    "key": "Submissions",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "Submissions"
+  },
+  {
+    "key": "This onboarding form is not available.",
+    "category": "Onboarding",
+    "kind": "static",
+    "default": "This onboarding form is not available."
+  },
+  {
+    "key": "Already finalized",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Already finalized"
+  },
+  {
+    "key": "Approve the payroll before finalizing",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Approve the payroll before finalizing"
+  },
+  {
+    "key": "Audit log retrieved",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Audit log retrieved"
+  },
+  {
+    "key": "Cannot delete a completed payroll run",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Cannot delete a completed payroll run"
+  },
+  {
+    "key": "Cannot edit a completed payroll run",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Cannot edit a completed payroll run"
+  },
+  {
+    "key": "Cannot regenerate a completed payroll run",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Cannot regenerate a completed payroll run"
+  },
+  {
+    "key": "Cannot regenerate an approved payroll run",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Cannot regenerate an approved payroll run"
+  },
+  {
+    "key": "Debug info",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Debug info"
+  },
+  {
+    "key": "Generate the payroll before finalizing",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Generate the payroll before finalizing"
+  },
+  {
+    "key": "GL already posted for this run",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "GL already posted for this run"
+  },
+  {
+    "key": "GL API URL not configured",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "GL API URL not configured"
+  },
+  {
+    "key": "GL posted successfully",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "GL posted successfully"
+  },
+  {
+    "key": "GL posting failed",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "GL posting failed"
+  },
+  {
+    "key": "No employees found for this pay frequency",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "No employees found for this pay frequency"
+  },
+  {
+    "key": "No enabled payroll columns found",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "No enabled payroll columns found"
+  },
+  {
+    "key": "Only a GL Failed run can retry GL posting",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Only a GL Failed run can retry GL posting"
+  },
+  {
+    "key": "Only a Processing run can be submitted for approval",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Only a Processing run can be submitted for approval"
+  },
+  {
+    "key": "Payroll approved",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll approved"
+  },
+  {
+    "key": "Payroll data retrieved",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll data retrieved"
+  },
+  {
+    "key": "Payroll finalized",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll finalized"
+  },
+  {
+    "key": "Payroll generated",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll generated"
+  },
+  {
+    "key": "Payroll GL posting is disabled in settings",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll GL posting is disabled in settings"
+  },
+  {
+    "key": "Payroll rejected",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll rejected"
+  },
+  {
+    "key": "Payroll run created",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll run created"
+  },
+  {
+    "key": "Payroll runs retrieved",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Payroll runs retrieved"
+  },
+  {
+    "key": "Regenerate the payroll before finalizing",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Regenerate the payroll before finalizing"
+  },
+  {
+    "key": "Run duplicated",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Run duplicated"
+  },
+  {
+    "key": "Run is not pending approval",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Run is not pending approval"
+  },
+  {
+    "key": "Run name is required",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Run name is required"
+  },
+  {
+    "key": "Run not found",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Run not found"
+  },
+  {
+    "key": "Self-approval is disabled — a different approver must review this payroll run",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Self-approval is disabled — a different approver must review this payroll run"
+  },
+  {
+    "key": "Updated",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Updated"
+  },
+  {
+    "key": "Withdraw the approval request before regenerating",
+    "category": "PayrollRun",
+    "kind": "static",
+    "default": "Withdraw the approval request before regenerating"
+  },
+  {
+    "key": "Employee record not found for this user",
+    "category": "Payslip",
+    "kind": "static",
+    "default": "Employee record not found for this user"
+  },
+  {
+    "key": "My payslips retrieved",
+    "category": "Payslip",
+    "kind": "static",
+    "default": "My payslips retrieved"
+  },
+  {
+    "key": "Payroll run not found",
+    "category": "Payslip",
+    "kind": "static",
+    "default": "Payroll run not found"
+  },
+  {
+    "key": "Payslips are not generated for this payment type.",
+    "category": "Payslip",
+    "kind": "static",
+    "default": "Payslips are not generated for this payment type."
+  },
+  {
+    "key": "Tax summary",
+    "category": "Payslip",
+    "kind": "static",
+    "default": "Tax summary"
+  },
+  {
+    "key": "You can only download your own payslip",
+    "category": "Payslip",
+    "kind": "static",
+    "default": "You can only download your own payslip"
+  },
+  {
+    "key": "assignments array is required",
+    "category": "Performance",
+    "kind": "static",
+    "default": "assignments array is required"
+  },
+  {
+    "key": "Category is required",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Category is required"
+  },
+  {
+    "key": "Competencies retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Competencies retrieved"
+  },
+  {
+    "key": "Competency created",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Competency created"
+  },
+  {
+    "key": "Competency not found",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Competency not found"
+  },
+  {
+    "key": "Competency updated",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Competency updated"
+  },
+  {
+    "key": "Cycle activated",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle activated"
+  },
+  {
+    "key": "Cycle closed",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle closed"
+  },
+  {
+    "key": "Cycle created",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle created"
+  },
+  {
+    "key": "Cycle deleted",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle deleted"
+  },
+  {
+    "key": "Cycle is already active",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle is already active"
+  },
+  {
+    "key": "Cycle name is required",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle name is required"
+  },
+  {
+    "key": "Cycle not found",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle not found"
+  },
+  {
+    "key": "Cycle retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle retrieved"
+  },
+  {
+    "key": "Cycle updated",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycle updated"
+  },
+  {
+    "key": "Cycles retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Cycles retrieved"
+  },
+  {
+    "key": "Employee not resolved from token",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Employee not resolved from token"
+  },
+  {
+    "key": "Employee removed from cycle",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Employee removed from cycle"
+  },
+  {
+    "key": "Employees can only be removed from Draft cycles",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Employees can only be removed from Draft cycles"
+  },
+  {
+    "key": "Goal created",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Goal created"
+  },
+  {
+    "key": "Goal deleted",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Goal deleted"
+  },
+  {
+    "key": "Goal not found",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Goal not found"
+  },
+  {
+    "key": "Goal updated",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Goal updated"
+  },
+  {
+    "key": "Goals retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Goals retrieved"
+  },
+  {
+    "key": "Invalid cycle ID",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Invalid cycle ID"
+  },
+  {
+    "key": "Invalid goal ID",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Invalid goal ID"
+  },
+  {
+    "key": "Invalid review ID",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Invalid review ID"
+  },
+  {
+    "key": "My reviews retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "My reviews retrieved"
+  },
+  {
+    "key": "Only Active cycles can be closed",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Only Active cycles can be closed"
+  },
+  {
+    "key": "Only Draft cycles can be deleted",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Only Draft cycles can be deleted"
+  },
+  {
+    "key": "Performance meta",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Performance meta"
+  },
+  {
+    "key": "Period end is required",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Period end is required"
+  },
+  {
+    "key": "Period start is required",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Period start is required"
+  },
+  {
+    "key": "ratings array is required",
+    "category": "Performance",
+    "kind": "static",
+    "default": "ratings array is required"
+  },
+  {
+    "key": "Ratings saved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Ratings saved"
+  },
+  {
+    "key": "Review completed",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Review completed"
+  },
+  {
+    "key": "Review is not in Self Assessment stage",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Review is not in Self Assessment stage"
+  },
+  {
+    "key": "Review is not in Supervisor Review stage",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Review is not in Supervisor Review stage"
+  },
+  {
+    "key": "Review not found",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Review not found"
+  },
+  {
+    "key": "Review retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Review retrieved"
+  },
+  {
+    "key": "Review updated",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Review updated"
+  },
+  {
+    "key": "Reviews retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Reviews retrieved"
+  },
+  {
+    "key": "Self assessment already submitted",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Self assessment already submitted"
+  },
+  {
+    "key": "Self assessment submitted",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Self assessment submitted"
+  },
+  {
+    "key": "Supervisor review submitted",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Supervisor review submitted"
+  },
+  {
+    "key": "Team reviews retrieved",
+    "category": "Performance",
+    "kind": "static",
+    "default": "Team reviews retrieved"
+  },
+  {
+    "key": "Application created",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Application created"
+  },
+  {
+    "key": "Application deleted",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Application deleted"
+  },
+  {
+    "key": "Application submitted successfully",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Application submitted successfully"
+  },
+  {
+    "key": "Applications",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Applications"
+  },
+  {
+    "key": "Candidate",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidate"
+  },
+  {
+    "key": "Candidate created",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidate created"
+  },
+  {
+    "key": "Candidate deleted",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidate deleted"
+  },
+  {
+    "key": "Candidate has no email address",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidate has no email address"
+  },
+  {
+    "key": "Candidate not found",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidate not found"
+  },
+  {
+    "key": "Candidate updated",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidate updated"
+  },
+  {
+    "key": "Candidates",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Candidates"
+  },
+  {
+    "key": "Employee record created",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Employee record created"
+  },
+  {
+    "key": "First name, last name and email are required",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "First name, last name and email are required"
+  },
+  {
+    "key": "Interview already confirmed",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview already confirmed"
+  },
+  {
+    "key": "Interview confirmed",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview confirmed"
+  },
+  {
+    "key": "Interview created",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview created"
+  },
+  {
+    "key": "Interview deleted",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview deleted"
+  },
+  {
+    "key": "Interview invite sent",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview invite sent"
+  },
+  {
+    "key": "Interview not found",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview not found"
+  },
+  {
+    "key": "Interview updated",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interview updated"
+  },
+  {
+    "key": "Interviews",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Interviews"
+  },
+  {
+    "key": "Invalid slot selected",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Invalid slot selected"
+  },
+  {
+    "key": "Job",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Job"
+  },
+  {
+    "key": "Job created",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Job created"
+  },
+  {
+    "key": "Job deleted",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Job deleted"
+  },
+  {
+    "key": "Job not found",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Job not found"
+  },
+  {
+    "key": "Job updated",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Job updated"
+  },
+  {
+    "key": "Jobs",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Jobs"
+  },
+  {
+    "key": "No interview date set. Set a date on the interview before sending an invite.",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "No interview date set. Set a date on the interview before sending an invite."
+  },
+  {
+    "key": "No recipients found. Add an email to the candidate or interviewers.",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "No recipients found. Add an email to the candidate or interviewers."
+  },
+  {
+    "key": "No scheduling slots defined for this interview",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "No scheduling slots defined for this interview"
+  },
+  {
+    "key": "No slot provided",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "No slot provided"
+  },
+  {
+    "key": "Pipeline",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Pipeline"
+  },
+  {
+    "key": "Schedule page",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Schedule page"
+  },
+  {
+    "key": "Scheduling link sent",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Scheduling link sent"
+  },
+  {
+    "key": "Settings",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Settings"
+  },
+  {
+    "key": "Stage updated",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "Stage updated"
+  },
+  {
+    "key": "You have already applied for this position.",
+    "category": "Recruitment",
+    "kind": "static",
+    "default": "You have already applied for this position."
+  },
+  {
+    "key": "Report too large — maximum 5000 rows",
+    "category": "Report",
+    "kind": "static",
+    "default": "Report too large — maximum 5000 rows"
+  },
+  {
+    "key": "rows must be an array",
+    "category": "Report",
+    "kind": "static",
+    "default": "rows must be an array"
+  },
+  {
+    "key": "title and headers are required",
+    "category": "Report",
+    "kind": "static",
+    "default": "title and headers are required"
+  },
+  {
+    "key": "A role with this name already exists",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "A role with this name already exists"
+  },
+  {
+    "key": "Cannot change status of a system role",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Cannot change status of a system role"
+  },
+  {
+    "key": "Cannot delete a system role",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Cannot delete a system role"
+  },
+  {
+    "key": "Cannot update a system role",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Cannot update a system role"
+  },
+  {
+    "key": "Invalid Role ID",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Invalid Role ID"
+  },
+  {
+    "key": "Invalid User ID",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Invalid User ID"
+  },
+  {
+    "key": "Invalid User ID or Permission ID",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Invalid User ID or Permission ID"
+  },
+  {
+    "key": "Invalid User ID or Role ID",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Invalid User ID or Role ID"
+  },
+  {
+    "key": "Permission already assigned to this user",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Permission already assigned to this user"
+  },
+  {
+    "key": "Permission assigned successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Permission assigned successfully"
+  },
+  {
+    "key": "Permission revoked successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Permission revoked successfully"
+  },
+  {
+    "key": "Role already assigned to this user",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role already assigned to this user"
+  },
+  {
+    "key": "Role assigned successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role assigned successfully"
+  },
+  {
+    "key": "Role created successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role created successfully"
+  },
+  {
+    "key": "Role deleted successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role deleted successfully"
+  },
+  {
+    "key": "Role not found",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role not found"
+  },
+  {
+    "key": "Role revoked successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role revoked successfully"
+  },
+  {
+    "key": "Role updated successfully",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Role updated successfully"
+  },
+  {
+    "key": "Status must be \"0\" (inactive) or \"1\" (active)",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Status must be \"0\" (inactive) or \"1\" (active)"
+  },
+  {
+    "key": "Status must be 0 (inactive) or 1 (active)",
+    "category": "RolePermission",
+    "kind": "static",
+    "default": "Status must be 0 (inactive) or 1 (active)"
+  },
+  {
+    "key": "A notch with this amount already exists for this paygrade",
+    "category": "Salary",
+    "kind": "static",
+    "default": "A notch with this amount already exists for this paygrade"
+  },
+  {
+    "key": "Cannot delete: component is assigned to employees",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Cannot delete: component is assigned to employees"
+  },
+  {
+    "key": "Cannot delete: component type is used by salary components",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Cannot delete: component type is used by salary components"
+  },
+  {
+    "key": "Change percentage must be greater than zero",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Change percentage must be greater than zero"
+  },
+  {
+    "key": "Code is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Code is required"
+  },
+  {
+    "key": "Component is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Component is required"
+  },
+  {
+    "key": "Component type code already exists",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Component type code already exists"
+  },
+  {
+    "key": "Employee salary component created",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Employee salary component created"
+  },
+  {
+    "key": "Employee salary component deleted",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Employee salary component deleted"
+  },
+  {
+    "key": "Employee salary component not found",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Employee salary component not found"
+  },
+  {
+    "key": "Employee salary component updated",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Employee salary component updated"
+  },
+  {
+    "key": "Employee salary components retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Employee salary components retrieved"
+  },
+  {
+    "key": "Invalid component type ID",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Invalid component type ID"
+  },
+  {
+    "key": "Invalid employee salary component ID",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Invalid employee salary component ID"
+  },
+  {
+    "key": "Invalid notch ID",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Invalid notch ID"
+  },
+  {
+    "key": "Invalid paygrade ID",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Invalid paygrade ID"
+  },
+  {
+    "key": "Invalid payment type ID",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Invalid payment type ID"
+  },
+  {
+    "key": "Invalid salary component ID",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Invalid salary component ID"
+  },
+  {
+    "key": "Notch created",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Notch created"
+  },
+  {
+    "key": "Notch deleted",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Notch deleted"
+  },
+  {
+    "key": "Notch is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Notch is required"
+  },
+  {
+    "key": "Notch name is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Notch name is required"
+  },
+  {
+    "key": "Notch not found",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Notch not found"
+  },
+  {
+    "key": "Notch updated",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Notch updated"
+  },
+  {
+    "key": "Operation must be Increment or Decrement",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Operation must be Increment or Decrement"
+  },
+  {
+    "key": "Paygrade created",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade created"
+  },
+  {
+    "key": "Paygrade deleted",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade deleted"
+  },
+  {
+    "key": "Paygrade is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade is required"
+  },
+  {
+    "key": "Paygrade name already exists",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade name already exists"
+  },
+  {
+    "key": "Paygrade name is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade name is required"
+  },
+  {
+    "key": "Paygrade not found",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade not found"
+  },
+  {
+    "key": "Paygrade updated",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Paygrade updated"
+  },
+  {
+    "key": "Payment type created",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Payment type created"
+  },
+  {
+    "key": "Payment type deleted",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Payment type deleted"
+  },
+  {
+    "key": "Payment type is required",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Payment type is required"
+  },
+  {
+    "key": "Payment type updated",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Payment type updated"
+  },
+  {
+    "key": "Payment types retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Payment types retrieved"
+  },
+  {
+    "key": "Salary component created",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component created"
+  },
+  {
+    "key": "Salary component deleted",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component deleted"
+  },
+  {
+    "key": "Salary component not found",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component not found"
+  },
+  {
+    "key": "Salary component type created",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component type created"
+  },
+  {
+    "key": "Salary component type deleted",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component type deleted"
+  },
+  {
+    "key": "Salary component type not found",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component type not found"
+  },
+  {
+    "key": "Salary component type updated",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component type updated"
+  },
+  {
+    "key": "Salary component types retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component types retrieved"
+  },
+  {
+    "key": "Salary component updated",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary component updated"
+  },
+  {
+    "key": "Salary components retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary components retrieved"
+  },
+  {
+    "key": "Salary history retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary history retrieved"
+  },
+  {
+    "key": "Salary increment/decrement applied",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary increment/decrement applied"
+  },
+  {
+    "key": "Salary increment/decrement records retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary increment/decrement records retrieved"
+  },
+  {
+    "key": "Salary references retrieved",
+    "category": "Salary",
+    "kind": "static",
+    "default": "Salary references retrieved"
+  },
+  {
+    "key": "There is already an exception for this employee and component",
+    "category": "Salary",
+    "kind": "static",
+    "default": "There is already an exception for this employee and component"
+  },
+  {
+    "key": "App setup",
+    "category": "Settings",
+    "kind": "static",
+    "default": "App setup"
+  },
+  {
+    "key": "App setup saved",
+    "category": "Settings",
+    "kind": "static",
+    "default": "App setup saved"
+  },
+  {
+    "key": "Control settings",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Control settings"
+  },
+  {
+    "key": "Control settings saved",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Control settings saved"
+  },
+  {
+    "key": "Email settings",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Email settings"
+  },
+  {
+    "key": "Email settings saved",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Email settings saved"
+  },
+  {
+    "key": "Module settings saved",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Module settings saved"
+  },
+  {
+    "key": "Notification settings",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Notification settings"
+  },
+  {
+    "key": "Notification settings saved",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Notification settings saved"
+  },
+  {
+    "key": "OK",
+    "category": "Settings",
+    "kind": "static",
+    "default": "OK"
+  },
+  {
+    "key": "Recipient email is required",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Recipient email is required"
+  },
+  {
+    "key": "Test email sent successfully",
+    "category": "Settings",
+    "kind": "static",
+    "default": "Test email sent successfully"
+  },
+  {
+    "key": "Code list created successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Code list created successfully"
+  },
+  {
+    "key": "Code list not found",
+    "category": "System",
+    "kind": "static",
+    "default": "Code list not found"
+  },
+  {
+    "key": "Code list retrieved successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Code list retrieved successfully"
+  },
+  {
+    "key": "Code list updated successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Code list updated successfully"
+  },
+  {
+    "key": "Code list values retrieved successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Code list values retrieved successfully"
+  },
+  {
+    "key": "Code lists retrieved successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Code lists retrieved successfully"
+  },
+  {
+    "key": "Failed to activate value",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to activate value"
+  },
+  {
+    "key": "Failed to add value",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to add value"
+  },
+  {
+    "key": "Failed to create code list",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to create code list"
+  },
+  {
+    "key": "Failed to deactivate value",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to deactivate value"
+  },
+  {
+    "key": "Failed to fetch code list",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to fetch code list"
+  },
+  {
+    "key": "Failed to fetch code list values",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to fetch code list values"
+  },
+  {
+    "key": "Failed to fetch code lists",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to fetch code lists"
+  },
+  {
+    "key": "Failed to fetch values",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to fetch values"
+  },
+  {
+    "key": "Failed to update code list",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to update code list"
+  },
+  {
+    "key": "Failed to update value",
+    "category": "System",
+    "kind": "static",
+    "default": "Failed to update value"
+  },
+  {
+    "key": "isActive must be a boolean",
+    "category": "System",
+    "kind": "static",
+    "default": "isActive must be a boolean"
+  },
+  {
+    "key": "Label is required",
+    "category": "System",
+    "kind": "static",
+    "default": "Label is required"
+  },
+  {
+    "key": "Name cannot be empty",
+    "category": "System",
+    "kind": "static",
+    "default": "Name cannot be empty"
+  },
+  {
+    "key": "No changes provided",
+    "category": "System",
+    "kind": "static",
+    "default": "No changes provided"
+  },
+  {
+    "key": "sortOrder must be a number",
+    "category": "System",
+    "kind": "static",
+    "default": "sortOrder must be a number"
+  },
+  {
+    "key": "Value added successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Value added successfully"
+  },
+  {
+    "key": "Value code must be 1–20 uppercase letters, digits, or underscores",
+    "category": "System",
+    "kind": "static",
+    "default": "Value code must be 1–20 uppercase letters, digits, or underscores"
+  },
+  {
+    "key": "Value does not belong to this code list",
+    "category": "System",
+    "kind": "static",
+    "default": "Value does not belong to this code list"
+  },
+  {
+    "key": "Value not found",
+    "category": "System",
+    "kind": "static",
+    "default": "Value not found"
+  },
+  {
+    "key": "Value updated successfully",
+    "category": "System",
+    "kind": "static",
+    "default": "Value updated successfully"
+  },
+  {
+    "key": "A nomination for this training on the same start date already exists for this employee",
+    "category": "Training",
+    "kind": "static",
+    "default": "A nomination for this training on the same start date already exists for this employee"
+  },
+  {
+    "key": "Approved — forwarded to HR for final approval",
+    "category": "Training",
+    "kind": "static",
+    "default": "Approved — forwarded to HR for final approval"
+  },
+  {
+    "key": "Course code is required",
+    "category": "Training",
+    "kind": "static",
+    "default": "Course code is required"
+  },
+  {
+    "key": "Course created",
+    "category": "Training",
+    "kind": "static",
+    "default": "Course created"
+  },
+  {
+    "key": "Course name is required",
+    "category": "Training",
+    "kind": "static",
+    "default": "Course name is required"
+  },
+  {
+    "key": "Course updated",
+    "category": "Training",
+    "kind": "static",
+    "default": "Course updated"
+  },
+  {
+    "key": "Marked as completed",
+    "category": "Training",
+    "kind": "static",
+    "default": "Marked as completed"
+  },
+  {
+    "key": "Marked as No Show",
+    "category": "Training",
+    "kind": "static",
+    "default": "Marked as No Show"
+  },
+  {
+    "key": "Nomination approved",
+    "category": "Training",
+    "kind": "static",
+    "default": "Nomination approved"
+  },
+  {
+    "key": "Nomination created",
+    "category": "Training",
+    "kind": "static",
+    "default": "Nomination created"
+  },
+  {
+    "key": "Nomination not found",
+    "category": "Training",
+    "kind": "static",
+    "default": "Nomination not found"
+  },
+  {
+    "key": "Nomination rejected",
+    "category": "Training",
+    "kind": "static",
+    "default": "Nomination rejected"
+  },
+  {
+    "key": "Nomination updated",
+    "category": "Training",
+    "kind": "static",
+    "default": "Nomination updated"
+  },
+  {
+    "key": "Only Approved nominations can be marked as No Show",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Approved nominations can be marked as No Show"
+  },
+  {
+    "key": "Only Approved nominations can be marked complete",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Approved nominations can be marked complete"
+  },
+  {
+    "key": "Only Draft nominations can be deleted",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Draft nominations can be deleted"
+  },
+  {
+    "key": "Only Draft nominations can be edited",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Draft nominations can be edited"
+  },
+  {
+    "key": "Only Draft nominations can be submitted",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Draft nominations can be submitted"
+  },
+  {
+    "key": "Only Pending HR Approval nominations can be approved",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Pending HR Approval nominations can be approved"
+  },
+  {
+    "key": "Only Pending HR Approval nominations can be rejected",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Pending HR Approval nominations can be rejected"
+  },
+  {
+    "key": "Only Pending Supervisor Approval nominations can be approved here",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Pending Supervisor Approval nominations can be approved here"
+  },
+  {
+    "key": "Only Pending Supervisor Approval nominations can be rejected here",
+    "category": "Training",
+    "kind": "static",
+    "default": "Only Pending Supervisor Approval nominations can be rejected here"
+  },
+  {
+    "key": "Slots",
+    "category": "Training",
+    "kind": "static",
+    "default": "Slots"
+  },
+  {
+    "key": "Slots saved",
+    "category": "Training",
+    "kind": "static",
+    "default": "Slots saved"
+  },
+  {
+    "key": "Start date is required",
+    "category": "Training",
+    "kind": "static",
+    "default": "Start date is required"
+  },
+  {
+    "key": "Subordinate nominations",
+    "category": "Training",
+    "kind": "static",
+    "default": "Subordinate nominations"
+  },
+  {
+    "key": "Subordinates",
+    "category": "Training",
+    "kind": "static",
+    "default": "Subordinates"
+  },
+  {
+    "key": "Training catalog",
+    "category": "Training",
+    "kind": "static",
+    "default": "Training catalog"
+  },
+  {
+    "key": "Training name is required",
+    "category": "Training",
+    "kind": "static",
+    "default": "Training name is required"
+  },
+  {
+    "key": "Training nominations",
+    "category": "Training",
+    "kind": "static",
+    "default": "Training nominations"
+  },
+  {
+    "key": "Training settings",
+    "category": "Training",
+    "kind": "static",
+    "default": "Training settings"
+  },
+  {
+    "key": "Training settings saved",
+    "category": "Training",
+    "kind": "static",
+    "default": "Training settings saved"
+  },
+  {
+    "key": "Type is required",
+    "category": "Training",
+    "kind": "static",
+    "default": "Type is required"
+  },
+  {
+    "key": "Venue is required for each date slot",
+    "category": "Training",
+    "kind": "static",
+    "default": "Venue is required for each date slot"
+  },
+  {
+    "key": "A user account already exists for this employee",
+    "category": "User",
+    "kind": "static",
+    "default": "A user account already exists for this employee"
+  },
+  {
+    "key": "Account is deactivated. Contact administrator.",
+    "category": "User",
+    "kind": "static",
+    "default": "Account is deactivated. Contact administrator."
+  },
+  {
+    "key": "At least one role is required",
+    "category": "User",
+    "kind": "static",
+    "default": "At least one role is required"
+  },
+  {
+    "key": "Cannot change status of a system user",
+    "category": "User",
+    "kind": "static",
+    "default": "Cannot change status of a system user"
+  },
+  {
+    "key": "Current password is incorrect",
+    "category": "User",
+    "kind": "static",
+    "default": "Current password is incorrect"
+  },
+  {
+    "key": "Email or phone already in use by another employee",
+    "category": "User",
+    "kind": "static",
+    "default": "Email or phone already in use by another employee"
+  },
+  {
+    "key": "Invalid email or password",
+    "category": "User",
+    "kind": "static",
+    "default": "Invalid email or password"
+  },
+  {
+    "key": "Invalid theme",
+    "category": "User",
+    "kind": "static",
+    "default": "Invalid theme"
+  },
+  {
+    "key": "Logged out successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "Logged out successfully"
+  },
+  {
+    "key": "Login successful",
+    "category": "User",
+    "kind": "static",
+    "default": "Login successful"
+  },
+  {
+    "key": "New password must be different from current password",
+    "category": "User",
+    "kind": "static",
+    "default": "New password must be different from current password"
+  },
+  {
+    "key": "No users found",
+    "category": "User",
+    "kind": "static",
+    "default": "No users found"
+  },
+  {
+    "key": "One or more permission IDs are invalid",
+    "category": "User",
+    "kind": "static",
+    "default": "One or more permission IDs are invalid"
+  },
+  {
+    "key": "One or more role IDs are invalid",
+    "category": "User",
+    "kind": "static",
+    "default": "One or more role IDs are invalid"
+  },
+  {
+    "key": "Password changed successfully. Please log in again.",
+    "category": "User",
+    "kind": "static",
+    "default": "Password changed successfully. Please log in again."
+  },
+  {
+    "key": "Theme saved",
+    "category": "User",
+    "kind": "static",
+    "default": "Theme saved"
+  },
+  {
+    "key": "Unauthorized to change this user's password",
+    "category": "User",
+    "kind": "static",
+    "default": "Unauthorized to change this user's password"
+  },
+  {
+    "key": "User activated successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "User activated successfully"
+  },
+  {
+    "key": "User deactivated successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "User deactivated successfully"
+  },
+  {
+    "key": "User is already active",
+    "category": "User",
+    "kind": "static",
+    "default": "User is already active"
+  },
+  {
+    "key": "User is already deactivated",
+    "category": "User",
+    "kind": "static",
+    "default": "User is already deactivated"
+  },
+  {
+    "key": "User not found",
+    "category": "User",
+    "kind": "static",
+    "default": "User not found"
+  },
+  {
+    "key": "User not found after update",
+    "category": "User",
+    "kind": "static",
+    "default": "User not found after update"
+  },
+  {
+    "key": "User registered successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "User registered successfully"
+  },
+  {
+    "key": "User retrieved successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "User retrieved successfully"
+  },
+  {
+    "key": "User updated successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "User updated successfully"
+  },
+  {
+    "key": "Users retrieved successfully",
+    "category": "User",
+    "kind": "static",
+    "default": "Users retrieved successfully"
+  }
+]

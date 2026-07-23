@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\"OK\")",
+      "Bash(curl -s -m 20 -X POST __TRACKED_VAR__/public/attendance/kiosk/__TRACKED_VAR__/punch -H 'Content-Type: application/json' -d '{\"employee_no\":\"EMP-00003\",\"photo\":\"data:image/jpeg;base64,/9j/test\"}')",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\).data;console.log\\('headcount',d.headcount,'| day counts',JSON.stringify\\(d.days['2026-06-11']??{}\\)\\)}\\)\")",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\).data;console.log\\('range', d.date_from, '→', d.date_to, '| days:', d.days.length, '| totals', JSON.stringify\\(d.totals\\)\\)}\\)\")",
+      "PowerShell(node --check Server\\\\src\\\\controllers\\\\dashboardController.js)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\).data;console.log\\('stats', JSON.stringify\\(d.stats\\)\\);console.log\\('att rows', d.attendance_today.length, JSON.stringify\\(d.attendance_today[0]??null\\)\\);console.log\\('emp status', JSON.stringify\\(d.employment_status\\)\\);console.log\\('growth', JSON.stringify\\(d.growth\\)\\);console.log\\('service', JSON.stringify\\(d.service\\)\\);console.log\\('recent', d.recent_employees.length, JSON.stringify\\(d.recent_employees[0]??null\\)\\)}\\)\")",
+      "Bash(node --check src/controllers/salaryController.js)",
+      "Bash(echo \"TSC exit=$?\")",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'nodemon|server\\\\.js' -and $_.CommandLine -notmatch 'vite|Client' } | Select-Object ProcessId, @{n='CmdLine';e={$_.CommandLine}} | Format-Table -AutoSize -Wrap)",
+      "PowerShell(taskkill /F /T /PID 2052 2>$null; taskkill /F /PID 48412 2>$null; Start-Sleep -Milliseconds 800; $still = Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'nodemon|server\\\\.js' -and $_.CommandLine -notmatch 'vite|Client' }; if \\($still\\) { \"STILL RUNNING: \" + \\($still.ProcessId -join ','\\) } else { \"Server stopped.\" })",
+      "Bash(grep -qiE \"listening|running|started|port|ready\" \"C:/Users/UNIONSG/AppData/Local/Temp/claude/c--Users-UNIONSG-Documents-GitHub-HR/df20d4fd-aa3f-4496-a94f-f466d6bcb958/tasks/bz7l3s046.output\")",
+      "Bash(break)",
+      "Bash(node ./_tmp_verify.js)",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -match '\\\\''server\\\\.js'\\\\'' -and $_.CommandLine -notmatch '\\\\''vite|Client'\\\\'' } | Select-Object ProcessId | Format-Table -AutoSize')",
+      "Bash(node --check src/controllers/calculationController.js)",
+      "Bash(node ./_tmp_mismatch.js)",
+      "Bash(node --check src/helpers/payrollFormula.js)",
+      "Bash(echo \"exit=$?\")",
+      "PowerShell(foreach \\($p in 111288, 116456, 21208\\) { taskkill /F /T /PID $p 2>$null | Out-Null }; Start-Sleep -Milliseconds 1000; $still = Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'nodemon|server\\\\.js' -and $_.CommandLine -notmatch 'vite|Client' }; if \\($still\\) { \"STILL RUNNING: \" + \\($still.ProcessId -join ','\\) } else { \"Server stopped.\" })",
+      "Bash(node -e ' *)",
+      "Bash(node ./_tmp_layer.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3050/v1/api/hr/salary/paygrade-components?target_id=1\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3050/v1/api/hr/salary/refs\")",
+      "Bash(grep -nA15 \"getSalaryRefs\" src/controllers/salaryController.js)",
+      "Bash(echo \"client exit=$?\")",
+      "Bash(node -e \"const d=require\\('./Server/src/data/helpKnowledge.json'\\); console.log\\('type:', Array.isArray\\(d\\)?'array len '+d.length:'object keys '+Object.keys\\(d\\).join\\(','\\)\\); const arr=Array.isArray\\(d\\)?d:\\(d.entries||d.topics||[]\\); console.log\\('sample entry keys:', arr[0]?Object.keys\\(arr[0]\\).join\\(','\\):'n/a'\\); console.log\\('titles:'\\); arr.forEach\\(e=>console.log\\('  -',e.id||'', '|', \\(e.title||e.q||''\\).slice\\(0,70\\)\\)\\);\")",
+      "Bash(node -e \"const d=require\\('./Server/src/data/helpKnowledge.json'\\); d.filter\\(e=>/payroll|salary|component|notch|paygrade|grade/i.test\\(e.id+e.title+e.text\\)\\).forEach\\(e=>console.log\\('###',e.id,'—',e.title,'\\\\n',e.text,'\\\\n'\\)\\)\")",
+      "Bash(grep -nE \"employeeSelfApproval, *setEmployeeSelfApproval|const \\\\[employeeSelfApproval|<ApprovalsSection|employeeSelfApproval=\\\\{employeeSelfApproval\\\\}\" src/components/Settings.tsx)"
+    ]
+  }
+}

@@ -1,0 +1,453 @@
+[cron] Daily leave GL scheduled — runs at 06:00 every day
+🚀 Server running on port 3050
+prisma:query 
+      CREATE TABLE IF NOT EXISTS auditlogs (
+        id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+        module       VARCHAR(60)  NOT NULL,
+        action       VARCHAR(60)  NOT NULL,
+        entity_id    VARCHAR(60)  NULL,
+        entity_name  VARCHAR(255) NULL,
+        user_id      BIGINT       NULL,
+        user_name    VARCHAR(200) NULL,
+        ip_address   VARCHAR(60)  NULL,
+        details      TEXT         NULL,
+        created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrollruns (
+        id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+        name            VARCHAR(200) NOT NULL,
+        pay_frequency   INT NULL,
+        date_start      DATE NULL,
+        date_end        DATE NULL,
+        deduction_group BIGINT NULL,
+        status          ENUM('Draft','Processing','Completed') DEFAULT 'Draft',
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    
+prisma:query 
+    CREATE TABLE IF NOT EXISTS salary_history (
+      id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+      employee_id    BIGINT NOT NULL,
+      component_id   BIGINT NOT NULL,
+      component_name VARCHAR(200) NULL,
+      action         ENUM('created','updated','deleted') NOT NULL,
+      old_amount     VARCHAR(30) NULL,
+      new_amount     VARCHAR(30) NULL,
+      old_currency   VARCHAR(10) NULL,
+      new_currency   VARCHAR(10) NULL,
+      changed_by     VARCHAR(200) NULL,
+      created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  
+prisma:query 
+    CREATE TABLE IF NOT EXISTS payslip_settings (
+      id                 INT AUTO_INCREMENT PRIMARY KEY,
+      template_name      VARCHAR(100) NOT NULL DEFAULT 'Default',
+      deduction_group_id BIGINT NULL,
+      company_name       VARCHAR(200) NULL,
+      company_address    TEXT NULL,
+      company_logo_url   VARCHAR(500) NULL,
+      header_note        TEXT NULL,
+      footer_note        TEXT NULL,
+      accent_color       VARCHAR(20) NOT NULL DEFAULT '#3B82F6',
+      show_emp_id        TINYINT(1) NOT NULL DEFAULT 1,
+      show_department    TINYINT(1) NOT NULL DEFAULT 1,
+      show_position      TINYINT(1) NOT NULL DEFAULT 1,
+      show_bank_account  TINYINT(1) NOT NULL DEFAULT 0,
+      visible_columns    TEXT NULL,
+      net_columns        TEXT NULL,
+      payment_type_id    BIGINT NULL,
+      updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  
+prisma:query CREATE TABLE IF NOT EXISTS calculationgroups (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      details TEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+[auditController] Table ready
+prisma:query ALTER TABLE medicallimit ADD COLUMN paygrade_id BIGINT NULL
+prisma:query ALTER TABLE salarycomponent ADD COLUMN is_notch_linked TINYINT(1) NOT NULL DEFAULT 0
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN payslip_label VARCHAR(100) NULL
+prisma:query ALTER TABLE employeeleaves ADD COLUMN submitted_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'paygrade_id'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'is_notch_linked'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'submitted_by'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payslip_label'`
+prisma:query ALTER TABLE payslip_settings ADD COLUMN template_name VARCHAR(100) NOT NULL DEFAULT 'Default'
+prisma:query CREATE TABLE IF NOT EXISTS savedcalculations (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      target_type VARCHAR(20) NOT NULL DEFAULT 'component',
+      target_id BIGINT NULL,
+      target_name VARCHAR(200) NULL,
+      calculation_group_id BIGINT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query ALTER TABLE payrollruns ADD COLUMN payment_type_id BIGINT NULL
+prisma:query ALTER TABLE medicallimit ADD COLUMN currency VARCHAR(10) NULL DEFAULT 'SLE'
+prisma:query ALTER TABLE `paygrades` MODIFY COLUMN `currency` VARCHAR(50) NOT NULL DEFAULT ''
+prisma:query ALTER TABLE paymenttype ADD COLUMN generate_payslip TINYINT(1) NOT NULL DEFAULT 1
+prisma:query ALTER TABLE employeeleaves ADD COLUMN approved_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'template_name'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payment_type_id'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'currency'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'generate_payslip'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'approved_by'`
+prisma:query ALTER TABLE payslip_settings ADD COLUMN deduction_group_id BIGINT NULL
+prisma:query CREATE TABLE IF NOT EXISTS calculationprocessitems (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      saved_calculation_id BIGINT NOT NULL,
+      lower_limit_condition VARCHAR(50) NOT NULL DEFAULT 'NO_LOWER_LIMIT',
+      lower_limit DECIMAL(18,4) NULL,
+      upper_limit_condition VARCHAR(50) NOT NULL DEFAULT 'NO_UPPER_LIMIT',
+      upper_limit DECIMAL(18,4) NULL,
+      value VARCHAR(200) NOT NULL DEFAULT '0',
+      sort_order INT DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query ALTER TABLE dependentmedical ADD COLUMN dependent_id BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'deduction_group_id'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'dependent_id'`
+prisma:query ALTER TABLE employeeleaves ADD COLUMN rejection_reason TEXT NULL
+prisma:query ALTER TABLE payslip_settings ADD COLUMN visible_columns TEXT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'rejection_reason'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'visible_columns'`
+prisma:query ALTER TABLE staffmedical ADD COLUMN approved_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'approved_by'`
+prisma:query ALTER TABLE employeeleaves ADD COLUMN leave_tax VARCHAR(30) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'leave_tax'`
+prisma:query ALTER TABLE payslip_settings ADD COLUMN net_columns TEXT NULL
+prisma:query ALTER TABLE staffmedical ADD COLUMN rejection_reason TEXT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'net_columns'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'rejection_reason'`
+prisma:query ALTER TABLE employeeleaves ADD COLUMN api_response TEXT NULL
+prisma:query ALTER TABLE payrollruns MODIFY COLUMN status ENUM('Draft','Processing','Pending Approval','Rejected','Approved','Completed','GL Failed') DEFAULT 'Draft'
+prisma:query ALTER TABLE payslip_settings ADD COLUMN payment_type_id BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'api_response'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payment_type_id'`
+prisma:query ALTER TABLE staffmedical ADD COLUMN submitted_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'submitted_by'`
+prisma:query ALTER TABLE employeeleaves ADD COLUMN branch VARCHAR(50) NULL
+prisma:query ALTER TABLE payrollruns ADD COLUMN submitted_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'branch'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'submitted_by'`
+prisma:query ALTER TABLE dependentmedical ADD COLUMN approved_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'approved_by'`
+prisma:query ALTER TABLE calculationprocessitems MODIFY COLUMN value VARCHAR(200) NOT NULL DEFAULT '0'
+prisma:query ALTER TABLE payrollruns ADD COLUMN approved_by BIGINT NULL
+prisma:query UPDATE payslip_settings SET template_name='Default' WHERE id=1 AND template_name=''
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'approved_by'`
+prisma:query ALTER TABLE dependentmedical ADD COLUMN rejection_reason TEXT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'rejection_reason'`
+prisma:query ALTER TABLE payrollruns ADD COLUMN approved_at DATETIME NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'approved_at'`
+prisma:query ALTER TABLE dependentmedical ADD COLUMN submitted_by BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'submitted_by'`
+prisma:query ALTER TABLE payrollruns ADD COLUMN rejection_reason TEXT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'rejection_reason'`
+prisma:query ALTER TABLE registeredhospitals ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'Hospital'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'type'`
+prisma:query ALTER TABLE payrollruns ADD COLUMN document_ref VARCHAR(100) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'document_ref'`
+prisma:query ALTER TABLE payrollruns ADD COLUMN payment_log TEXT NULL
+prisma:query ALTER TABLE hospitalclaims ADD COLUMN document_ref VARCHAR(100) NULL
+prisma:query ALTER TABLE employeeleaves MODIFY COLUMN allowance_status VARCHAR(50) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payment_log'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'document_ref'`
+prisma:query ALTER TABLE payrollemployees MODIFY COLUMN currency VARCHAR(20) NULL
+prisma:query ALTER TABLE payrollruns ADD COLUMN finalized_at DATETIME NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'finalized_at'`
+prisma:query ALTER TABLE hospitalclaims ADD COLUMN payment_log TEXT NULL
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN pay_frequency INT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payment_log'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'pay_frequency'`
+prisma:query ALTER TABLE staffmedical ADD COLUMN document_ref VARCHAR(100) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'document_ref'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN calculation_rule INT NULL
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrollrunaudit (
+        id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+        run_id     BIGINT NOT NULL,
+        action     VARCHAR(50) NOT NULL,
+        user_id    BIGINT NULL,
+        user_name  VARCHAR(200) NULL,
+        details    TEXT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'calculation_rule'`
+prisma:query 
+      CREATE TABLE IF NOT EXISTS payrolldata (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        payroll      BIGINT NOT NULL,
+        employee     BIGINT NOT NULL,
+        payroll_item INT NOT NULL,
+        amount       VARCHAR(25) NULL
+      )
+    
+[payrollRunController] Tables ready
+prisma:query ALTER TABLE staffmedical ADD COLUMN payment_log TEXT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payment_log'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN visible TINYINT(1) NOT NULL DEFAULT 1
+prisma:query ALTER TABLE employeeleaves MODIFY COLUMN status VARCHAR(50) NULL DEFAULT 'Draft'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'visible'`
+prisma:query ALTER TABLE dependentmedical ADD COLUMN document_ref VARCHAR(100) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'document_ref'`
+prisma:query ALTER TABLE leaveperiods ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT ''
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN include_in_net TINYINT(1) NOT NULL DEFAULT 1
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'name'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'include_in_net'`
+prisma:query ALTER TABLE dependentmedical ADD COLUMN payment_log TEXT NULL
+prisma:query ALTER TABLE holidays ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'Full_Day'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payment_log'`
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'status'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN posting_branch VARCHAR(20) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'posting_branch'`
+prisma:query ALTER TABLE workdays ADD COLUMN country BIGINT NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'country'`
+prisma:query ALTER TABLE payrollcolumns ADD COLUMN payslip_label VARCHAR(100) NULL
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'payslip_label'`
+prisma:query ALTER TABLE leavetypes ADD COLUMN leave_allowance VARCHAR(3) NOT NULL DEFAULT 'No'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'leave_allowance'`
+prisma:query CREATE TABLE IF NOT EXISTS payfrequencies (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      description VARCHAR(200) NULL,
+      sort_order INT NOT NULL DEFAULT 99,
+      is_active TINYINT(1) NOT NULL DEFAULT 1
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+prisma:query ALTER TABLE leavetypes ADD COLUMN leave_allowance_once VARCHAR(3) NOT NULL DEFAULT 'No'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'leave_allowance_once'`
+prisma:query ALTER TABLE leaverules ADD COLUMN leave_allowance VARCHAR(3) NOT NULL DEFAULT 'No'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'leave_allowance'`
+prisma:query SELECT COUNT(*) AS cnt FROM payfrequencies
+prisma:query ALTER TABLE leaverules ADD COLUMN leave_allowance_once VARCHAR(3) NOT NULL DEFAULT 'No'
+prisma:error 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `1060`. Message: `Duplicate column name 'leave_allowance_once'`
+prisma:query 
+    CREATE TABLE IF NOT EXISTS leavegrouppaygrades (
+      id BIGINT PRIMARY KEY,
+      leave_group BIGINT NOT NULL,
+      paygrade_id BIGINT NOT NULL,
+      created DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_lg_pg (leave_group, paygrade_id)
+    )
+  
+prisma:query 
+    CREATE TABLE IF NOT EXISTS leavetype_groups (
+      id BIGINT PRIMARY KEY,
+      leave_type_id BIGINT NOT NULL,
+      leave_group_id BIGINT NOT NULL,
+      UNIQUE KEY uq_ltg (leave_type_id, leave_group_id)
+    )
+  

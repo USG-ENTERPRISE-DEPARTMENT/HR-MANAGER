@@ -1,0 +1,72 @@
+{
+  "name": "express-js-backend-boilerplate",
+  "version": "1.0.0",
+  "description": "a boilerplate for all express js backend projects",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "smoke": "node smoke/run.js",
+    "db:use-mysql": "prisma generate --schema=src/prisma/schema.prisma && echo Client now on MYSQL (reads DATABASE_URL) — restart the server.",
+    "db:use-pg": "prisma generate --schema=src/prisma/schema.postgres.prisma && echo Client now on POSTGRES (reads PG_URL) — restart the server.",
+    "db:which": "node -e \"const{prisma}=require('./src/helpers/dbQueryHelper');console.log('Active Prisma client provider:',prisma._activeProvider)\""
+  },
+  "prisma": {
+    "schema": "src/prisma/schema.prisma",
+    "seed": "node src/prisma/seedCodeLists.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/USG-ENTERPRISE-DEPARTMENT/EXPRESS-JS-BACKEND-BOILERPLATE.git"
+  },
+  "keywords": [
+    "boilerplate"
+  ],
+  "author": "henry",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/USG-ENTERPRISE-DEPARTMENT/EXPRESS-JS-BACKEND-BOILERPLATE/issues"
+  },
+  "homepage": "https://github.com/USG-ENTERPRISE-DEPARTMENT/EXPRESS-JS-BACKEND-BOILERPLATE#readme",
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "axios": "^1.6.7",
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
+    "compromise": "^14.11.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "expr-eval": "^2.0.2",
+    "express": "^4.21.2",
+    "express-fileupload": "^1.5.1",
+    "fs": "^0.0.1-security",
+    "http-errors": "^2.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mariadb": "^3.4.1",
+    "memory-cache": "^0.2.0",
+    "morgan": "^1.10.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql": "^2.18.1",
+    "mysql2": "^3.16.2",
+    "natural": "^6.10.4",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^8.0.7",
+    "nodemon": "^3.1.11",
+    "openai": "^4.24.1",
+    "path": "^0.12.7",
+    "pdfkit": "^0.18.0",
+    "prisma": "^5.7.1",
+    "retext": "^9.0.0",
+    "retext-keywords": "^8.0.1",
+    "retext-pos": "^5.0.0",
+    "sequelize": "^6.37.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "tesseract.js": "^7.0.0",
+    "toad-scheduler": "^3.0.1",
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5"
+  }
+}
