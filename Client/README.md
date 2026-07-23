@@ -73,12 +73,15 @@ The repo has two apps:
 
 | Folder    | What it is                          | Default port |
 |-----------|-------------------------------------|--------------|
-| `Server/` | Express + Prisma API + cron jobs    | `3050`       |
-| `Client/` | React 19 + Vite front end           | `3002` (dev) |
+| `Server/` | Express + Prisma API + cron jobs    | `3088`       |
+| `Client/` | React 19 + Vite front end           | `3099` (dev) |
 
 ## 3. Create the database
 
-Create an empty MySQL database and a user with full rights on it:
+The API runs on **either MySQL or PostgreSQL**. Create the empty database with the matching script
+below — the schema itself is applied by Prisma in step 4, so you do **not** import a SQL dump.
+
+### MySQL (default)
 
 ```sql
 CREATE DATABASE xhrm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -87,7 +90,24 @@ GRANT ALL PRIVILEGES ON xhrm.* TO 'hr'@'%';
 FLUSH PRIVILEGES;
 ```
 
-The schema is applied by Prisma in step 4 — you do **not** import a SQL dump.
+### PostgreSQL
+
+Postgres does not auto-create the database, so create it (and a role) up front:
+
+```sql
+-- run as a superuser (e.g. `psql -U postgres`)
+CREATE DATABASE xhrm;
+CREATE USER hr WITH PASSWORD 'a-strong-password';
+GRANT ALL PRIVILEGES ON DATABASE xhrm TO hr;
+
+-- Postgres 15+ also needs schema-level grants on the new DB:
+\connect xhrm
+GRANT ALL ON SCHEMA public TO hr;
+```
+
+Then follow step 4, and for Postgres also see
+[Switching between MySQL and Postgres](#switching-between-mysql-and-postgres) for generating the
+Postgres client and pushing the schema.
 
 ## 4. Set up the API server (`Server/`)
 
@@ -100,7 +120,7 @@ Create a `Server/.env` file. The required keys (see the existing `.env` for the
 full list, including optional SMTP / GL-posting / employee-sync integrations):
 
 ```dotenv
-PORT=3050
+PORT=3088
 NODE_ENV=production
 LOG_LEVEL=info
 
@@ -155,7 +175,7 @@ npm run start        # production (node server.js)
 npm run dev          # development (nodemon, auto-restart)
 ```
 
-The API now listens on `http://<server>:3050`. Uploaded files are stored under
+The API now listens on `http://<server>:3088`. Uploaded files are stored under
 `Server/uploads/` and served from there — make sure that folder is writable and
 persisted (back it up / mount a volume).
 
@@ -200,20 +220,19 @@ npm run db:use-pg       # regenerate the Prisma client for Postgres
 > So changing `PG_URL` has **no effect** while the MySQL client is active — you must regenerate.
 > Unsure which DB you're on? Run `npm run db:which`.
 
-**First-time Postgres setup.** Postgres does not auto-create the database, so create it, then push the
-Postgres schema and seed it:
+**First-time Postgres setup.** Create the database first (see
+[§3 → PostgreSQL](#3-create-the-database)), set `PG_URL` in `Server/.env`, then generate the PG
+client, push the Postgres schema, and seed it:
 
 ```bash
-# 1. create the empty database (run once)
-psql -h <host> -U postgres -c "CREATE DATABASE xhrm;"
-
-# 2. generate the PG client and create all tables
+# 1. generate the PG client and create all tables
 npm run db:use-pg
 npx prisma db push --schema=src/prisma/schema.postgres.prisma
 
-# 3. seed baseline + reference data
-node src/prisma/seed.js
-node src/prisma/seedCodeLists.js
+# 2. seed baseline + reference data (same order as MySQL)
+node src/prisma/seed.js               # roles, permissions, default super-admin
+node src/prisma/seedPermissions.js    # reconcile to the canonical permission catalog
+node src/prisma/seedCodeLists.js      # reference lists (titles, genders, nationalities, …)
 ```
 
 Notes:
@@ -222,6 +241,11 @@ Notes:
   schema, mirror the change in the Postgres schema** (or regenerate it from `schema.prisma`).
 - Runtime schema/DDL patches (`safeAlter`, some seed scripts) are MySQL-specific and are skipped
   automatically on Postgres — the tables already exist from `prisma db push`.
+- **Manual migrations.** Some schema changes are shipped as hand-written SQL in
+  `Server/src/prisma/manual-migrations/` with a `*.mysql.sql` and a `*.postgres.sql` variant each
+  (e.g. `pccodes.*.sql`, `codelist_cuid_to_int.postgres.sql`). On an existing database, apply the
+  variant matching your provider. Fresh installs get these via `prisma db push` from the current
+  schema, so they only matter when upgrading a database that already has data.
 
 ## 5. Set up the client (`Client/`)
 
@@ -231,13 +255,14 @@ npm install
 ```
 
 **Point the client at the API.** In dev, Vite proxies `/v1/api/hr` and
-`/uploads` to `http://localhost:3050` — if your API runs elsewhere, edit the
-`target` in [`Client/vite.config.ts`](vite.config.ts).
+`/uploads` to `http://localhost:3088` — if your API runs elsewhere, edit the
+`target` in [`Client/vite.config.ts`](vite.config.ts). The dev-server port is set in
+`Client/package.json` (`dev` script) and `vite.config.ts`.
 
 Run it:
 
 ```bash
-npm run dev          # dev server on http://<server>:3002 (host 0.0.0.0)
+npm run dev          # dev server on http://<server>:3099 (host 0.0.0.0)
 ```
 
 For production, build static files and serve them behind your reverse proxy:
@@ -253,7 +278,7 @@ Put both apps behind one reverse proxy on a single hostname so the browser sees
 one origin (no CORS, public QR/onboarding links resolve correctly):
 
 - Serve `Client/dist` as the site root (`/`).
-- Proxy `/v1/api/hr` and `/uploads` to the API at `http://127.0.0.1:3050`.
+- Proxy `/v1/api/hr` and `/uploads` to the API at `http://127.0.0.1:3088`.
 - Run the API with a process manager (`pm2 start server.js --name hr-api`) so it
   restarts on reboot. Cron jobs (auto-absent marking, daily digests) run inside
   the API process, so it must stay up.
@@ -271,10 +296,10 @@ one origin (no CORS, public QR/onboarding links resolve correctly):
 
    **Change this password immediately after first login.**
 2. Go to **Settings → Email Setup** to configure SMTP and send a test email.
-3. Sanity-check: `GET http://<server>:3050/v1/api/hr/health` returns
+3. Sanity-check: `GET http://<server>:3088/v1/api/hr/health` returns
    `{ "status": "ok" }`.
 4. Run `npm run lint` in `Client/` (type-check) and confirm the API console shows
-   `🚀 Server running on port 3050`.
+   `🚀 Server running on port 3088`.
 
 ---
 
@@ -353,7 +378,7 @@ files or content, rebuild it via **Settings → AI → Reindex knowledge**.
 ### 8.5 Verify
 
 ```bash
-curl http://<server>:3050/v1/api/hr/ai/health
+curl http://<server>:3088/v1/api/hr/ai/health
 ```
 
 A healthy response reports `ok: true`, the configured models, and
