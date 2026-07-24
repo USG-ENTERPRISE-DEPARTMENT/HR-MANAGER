@@ -1103,15 +1103,30 @@ exports.getMyMedicalEnquiry = asyncHandler(async (req, res) => {
   const limit  = lim ? parseFloat(lim.amount ?? 0) : null;
   const currency = lim?.currency ?? '';
 
-  // Count Approved records only from the current medical year; in-progress Draft/Pending always show.
+  // Utilization must match the web Medical Enquiry screen (getMedicalEnquiry) exactly, or the app and
+  // the mobile app show different balances for the same employee. That means: only **Approved** staff
+  // + dependent records from the current medical year, PLUS approved hospital-claim items for this
+  // employee. Pending/Draft are NOT counted here — they are money requested, not yet committed.
   const cut  = await getUtilizationCutoff();
   const frag = cutoffFragments(cut);
-  const [staffTotals] = await prisma.$queryRaw`SELECT SUM(cost) AS total FROM staffmedical WHERE employee = ${empId}
-       AND (status IN ('Pending Approval','Draft') OR (status = 'Approved'${Prisma.raw(frag.staff)}))`.catch(() => [{ total: 0 }]);
-  const [depTotals] = await prisma.$queryRaw`SELECT SUM(cost) AS total FROM dependentmedical WHERE employee = ${empId}
-       AND (status IN ('Pending Approval','Draft') OR (status = 'Approved'${Prisma.raw(frag.dep)}))`.catch(() => [{ total: 0 }]);
+  const [staffTotals] = await prisma.$queryRaw`SELECT SUM(cost) AS total FROM staffmedical
+       WHERE employee = ${empId} AND status = 'Approved'${Prisma.raw(frag.staff)}`.catch(() => [{ total: 0 }]);
+  const [depTotals] = await prisma.$queryRaw`SELECT SUM(cost) AS total FROM dependentmedical
+       WHERE employee = ${empId} AND status = 'Approved'${Prisma.raw(frag.dep)}`.catch(() => [{ total: 0 }]);
 
-  const utilized = parseFloat(staffTotals?.total ?? 0) + parseFloat(depTotals?.total ?? 0);
+  // Approved hospital claims store per-employee line items in a JSON `items` column, so they can't be
+  // filtered by employee in SQL — pull the approved claims and sum this employee's items (same as web).
+  const approvedClaims = await prisma.$queryRaw`SELECT items FROM hospitalclaims WHERE status = 'Approved'${Prisma.raw(frag.claim)}`.catch(() => []);
+  let claimTotal = 0;
+  for (const claim of approvedClaims) {
+    let items = [];
+    try { items = JSON.parse(claim.items ?? '[]'); } catch {}
+    for (const item of items) {
+      if (String(item.employee_id) === String(empId)) claimTotal += parseFloat(item.amount ?? 0);
+    }
+  }
+
+  const utilized = parseFloat(staffTotals?.total ?? 0) + parseFloat(depTotals?.total ?? 0) + claimTotal;
   const balance  = limit !== null ? Math.max(0, limit - utilized) : null;
 
   // Also return individual records for the history
