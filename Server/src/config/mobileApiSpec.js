@@ -193,6 +193,45 @@ const spec = {
           employee_code: { type: 'string', example: 'EMP-00005' },
         },
       },
+      // Body for POST /medical/staff. `employee` is NOT listed: on the mobile /me/* path the server
+      // forces it to the authenticated employee, so the app must not send it. The record is created
+      // as a Draft — call /medical/staff/{id}/submit to send it for approval.
+      StaffMedicalClaim: {
+        type: 'object',
+        required: ['admission_date', 'illness_type', 'cost'],
+        properties: {
+          admission_date:  { type: 'string', format: 'date', example: '2026-07-20', description: 'Date admitted / treated' },
+          discharged_date: { type: 'string', format: 'date', nullable: true, example: '2026-07-22' },
+          admission_type:  { type: 'string', example: 'Outpatient' },
+          illness_type:    { type: 'string', example: 'Malaria', description: 'Nature of the illness/treatment' },
+          medication:      { type: 'string', example: 'Artemether-lumefantrine' },
+          hospital:        { type: 'string', example: 'City General Hospital' },
+          physician:       { type: 'string', nullable: true, example: 'Dr. Kamara' },
+          cost:            { type: 'number', example: 250.00, description: 'Amount claimed' },
+          mode_of_payment: { type: 'string', nullable: true, example: 'Cash' },
+          attachment1:     { type: 'string', nullable: true, description: 'Uploaded receipt/report reference', example: null },
+        },
+      },
+      // Body for POST /medical/dependents. As above, `employee` is server-set and must not be sent.
+      DependentMedicalClaim: {
+        type: 'object',
+        required: ['dependent_id', 'date_attended', 'illness_type', 'cost'],
+        properties: {
+          dependent_id:    { ...id('7'), description: 'Registered dependant id (from the employee\'s dependants)' },
+          relationship:    { type: 'string', example: 'Child' },
+          dob:             { type: 'string', format: 'date', nullable: true, example: '2015-04-10' },
+          date_attended:   { type: 'string', format: 'date', example: '2026-07-20' },
+          date_discharged: { type: 'string', format: 'date', nullable: true, example: '2026-07-21' },
+          admission_type:  { type: 'string', example: 'Outpatient' },
+          illness_type:    { type: 'string', example: 'Tonsillitis' },
+          medication:      { type: 'string', example: 'Amoxicillin' },
+          hospital:        { type: 'string', example: 'City General Hospital' },
+          physician:       { type: 'string', nullable: true, example: 'Dr. Bangura' },
+          cost:            { type: 'number', example: 120.00 },
+          mode_of_payment: { type: 'string', nullable: true, example: 'Cash' },
+          attachment1:     { type: 'string', nullable: true, example: null },
+        },
+      },
     },
   },
   tags: [
@@ -304,12 +343,20 @@ const spec = {
     '/medical/enquiry':    { get: op({ tag: 'Medical', summary: 'Own medical limit and utilisation', description: 'Entitlement, amount used and remaining balance.', response: { type: 'object' } }) },
     '/medical/staff': {
       get:  op({ tag: 'Medical', summary: 'List own staff medical claims', response: { type: 'array', items: { type: 'object' } } }),
-      post: op({ tag: 'Medical', summary: 'Create a staff medical claim', body: { type: 'object' }, response: { type: 'object' } }),
+      post: op({
+        tag: 'Medical', summary: 'Create a staff medical claim',
+        description: 'Creates the claim as a Draft for the authenticated employee. Do not send `employee` — it is set from the auth headers. Call `/medical/staff/{id}/submit` afterwards to send it for approval.',
+        body: { $ref: '#/components/schemas/StaffMedicalClaim' }, response: { type: 'object' },
+      }),
     },
     '/medical/staff/{id}/submit':      { post: op({ tag: 'Medical', summary: 'Submit a staff medical claim', params: [pathId], response: { type: 'object' } }) },
     '/medical/dependents': {
       get:  op({ tag: 'Medical', summary: 'List own dependent medical claims', response: { type: 'array', items: { type: 'object' } } }),
-      post: op({ tag: 'Medical', summary: 'Create a dependent medical claim', body: { type: 'object' }, response: { type: 'object' } }),
+      post: op({
+        tag: 'Medical', summary: 'Create a dependent medical claim',
+        description: 'Creates the claim as a Draft for one of the employee\'s registered dependants. Do not send `employee`. Call `/medical/dependents/{id}/submit` afterwards to send it for approval.',
+        body: { $ref: '#/components/schemas/DependentMedicalClaim' }, response: { type: 'object' },
+      }),
     },
     '/medical/dependents/{id}/submit': { post: op({ tag: 'Medical', summary: 'Submit a dependent medical claim', params: [pathId], response: { type: 'object' } }) },
 
