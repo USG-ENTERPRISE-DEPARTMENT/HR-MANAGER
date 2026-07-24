@@ -1416,8 +1416,10 @@ exports.getLeaves = asyncHandler(async (req, res) => {
   // ?all=1 returns every employee's leaves (reports/admin views — screen access is the gate).
   let scopedEmployee = null;
   if (req.query.all !== '1') {
-    const userEmp = await prisma.$queryRaw`SELECT employeeId, employee FROM users WHERE id=${toBigInt(req.user.id)}`.catch(() => []);
-    const ownEmpId = userEmp[0]?.employeeId || userEmp[0]?.employee;
+    // Alias the columns: on Postgres unquoted `employeeId` returns as key `employeeid`, so reading
+    // `.employeeId` off the row is undefined and every employee's own-leave list comes back empty.
+    const userEmp = await prisma.$queryRaw`SELECT employeeId AS emp_link, employee AS emp_fallback FROM users WHERE id=${toBigInt(req.user.id)}`.catch(() => []);
+    const ownEmpId = userEmp[0]?.emp_link || userEmp[0]?.emp_fallback;
     if (!ownEmpId) return respond.ok(res, 'Leaves', []);
     scopedEmployee = String(ownEmpId);
   }
@@ -1577,8 +1579,9 @@ exports.applyLeave = asyncHandler(async (req, res) => {
   // Resolve employee first — use body value if provided, otherwise look up from user account
   let employee = bodyEmployee;
   if (!employee) {
-    const userRow = await prisma.$queryRaw`SELECT employeeId, employee FROM users WHERE id=${toBigInt(req.user?.id)}`.catch(() => []);
-    const empLink = userRow[0]?.employeeId || userRow[0]?.employee;
+    // Alias the columns — see getLeaves: Postgres returns unquoted `employeeId` as key `employeeid`.
+    const userRow = await prisma.$queryRaw`SELECT employeeId AS emp_link, employee AS emp_fallback FROM users WHERE id=${toBigInt(req.user?.id)}`.catch(() => []);
+    const empLink = userRow[0]?.emp_link || userRow[0]?.emp_fallback;
     employee = empLink ? String(empLink) : null;
   }
   if (!employee) return respond.badReq(res, 'No employee record linked to your account. Contact HR to link your profile.');
@@ -2226,8 +2229,9 @@ exports.getLeaveCentralApproval = asyncHandler(async (req, res) => {
   const canFinancial = hasBlanketFinancial(req) || (await readLeaveFlow()).length > 0;
 
   // Find current user's linked employee record
-  const userEmp = await prisma.$queryRaw`SELECT employeeId FROM users WHERE id=${userId}`.catch(() => []);
-  const empId = userEmp[0]?.employeeId ? toBigInt(userEmp[0].employeeId) : null;
+  // Alias the column — Postgres returns unquoted `employeeId` as key `employeeid`.
+  const userEmp = await prisma.$queryRaw`SELECT employeeId AS emp_link FROM users WHERE id=${userId}`.catch(() => []);
+  const empId = userEmp[0]?.emp_link ? toBigInt(userEmp[0].emp_link) : null;
 
   const clauses = [];
   // Supervisor tier: subordinates waiting for first approval

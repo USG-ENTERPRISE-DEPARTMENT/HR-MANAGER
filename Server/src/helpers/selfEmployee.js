@@ -16,10 +16,13 @@ async function resolveOwnEmployee(userId) {
   const id = toBigInt(userId);
   if (id == null) return null;
 
+  // Alias to a fixed lower-case key: on Postgres an unquoted `employeeId` comes back as `employeeid`,
+  // so reading `.employeeId` off the row silently yields undefined and the account looks unlinked.
+  // Aliasing makes the JS key deterministic across MySQL and Postgres.
   const rows = await prisma.$queryRaw`
-    SELECT employeeId, employee FROM users WHERE id = ${id} LIMIT 1`.catch(() => []);
+    SELECT employeeId AS emp_link, employee AS emp_fallback FROM users WHERE id = ${id} LIMIT 1`.catch(() => []);
 
-  const link = rows[0]?.employeeId ?? rows[0]?.employee;
+  const link = rows[0]?.emp_link ?? rows[0]?.emp_fallback;
   return link ? String(link) : null;
 }
 
