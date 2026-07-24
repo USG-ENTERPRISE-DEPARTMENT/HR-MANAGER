@@ -2,8 +2,11 @@ const { prisma }   = require('../helpers/dbQueryHelper');
 const asyncHandler = require('../middleware/asyncHandler');
 const respond      = require('../helpers/respondHelper');
 const nodemailer   = require('nodemailer');
+const crypto       = require('crypto');
 const messageStore = require('../helpers/messageStore');
 const { upsertSetting } = require('../helpers/settingsHelper');
+const { logActivity, fromReq } = require('./auditController');
+const { getMobileApiKey, SETTING_KEY: MOBILE_KEY_SETTING } = require('../middleware/mobileAuth');
 
 function escapeHtml(value = '') {
   return String(value)
@@ -310,4 +313,32 @@ const resetMessage = asyncHandler(async (req, res) => {
   respond.ok(res, 'Message reset to default');
 });
 
-module.exports = { getEmailSettings, updateEmailSettings, sendTestEmail, getModuleSettings, saveModuleSettings, getControlSettings, saveControlSettings, getAppSetup, saveAppSetup, getNotificationSettings, saveNotificationSettings, getMessages, saveMessage, resetMessage };
+// ── Mobile API key ───────────────────────────────────────────────────────────
+// The key the staff mobile app sends as `x-api-key`. It is stored here (not in .env) precisely so a
+// leaked key can be rotated from the UI without a redeploy — see middleware/mobileAuth.js for why
+// that matters under this auth model.
+
+const getMobileApiSettings = asyncHandler(async (req, res) => {
+  const key = await getMobileApiKey();
+  // Masked by default: the full key is shown only at generation time, so a shoulder-surfed or
+  // screenshotted settings page does not leak it.
+  respond.ok(res, 'Mobile API settings', {
+    configured: Boolean(key),
+    masked: key ? `${key.slice(0, 4)}${'•'.repeat(Math.max(0, key.length - 8))}${key.slice(-4)}` : null,
+  });
+});
+
+const regenerateMobileApiKey = asyncHandler(async (req, res) => {
+  const key = crypto.randomBytes(24).toString('hex');
+  await prisma.app_settings.upsert({
+    where:  { setting_key: MOBILE_KEY_SETTING },
+    update: { setting_value: key },
+    create: { setting_key: MOBILE_KEY_SETTING, setting_value: key },
+  });
+  logActivity({ module: 'Settings', action: 'regenerate_mobile_api_key', ...fromReq(req) });
+  // Every installed copy of the mobile app must be updated with this key — rotating it logs out all
+  // mobile clients until they ship the new value.
+  respond.ok(res, 'Mobile API key regenerated — copy it now, it will not be shown again', { key });
+});
+
+module.exports = { getEmailSettings, updateEmailSettings, sendTestEmail, getModuleSettings, saveModuleSettings, getControlSettings, saveControlSettings, getAppSetup, saveAppSetup, getNotificationSettings, saveNotificationSettings, getMessages, saveMessage, resetMessage, getMobileApiSettings, regenerateMobileApiKey };

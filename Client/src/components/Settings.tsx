@@ -6,6 +6,7 @@ import {
   Building2, Users, ShieldCheck, Stethoscope, Banknote, Network, CalendarClock, FileText, Briefcase,
   Mail, Server, AtSign, Eye, EyeOff, Send, Loader2, GraduationCap,
   Clock, MapPin, Tablet, KeyRound, Copy, RefreshCw, Lock, Sparkles, CheckCircle2, XCircle, Plus, Trash2, Pencil,
+  Smartphone, ExternalLink,
   MessageSquare, RotateCcw, Search, Check, ArrowRightLeft,
 } from 'lucide-react';
 import { Modules } from './Modules';
@@ -2152,7 +2153,192 @@ function MessagesTab() {
   );
 }
 
-const TABS = ['Modules', 'Notification Settings', 'Controls', 'Email Setup', 'AI', 'Messages'] as const;
+// ─── Mobile API ───────────────────────────────────────────────────────────────
+// Key management for the staff mobile app. The key is only ever returned in full at generation
+// time; afterwards the server sends a masked value, so this tab shows the real key exactly once.
+// Served by the API itself (public, no login) so the mobile developer can read it without an
+// account. Relative to the current origin, so it follows dev proxy / production host automatically.
+const DOCS_URL = '/v1/api/hr/me/docs/';
+
+function MobileApiTab() {
+  const [info, setInfo]       = useState<{ configured: boolean; masked: string | null } | null>(null);
+  const [freshKey, setFresh]  = useState<string | null>(null);   // shown once, never re-fetched
+  const [busy, setBusy]       = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const load = () => api.get('/settings/mobile-api')
+    .then(r => setInfo(r.data?.data ?? null))
+    .catch(() => toast.error('Failed to load mobile API settings'));
+  useEffect(() => { load(); }, []);
+
+  const regenerate = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post('/settings/mobile-api/regenerate');
+      const key = r.data?.data?.key ?? null;
+      setFresh(key);
+      setConfirming(false);
+      if (key) await navigator.clipboard.writeText(key).catch(() => {});
+      toast.success('New key generated and copied to your clipboard');
+      load();
+    } catch { toast.error('Failed to regenerate key'); }
+    finally { setBusy(false); }
+  };
+
+  const copy = (v: string) => {
+    navigator.clipboard.writeText(v)
+      .then(() => toast.success('Copied'))
+      .catch(() => toast.error('Copy failed'));
+  };
+
+  if (!info) return <div className="p-6 text-[13px] text-[var(--text-muted)]">Loading…</div>;
+
+  // Whether the *admin's own* browser session is encrypted. It is a reliable signal for how the
+  // server is reachable, but the mobile app may well be pointed at a different (HTTPS) port — hence
+  // the wording below asks rather than asserts.
+  const onHttps = window.location.protocol === 'https:';
+
+  return (
+    <div className="p-5 space-y-4 overflow-y-auto h-full">
+      {/* The auth model is unusual enough that it needs stating plainly on the screen itself. */}
+      <div className="px-4 py-3 rounded-xl text-[12px] leading-relaxed flex items-start gap-2.5"
+        style={{ background: 'color-mix(in srgb, var(--warning) 12%, transparent)', color: 'var(--warning)', border: '1px solid color-mix(in srgb, var(--warning) 35%, transparent)' }}>
+        <Lock size={14} className="shrink-0 mt-0.5" />
+        <span>
+          <strong>This key grants access to every employee's records.</strong> The mobile app sends it with an
+          employee id, and the server trusts that id — so anyone holding the key can read any employee's
+          payslips, medical claims and personal data. Keep the API off the public internet, and
+          regenerate immediately if a build or device is compromised.
+        </span>
+      </div>
+
+      {/* Transport security is the difference between "the key is a secret" and "the key is public
+          to anyone on the network", so it gets its own status line rather than a footnote. */}
+      {!onHttps && (
+        <div className="px-4 py-3 rounded-xl text-[12px] leading-relaxed flex items-start gap-2.5"
+          style={{ background: 'color-mix(in srgb, var(--danger, #dc2626) 10%, transparent)', color: 'var(--danger, #dc2626)', border: '1px solid color-mix(in srgb, var(--danger, #dc2626) 30%, transparent)' }}>
+          <ShieldCheck size={14} className="shrink-0 mt-0.5" />
+          <span>
+            <strong>You are viewing this over plain HTTP.</strong> If the mobile app also connects over
+            HTTP, the API key and every payslip and medical record it returns travel as readable text —
+            anyone on the same network can capture them, and rotating the key will not help. Enable
+            HTTPS by running <span className="font-mono text-[11px]">npm run cert:generate</span> in the
+            Server folder and setting <span className="font-mono text-[11px]">HTTPS_KEY</span> /{' '}
+            <span className="font-mono text-[11px]">HTTPS_CERT</span> — see the TLS section of
+            <span className="font-mono text-[11px]"> Server/MOBILE_API.md</span>.
+          </span>
+        </div>
+      )}
+
+      <SectionCard icon={<KeyRound size={13} />} title="Mobile App API Key">
+        <div className="px-5 py-3 border-b border-[var(--border)]">
+          <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
+            The staff mobile app sends this as the <span className="font-mono text-[11px]">x-api-key</span> header,
+            together with <span className="font-mono text-[11px]">x-employee-id</span>, to
+            endpoints under <span className="font-mono text-[11px]">/v1/api/hr/me/*</span>.
+            Every call is recorded in the audit log under the <span className="font-mono text-[11px]">MobileAPI</span> module.
+          </p>
+        </div>
+
+        <div className="px-5 py-4 space-y-2">
+          <p className="text-[12px] font-semibold text-[var(--text-primary)]">Current Key</p>
+
+          {freshKey ? (
+            // Only moment the full key is visible — it cannot be retrieved again afterwards.
+            <>
+              <div className="flex items-center gap-2">
+                <input className={`${inputClass} flex-1 font-mono text-[12px]`} readOnly value={freshKey} />
+                <button className="secondary-btn shrink-0" onClick={() => copy(freshKey)}>
+                  <Copy size={13} className="inline mr-1.5" />Copy
+                </button>
+              </div>
+              <p className="text-[11.5px] font-medium" style={{ color: 'var(--warning)' }}>
+                Copy this now — it will not be shown again. Leaving this tab hides it permanently.
+              </p>
+            </>
+          ) : (
+            <>
+              <input
+                className={`${inputClass} w-full font-mono text-[12px]`}
+                readOnly
+                value={info.masked ?? 'No key generated yet'}
+              />
+              <p className="text-[11.5px] text-[var(--text-muted)]">
+                {info.configured
+                  ? 'Keys are stored masked. Regenerate to issue a new one — the full value is shown only at that moment.'
+                  : 'A key is created automatically the first time the mobile app calls the API, or you can generate one now.'}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-[var(--border)]">
+          {confirming ? (
+            <div className="space-y-2.5">
+              <p className="text-[12px] text-[var(--text-primary)] font-medium">
+                Regenerate the key?
+              </p>
+              <p className="text-[11.5px] text-[var(--text-muted)] leading-relaxed">
+                The current key stops working immediately. Every installed copy of the mobile app will
+                fail to connect until it is updated with the new key — staff will be locked out in the
+                meantime.
+              </p>
+              <div className="flex items-center gap-2">
+                <button className="primary-btn" disabled={busy} onClick={regenerate}>
+                  {busy
+                    ? <><Loader2 size={13} className="inline mr-1.5 animate-spin" />Generating…</>
+                    : <><RefreshCw size={13} className="inline mr-1.5" />Yes, regenerate</>}
+                </button>
+                <button className="secondary-btn" disabled={busy} onClick={() => setConfirming(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="secondary-btn" onClick={() => setConfirming(true)}>
+              <RefreshCw size={13} className="inline mr-1.5" />
+              {info.configured ? 'Regenerate Key' : 'Generate Key'}
+            </button>
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard icon={<FileText size={13} />} title="API Reference">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex items-start justify-between gap-4">
+          <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
+            Interactive reference for every endpoint — an employee's own profile, leave, payslips,
+            attendance, medical claims, training, documents and notifications, plus approvals for their
+            direct reports. Readable without signing in, so the mobile developer does not need an HR account.
+          </p>
+          <a href={DOCS_URL} target="_blank" rel="noreferrer" className="secondary-btn shrink-0 no-underline">
+            <ExternalLink size={13} className="inline mr-1.5" />Open in new tab
+          </a>
+        </div>
+        <div className="px-5 py-4 space-y-2.5">
+          <p className="text-[12px] font-semibold text-[var(--text-primary)]">Example request</p>
+          <pre className="text-[11px] font-mono p-3 rounded-lg overflow-x-auto"
+            style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+{`curl ${window.location.origin}/v1/api/hr/me/leave \\
+  -H "x-api-key: <key>" \\
+  -H "x-employee-id: EMP-2026-0012"`}
+          </pre>
+        </div>
+        {/* Swagger UI brings its own stylesheet, so it is isolated in an iframe rather than allowed
+            to leak CSS into the app. It renders in its own light theme regardless of ours. */}
+        <div className="border-t border-[var(--border)]">
+          <iframe
+            src={DOCS_URL}
+            title="Mobile API reference"
+            className="w-full block"
+            style={{ height: 620, border: 0, background: '#fff', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}
+          />
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+const TABS = ['Modules', 'Notification Settings', 'Controls', 'Email Setup', 'AI', 'Mobile API', 'Messages'] as const;
 type Tab = (typeof TABS)[number];
 
 export function Settings() {
@@ -2191,6 +2377,7 @@ export function Settings() {
             {tab === 'Controls'              && <SlidersHorizontal   size={13} />}
             {tab === 'Email Setup'           && <Mail                size={13} />}
             {tab === 'AI'                    && <Sparkles            size={13} />}
+            {tab === 'Mobile API'            && <Smartphone          size={13} />}
             {tab === 'Messages'              && <MessageSquare       size={13} />}
             {tab}
           </button>
@@ -2230,6 +2417,9 @@ export function Settings() {
                 )}
                 {activeTab === 'AI'                    && (
                   <fieldset disabled={!canManage} className={`border-0 m-0 p-0 h-full ${!canManage ? 'readonly-section' : ''}`}><AiSettingsTab /></fieldset>
+                )}
+                {activeTab === 'Mobile API'            && (
+                  <fieldset disabled={!canManage} className={`border-0 m-0 p-0 h-full ${!canManage ? 'readonly-section' : ''}`}><MobileApiTab /></fieldset>
                 )}
                 {activeTab === 'Messages'              && (
                   <fieldset disabled={!canManage} className={`border-0 m-0 p-0 h-full ${!canManage ? 'readonly-section' : ''}`}><MessagesTab /></fieldset>

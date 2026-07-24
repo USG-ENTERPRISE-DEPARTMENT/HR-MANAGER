@@ -148,6 +148,15 @@ router.get ('/public/attendance/kiosk/:token/lookup/:staffId', attendance.kioskL
 router.post('/public/attendance/kiosk/:token/punch',           attendance.kioskPunch);
 
 // ─────────────────────────────────────────────
+// Mobile self-service API (x-api-key + x-employee-id, no JWT)
+// Mounted here so it bypasses the global checkToken below. Its own middleware authenticates every
+// request and pins the employee — see middleware/mobileAuth.js for the auth model and its caveats.
+// NOTE: this is a prefix mount for `/me/...` sub-paths; the exact-path `GET /me` (getMe) further
+// down still serves the web app's JWT-authenticated profile call.
+// ─────────────────────────────────────────────
+router.use('/me', require('./meRoutes'));
+
+// ─────────────────────────────────────────────
 // All routes below require a valid token
 // ─────────────────────────────────────────────
 router.use(checkToken);
@@ -398,6 +407,9 @@ router.put ('/settings/email',             permissionGuard('manage_settings'), a
 router.post('/settings/email/test',        permissionGuard('manage_settings'), appCfg.sendTestEmail);
 router.get ('/settings/api-integrations',  apiInteg.getApiIntegrations);
 router.put ('/settings/api-integrations',  permissionGuard('manage_settings'), apiInteg.updateApiIntegrations);
+// Staff mobile app key — read returns a masked value; regenerate reveals the new key once.
+router.get ('/settings/mobile-api',            permissionGuard('manage_settings'), appCfg.getMobileApiSettings);
+router.post('/settings/mobile-api/regenerate', permissionGuard('manage_settings'), appCfg.regenerateMobileApiKey);
 
 // ─────────────────────────────────────────────
 // Audit logs

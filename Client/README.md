@@ -1,25 +1,38 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# HR System
 
-# Run and deploy your AI Studio app
+A full-stack HR system: an Express + Prisma API (`Server/`) and a React 19 + Vite client
+(`Client/`), backed by MySQL **or** PostgreSQL.
 
-This contains everything you need to run your app locally.
+## Quick start (local dev)
 
-View your app in AI Studio: https://ai.studio/apps/b55c5182-49a2-4ab2-95d8-718e09068308
+```bash
+# 1. clone
+git clone <your-repo-url> HR
+cd HR
 
-## Run Locally (client only)
+# 2. install both apps (root helper scripts)
+npm install            # installs the root dev tools (concurrently)
+npm run install:all    # installs Client/ and Server/ dependencies
 
-**Prerequisites:**  Node.js
+# 3. configure the API — see "Set up the API server" below for the full env + DB steps
+#    (create Server/.env.development, create the database, then push the schema + seed)
 
-1. Install dependencies:
-   `npm install`
-2. Run the app:
-   `npm run dev`
+# 4. run BOTH apps together (client on :3099, server on :3088)
+npm run dev
+```
 
-The client is the front end of a full-stack HR system. It expects the API
-server (in the sibling `Server/` folder) to be running. For a complete
-deployment, follow the guide below.
+The repo **root** (`HR/package.json`) has two convenience scripts:
+
+| Script                | What it does                                                |
+|-----------------------|------------------------------------------------------------|
+| `npm run install:all` | installs dependencies in both `Client/` and `Server/`      |
+| `npm run dev`         | runs the client and server together via `concurrently`     |
+
+> You can still run each app on its own from its folder (`cd Server && npm run dev`,
+> `cd Client && npm run dev`). Either way the database and API env must be set up first (see the
+> full guide below) or the API won't start.
+
+The full from-scratch deployment guide (database, env, seeding, production wiring) follows.
 
 ---
 
@@ -62,14 +75,17 @@ Install these on the server first:
 - **Git**
 - A reverse proxy for production (nginx, IIS, Caddy, …) — optional for local
 
-## 2. Get the code
+## 2. Get the code & install dependencies
 
 ```bash
 git clone <your-repo-url> HR
 cd HR
+
+npm install            # root dev tools (concurrently, for `npm run dev`)
+npm run install:all    # installs Client/ and Server/ dependencies
 ```
 
-The repo has two apps:
+The repo has two apps, plus root-level helper scripts (`npm run install:all`, `npm run dev`):
 
 | Folder    | What it is                          | Default port |
 |-----------|-------------------------------------|--------------|
@@ -111,13 +127,16 @@ Postgres client and pushing the schema.
 
 ## 4. Set up the API server (`Server/`)
 
+Dependencies were installed by `npm run install:all` in step 2. Now configure the environment:
+
 ```bash
 cd Server
-npm install
 ```
 
-Create a `Server/.env` file. The required keys (see the existing `.env` for the
-full list, including optional SMTP / GL-posting / employee-sync integrations):
+Create the API env file with the keys below. **Which file the server reads depends on `NODE_ENV`:**
+`npm run dev` (development) reads **`Server/.env.development`**; `npm run start` (production) reads
+**`Server/.env`**. For local development, create `.env.development`; for production, create `.env`.
+(See the existing files for the full list, including optional SMTP / GL-posting / employee-sync keys.)
 
 ```dotenv
 PORT=3088
@@ -249,9 +268,10 @@ Notes:
 
 ## 5. Set up the client (`Client/`)
 
+Dependencies were installed by `npm run install:all` in step 2.
+
 ```bash
 cd ../Client
-npm install
 ```
 
 **Point the client at the API.** In dev, Vite proxies `/v1/api/hr` and

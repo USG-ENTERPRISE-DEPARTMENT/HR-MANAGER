@@ -1,5 +1,9 @@
 /node_modules
 
+# TLS certificates for the mobile API — the private key must never be committed.
+# Generate them per-machine with `npm run cert:generate`.
+/certs/
+
 # Uploaded documents (runtime user uploads) — ignore contents, keep the folder
 /uploads/documents/*
 !/uploads/documents/.gitkeep
