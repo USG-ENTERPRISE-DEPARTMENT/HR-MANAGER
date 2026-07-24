@@ -109,9 +109,14 @@ async function userMap(ids) {
   } catch { return {}; }
 }
 
-// Build id → { id, name, employee_id } map for a list of BigInt ids
+// Build id → { id, name, employee_id } map for a list of BigInt ids.
+// Guards against non-numeric ids (e.g. the literal string "null" that some legacy/imported rows
+// carry in place of an employee id) — one bad value must not throw and 500 the whole listing.
 async function empMap(ids) {
-  const unique = [...new Set(ids.filter(Boolean).map(String))];
+  const unique = [...new Set(
+    ids.map(v => (v == null ? null : String(v).trim()))
+       .filter(v => v && /^\d+$/.test(v)),
+  )];
   if (!unique.length) return {};
   const emps = await prisma.employee.findMany({
     where: { id: { in: unique.map(BigInt) } },
