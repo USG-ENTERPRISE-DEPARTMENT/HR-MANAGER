@@ -13,6 +13,7 @@
 //
 // `req.self` is set by mobileAuth and is the ONLY trusted source of identity on this path.
 // ─────────────────────────────────────────────────────────────────────────────
+const { Prisma } = require('@prisma/client');
 const { prisma } = require('../helpers/dbQueryHelper');
 const { toBigInt } = require('../helpers/controllerHelpers');
 const respond = require('../helpers/respondHelper');
@@ -58,8 +59,12 @@ const ownQuery = (req, extra = {}) => {
 async function ownsRecord(table, id, selfId) {
   const rid = toBigInt(id);
   if (rid == null) return false;
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT employee FROM ${table} WHERE id = ? LIMIT 1`, rid,
+  // `Prisma.raw` interpolates the (allowlisted, never user-supplied) table name; the id binds through
+  // the tagged template so the placeholder is emitted correctly per provider. A hardcoded `?` here
+  // was a MySQL-ism that threw a syntax error on Postgres — swallowed by the catch, so every
+  // ownership check silently failed with "Record not found".
+  const rows = await prisma.$queryRaw(
+    Prisma.sql`SELECT employee FROM ${Prisma.raw(table)} WHERE id = ${rid} LIMIT 1`,
   ).catch(() => []);
   const owner = rows?.[0]?.employee;
   return owner != null && String(owner) === String(selfId);
@@ -214,8 +219,8 @@ const requireSubordinate = (table) => asyncHandler(async (req, res, next) => {
   const rid = toBigInt(req.params.id);
   if (rid == null) return respond.notFound(res, 'Record not found');
 
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT employee FROM ${table} WHERE id = ? LIMIT 1`, rid,
+  const rows = await prisma.$queryRaw(
+    Prisma.sql`SELECT employee FROM ${Prisma.raw(table)} WHERE id = ${rid} LIMIT 1`,
   ).catch(() => []);
   const targetEmp = rows?.[0]?.employee;
   if (targetEmp == null) return respond.notFound(res, 'Record not found');
