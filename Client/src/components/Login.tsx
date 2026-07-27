@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Lock, ArrowRight, ShieldCheck, Zap, Activity, AlertCircle } from 'lucide-react';
+import { User, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { setSession } from '@/lib/auth';
 import { normalizeFromLogin } from '@/lib/permissions';
@@ -15,6 +15,7 @@ interface LoginProps {
 export function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,94 +44,51 @@ export function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-[#f8fafc] overflow-hidden font-sans">
-      
-      {/* Left side: Branding & Animation (Hidden on mobile) */}
-      <div 
-        className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col justify-between p-12 text-white bg-cover bg-center"
-        style={{ backgroundImage: `url('${import.meta.env.BASE_URL}login-bg.jpg')` }}
-      >
-        {/* Overlay to ensure text readability */}
-        <div className="absolute inset-0 bg-[#003355]/80 mix-blend-multiply"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-[#001f33]/90 via-transparent to-[#001f33]/40"></div>
+    <div
+      className="min-h-screen w-full relative overflow-hidden font-sans bg-cover bg-center bg-[#0b0f19]"
+      style={{ backgroundImage: `url('${import.meta.env.BASE_URL}login-bg.jpg')` }}
+    >
+      {/* Dark-to-transparent overlay: strong on the left where the card sits, fading out to the right */}
+      <div className="absolute inset-0 bg-gradient-to-r from-[#0b0f19] via-[#0b0f19]/80 to-[#0b0f19]/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0f19]/80 via-transparent to-[#0b0f19]/40" />
 
-        {/* Content */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 rounded bg-gradient-to-br from-[#0066b3] to-[#0099ff] flex items-center justify-center shadow-lg border border-white/20">
-              <span className="text-white font-bold text-xl tracking-tight">HR</span>
-            </div>
-            <span className="text-2xl font-bold tracking-wide">
-              SISL <span className="font-normal text-[#99b3c6]">Portal</span>
-            </span>
+      {/* Top bar */}
+      <div className="relative z-10 flex items-center justify-between px-8 sm:px-12 pt-8">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded bg-gradient-to-br from-[#0066b3] to-[#0099ff] flex items-center justify-center shadow-lg border border-white/20">
+            <span className="text-white font-bold text-[15px] tracking-tight">SI</span>
           </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-          >
-            <h1 className="text-4xl xl:text-5xl font-bold leading-tight mb-6">
-              Modern HR <br />
-              <span className="text-[#66b3ff]">Management</span>
-            </h1>
-            <p className="text-[#99b3c6] text-lg max-w-md">
-              Streamline your workflow, empower your team, and manage resources efficiently with our comprehensive platform.
-            </p>
-          </motion.div>
+          <span className="text-[19px] font-bold text-white tracking-wide">
+            SISL <span className="font-normal text-slate-400">Portal</span>
+          </span>
         </div>
-
-        {/* Animated Feature Cards */}
-        <div className="relative z-10 flex gap-4 mt-12">
-          {[
-            { icon: ShieldCheck, title: "Secure", delay: 0.4 },
-            { icon: Zap, title: "Fast", delay: 0.6 },
-            { icon: Activity, title: "Reliable", delay: 0.8 }
-          ].map((feature, i) => (
-            <motion.div 
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: feature.delay, duration: 0.5 }}
-              className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2.5 rounded-full border border-white/10"
-            >
-              <feature.icon className="w-4 h-4 text-[#66b3ff]" />
-              <span className="text-sm font-medium text-white/90">{feature.title}</span>
-            </motion.div>
-          ))}
+        <div className="hidden sm:flex items-center gap-8 text-sm font-semibold text-slate-300">
+          <span className="text-white">Sign In</span>
+          <a href="#" className="hover:text-white transition-colors">Help</a>
         </div>
       </div>
 
-      {/* Right side: Login Form */}
-      <div className="w-full lg:w-[55%] flex items-center justify-center p-6 sm:p-12 relative z-10 bg-[var(--bg)] shadow-[-20px_0_40px_rgba(0,0,0,0.05)]">
-        {/* Mobile Header (Hidden on large screens) */}
-        <div className="absolute top-8 left-8 flex lg:hidden items-center gap-2">
-          <div className="w-8 h-8 rounded bg-gradient-to-br from-[#0066b3] to-[#0099ff] flex items-center justify-center shadow-inner">
-            <span className="text-white font-bold text-[15px] tracking-tight">SI</span>
-          </div>
-          <span className="text-[17px] font-bold text-[#003355] tracking-wide">
-            SISL <span className="font-normal text-[#5c7083]">Portal</span>
-          </span>
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
+      {/* Card */}
+      <div className="relative z-10 flex items-center ml-32 min-h-[calc(100vh-96px)] px-6 sm:px-12">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
-          className="w-full max-w-[440px] bg-white p-8 sm:p-10 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
+          className="w-full max-w-[440px] bg-slate-900/40 p-8 sm:p-10 rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-white/5 backdrop-blur-lg"
         >
-          <div className="mb-10 text-center lg:text-left">
-            <h2 className="text-3xl font-bold text-slate-800 tracking-tight mb-3 syne">Welcome back</h2>
-            <p className="text-slate-500 text-[15px] font-medium">Please enter your details to sign in.</p>
+          <div className="mb-10">
+            <p className="text-xs font-bold tracking-[0.2em] text-blue-400 mb-3 uppercase">Welcome back</p>
+            <h2 className="text-3xl font-bold text-white tracking-tight mb-3">Sign in to your account</h2>
+            <p className="text-slate-400 text-[15px] font-medium">Please enter your details to sign in.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-4">
               {/* Email / Username Input */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-0.5 syne tracking-wide">Email or Username</label>
+                <label className="block text-sm font-semibold text-slate-300 mb-1.5 ml-0.5 tracking-wide">Email or Username</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[var(--accent)] transition-colors z-10">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors z-10">
                     <User className="h-5 w-5" />
                   </div>
                   <input
@@ -138,7 +96,8 @@ export function Login({ onLogin }: LoginProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="!pl-11 !py-3 font-medium text-[14px]"
+                    autoComplete="username"
+                    className="w-full !pl-11 !pr-4 !py-3 bg-slate-950/40 border border-white/10 rounded-lg text-white font-medium text-[14px] placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                     placeholder="admin@usg.com or EMP-00004"
                   />
                 </div>
@@ -147,30 +106,39 @@ export function Login({ onLogin }: LoginProps) {
               {/* Password Input */}
               <div>
                 <div className="flex items-center justify-between mb-1.5 ml-0.5">
-                  <label className="block text-sm font-semibold text-slate-700 syne tracking-wide">Password</label>
-                  <a href="#" className="text-sm font-bold text-[var(--accent)] hover:text-[#004b7c] transition-colors">
+                  <label className="block text-sm font-semibold text-slate-300 tracking-wide">Password</label>
+                  <a href="#" className="text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
                     Forgot password?
                   </a>
                 </div>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[var(--accent)] transition-colors z-10">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors z-10">
                     <Lock className="h-5 w-5" />
                   </div>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="!pl-11 !py-3 font-medium text-[14px]"
+                    autoComplete="current-password"
+                    className="w-full !pl-11 !pr-10 !py-3 bg-slate-950/40 border border-white/10 rounded-lg text-white font-medium text-[14px] placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                     placeholder="••••••••"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors focus:outline-none"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Error message */}
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-950/30 border border-red-800/50 text-red-400 text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -182,9 +150,9 @@ export function Login({ onLogin }: LoginProps) {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                className="h-4 w-4 rounded border-white/10 bg-slate-950/40 text-blue-600 focus:ring-blue-500/40 cursor-pointer accent-blue-600"
               />
-              <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-slate-600 cursor-pointer">
+              <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-slate-300 cursor-pointer">
                 Remember me for 30 days
               </label>
             </div>
@@ -192,7 +160,7 @@ export function Login({ onLogin }: LoginProps) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center py-3.5 border border-transparent rounded-[8px] shadow-[0_4px_14px_rgba(37,99,235,0.3)] text-[15px] font-semibold text-white bg-[var(--accent)] hover:bg-[#1d4ed8] focus:outline-none transition-all disabled:opacity-70 mt-6 relative overflow-hidden group"
+              className="w-full flex items-center justify-center py-3.5 border border-transparent rounded-[8px] shadow-[0_4px_14px_rgba(37,99,235,0.4)] text-[15px] font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70 mt-6 relative overflow-hidden group"
             >
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -226,9 +194,9 @@ export function Login({ onLogin }: LoginProps) {
           </form>
 
           {/* Footer Text */}
-          <p className="mt-10 text-center text-sm text-slate-500">
+          <p className="mt-10 text-center text-sm text-slate-400">
             Don't have an account?{' '}
-            <a href="#" className="font-semibold text-[#0066b3] hover:text-[#004b7c] transition-colors">
+            <a href="#" className="font-semibold text-blue-400 hover:text-blue-300 transition-colors">
               Contact Your Administrator
             </a>
           </p>

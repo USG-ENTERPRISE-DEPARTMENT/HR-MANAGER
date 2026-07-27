@@ -31,6 +31,16 @@ const prisma = new PrismaClient();
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
+// Is `code` already used by some OTHER value in this list (id !== exceptId)?
+async function codeTaken(codeListId, code, exceptId) {
+  if (code == null) return false;
+  const hit = await prisma.codeListValue.findFirst({
+    where: { codeListId, code, ...(exceptId != null ? { id: { not: exceptId } } : {}) },
+    select: { id: true },
+  });
+  return !!hit;
+}
+
 async function seedList({ code, name, description = null, values }) {
   // Upsert the list itself
   const list = await prisma.codeList.upsert({
@@ -39,18 +49,49 @@ async function seedList({ code, name, description = null, values }) {
     create: { code, name, description, isActive: true },
   });
 
-  // Upsert each value by [codeListId + code]
+  // Reconcile each value WITHOUT changing existing ids (ids are referenced outside the app).
+  //
+  // The table has TWO unique keys: (codeListId, code) and (codeListId, label). Many existing rows
+  // were created through the app UI with a NULL `code` but the same human label the seeder defines —
+  // so a plain upsert-by-code tries to CREATE a second row with that label and hits the label unique
+  // constraint. To keep ids stable we match by LABEL first and update in place (filling in the code
+  // if it was null), only creating when the label genuinely doesn't exist yet.
   for (let i = 0; i < values.length; i++) {
     const v = values[i];
-    await prisma.codeListValue.upsert({
-      where:  { codeListId_code: { codeListId: list.id, code: v.code } },
-      update: { label: v.label, description: v.description ?? null, sortOrder: i + 1 },
-      create: {
+    const sortOrder = i + 1;
+
+    // 1. Existing row with this label? Update it in place — id is preserved.
+    const byLabel = await prisma.codeListValue.findFirst({
+      where: { codeListId: list.id, label: v.label },
+      select: { id: true, code: true },
+    });
+    if (byLabel) {
+      await prisma.codeListValue.update({
+        where: { id: byLabel.id },
+        // Only set the code when the row has none, and only if that code isn't already taken by a
+        // different row in this list (avoids tripping the (codeListId, code) unique constraint).
+        data: {
+          description: v.description ?? null,
+          sortOrder,
+          ...(byLabel.code == null && !(await codeTaken(list.id, v.code, byLabel.id)) ? { code: v.code } : {}),
+        },
+      });
+      continue;
+    }
+
+    // 2. No label match. If the code is already used (by a differently-labelled row), just skip
+    //    setting it to avoid a collision; otherwise create the new value.
+    if (await codeTaken(list.id, v.code, null)) {
+      console.warn(`   ⚠ ${code}: code "${v.code}" already used by another value — skipping "${v.label}"`);
+      continue;
+    }
+    await prisma.codeListValue.create({
+      data: {
         codeListId:  list.id,
         code:        v.code,
         label:       v.label,
         description: v.description ?? null,
-        sortOrder:   i + 1,
+        sortOrder,
         isActive:    true,
       },
     });
@@ -264,6 +305,28 @@ const CODE_LISTS = [
       { code: 'SECURITY',     label: 'Security Officer' },
       { code: 'CLEANER',      label: 'Cleaner / Janitor' },
       { code: 'MESSENGER',    label: 'Messenger' },
+      // Imported from existing organisation data (vw_jobt) — roles specific to this deployment.
+      { code: 'ADMIN_OFFICER',       label: 'Admin Officer' },
+      { code: 'A_SIGNATORY',         label: 'A -  SIGNATORY' },
+      { code: 'DRIVER_LOGISTICS_OFF', label: 'Driver/Logistics Officer' },
+      { code: 'OFFICE_ASSISTANT',    label: 'Office Assistant' },
+      { code: 'RELIEF_MANAGER',      label: 'Relief Manager' },
+      { code: 'BANKING_OFFICER',     label: 'Banking Officer' },
+      { code: 'GARDENER',            label: 'Gardener' },
+      { code: 'GENERATOR_ATTENDANT', label: 'Generator Attendant' },
+      { code: 'HUMAN_RESOURCES_OFFI', label: 'Human Resources Officer' },
+      { code: 'FINANCE_MANAGER',     label: 'Finance manager' },
+      { code: 'SUPERVISOR',          label: 'Supervisor' },
+      { code: 'INTERNAL_AUDIT',      label: 'Internal Audit' },
+      { code: 'SIM_KORPOR_STAFF',    label: 'SIM KORPOR STAFF' },
+      { code: 'TE',                  label: 'TE' },
+      { code: 'LEGAL_ADVISOR',       label: 'Legal Advisor' },
+      { code: 'NOTE_COUNTER',        label: 'Note Counter' },
+      { code: 'CONTRACT_STAFF',      label: 'CONTRACT STAFF' },
+      { code: 'BACK_OFFICE_OFFICER', label: 'Back Office Officer' },
+      { code: 'BACK_OFFICE_STAFF',   label: 'Back Office Staff' },
+      { code: 'BACK_OFFICE_OPERATOR', label: 'Back Office Operator' },
+      { code: 'CUSTOMER_SERVICE_OFF', label: 'Customer Service Officer' },
     ],
   },
 
