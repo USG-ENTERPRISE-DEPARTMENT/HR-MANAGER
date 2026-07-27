@@ -27,23 +27,51 @@ async function main() {
   // become roots (attach under the root) rather than hanging off a vacated seat.
   const emps = await prisma.employee.findMany({
     where: { lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
-    select: { id: true, firstName: true, lastName: true, supervisorId: true, rmRoType: true },
+    select: { id: true, firstName: true, lastName: true, supervisorId: true, rmRoType: true, jobTitleId: true },
   });
+
+  // Positions are named for the ROLE (job title), not the person who holds them. Resolve every
+  // referenced job-title id up front so seat creation below is a cheap map lookup.
+  const titleIds = [...new Set(emps.map(e => e.jobTitleId).filter(v => v != null).map(Number))];
+  const titleRows = titleIds.length
+    ? await prisma.codeListValue.findMany({ where: { id: { in: titleIds } }, select: { id: true, label: true } })
+    : [];
+  const titleById = new Map(titleRows.map(t => [String(t.id), t.label]));
+  // Name = job title, or a neutral "Position <code>" when the employee has no title (never a name).
+  const seatName = (e, code) => (e.jobTitleId != null && titleById.get(String(e.jobTitleId))) || `Position ${code}`;
   const byId = new Map(emps.map(e => [e.id.toString(), e]));
   const exists = id => id != null && byId.has(id.toString());
-  const isRoot = e => !e.supervisorId || e.supervisorId.toString() === e.id.toString() || !exists(e.supervisorId);
+  // An employee who reports to themselves is the top of the hierarchy: they OCCUPY the root PC code
+  // (000…0) rather than getting a fresh code beneath it. The root is a single seat, so only the first
+  // such employee can take it; any others are treated as ordinary roots (placed under the root).
+  const selfSupervises = e => e.supervisorId != null && e.supervisorId.toString() === e.id.toString();
+  // Ordinary root = no supervisor, or a supervisor who isn't in this active/approved set. These get a
+  // new code directly under the synthetic root, as before. Self-supervisors are handled separately.
+  const isRoot = e => !selfSupervises(e) && (!e.supervisorId || !exists(e.supervisorId));
 
-  // children map (only among existing employees)
+  // Pick the single employee who will occupy the root seat (first self-supervisor, by id for
+  // determinism). Extras are demoted to ordinary roots and warned about.
+  const selfSupervisors = emps.filter(selfSupervises).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const rootOccupant = selfSupervisors[0] ?? null;
+  const rootOccupantId = rootOccupant ? rootOccupant.id.toString() : null;
+  const demotedSelfRoots = selfSupervisors.slice(1).map(e => e.id.toString()); // treated as ordinary roots
+
+  // children map (only among existing employees). The root occupant collects children the same way;
+  // demoted self-supervisors and ordinary roots are parents too, just anchored under the synthetic root.
   const childrenOf = new Map();
   for (const e of emps) {
-    if (isRoot(e)) continue;
+    const id = e.id.toString();
+    // The root occupant and ordinary/demoted roots have no *parent* among employees — skip adding
+    // them as someone's child. (A self-supervisor's own self-edge must never make them their own child.)
+    if (id === rootOccupantId || isRoot(e) || demotedSelfRoots.includes(id)) continue;
     const s = e.supervisorId.toString();
     if (!childrenOf.has(s)) childrenOf.set(s, []);
-    childrenOf.get(s).push(e.id.toString());
+    childrenOf.get(s).push(id);
   }
 
-  // RM = supervises someone; RO otherwise.
+  // RM = supervises someone; RO otherwise. The root occupant is always RM (top of the tree).
   const rmSet = new Set(childrenOf.keys());
+  if (rootOccupantId) rmSet.add(rootOccupantId);
   const tagOf = id => (rmSet.has(id) ? 'RM' : 'RO');
 
   // ── Validate the whole tree fits the code scheme BEFORE writing anything ──
@@ -70,17 +98,31 @@ async function main() {
   }
   function label(id) { const e = byId.get(id); return e ? `${e.firstName} ${e.lastName} (#${id})` : `#${id}`; }
 
-  // Root employees are direct children of the synthetic root code.
+  // Everything that hangs directly off the synthetic root shares ONE sibling-code list, so their
+  // codes don't collide. That set is: the root occupant's own direct reports, plus every ordinary
+  // root (no/foreign supervisor) and any demoted extra self-supervisor. They are all siblings under
+  // 000…0, whether their "parent" is the occupant or the synthetic root itself.
   const rootSibCodes = [];
-  for (const rid of roots) {
+  const numberUnderRoot = (rid) => {
     let code;
     try { code = nextChildCode(ROOT_CODE, rootSibCodes); }
-    catch (e) { errors.push(`${label(rid)} (root): ${e.message}`); continue; }
+    catch (e) { errors.push(`${label(rid)} (under root): ${e.message}`); return; }
     rootSibCodes.push(code);
     codeFor.set(rid, code);
     order.push(rid);
-    assignCodes(rid, code);
+    assignCodes(rid, code);        // number this node's own subtree with its private sibling list
+  };
+
+  // The self-supervising employee OCCUPIES the root code itself; place them first, then their direct
+  // reports (as root-children), so parents precede children in `order`.
+  if (rootOccupantId) {
+    codeFor.set(rootOccupantId, ROOT_CODE);
+    order.push(rootOccupantId);
+    for (const kid of (childrenOf.get(rootOccupantId) || [])) numberUnderRoot(kid);
   }
+
+  // Ordinary roots + demoted self-supervisors: also direct children of the synthetic root.
+  for (const rid of [...roots, ...demotedSelfRoots]) numberUnderRoot(rid);
 
   // Employees never reached from a root are inside a supervisor cycle — reported and skipped
   // (agreed: these are test/system accounts; assign by hand later if needed).
@@ -88,10 +130,15 @@ async function main() {
 
   const rmCount = emps.filter(e => tagOf(e.id.toString()) === 'RM').length;
   console.log(`Employees              : ${emps.length}`);
-  console.log(`  roots (under root)   : ${roots.length}`);
+  console.log(`  root occupant        : ${rootOccupant ? label(rootOccupantId) + '  → ' + ROOT_CODE : '(none — no self-supervising employee)'}`);
+  console.log(`  roots (under root)   : ${roots.length + demotedSelfRoots.length}`);
   console.log(`  RM (has reports)     : ${rmCount}`);
   console.log(`  RO (leaf)            : ${emps.length - rmCount}`);
   console.log(`Codes generated        : ${codeFor.size}`);
+  if (demotedSelfRoots.length) {
+    console.log(`⚠ Multiple self-supervising employees — only the first occupies the root; these were placed under it:`);
+    demotedSelfRoots.forEach(id => console.log(`   - ${label(id)}`));
+  }
   if (skipped.length) {
     console.log(`Skipped (supervisor cycle): ${skipped.length}`);
     skipped.forEach(e => console.log(`   - ${e.firstName} ${e.lastName} (#${e.id})`));
@@ -135,11 +182,27 @@ async function main() {
 
     if (alreadyAssigned.has(id)) continue; // keep existing placement
 
-    const parentEmpId = isRoot(e) ? null : e.supervisorId.toString();
+    // The root occupant takes over the EXISTING synthetic root row instead of creating a new code —
+    // relabel it (by job title) and assign them to it. Their children then report to this same row.
+    if (id === rootOccupantId) {
+      await prisma.pccodes.update({
+        where: { id: rootRow.id },
+        data:  { name: seatName(e, ROOT_CODE), isActive: true },
+      });
+      empToCodeRow.set(id, rootRow.id);
+      await prisma.pccodeassignments.create({
+        data: { pcCodeId: rootRow.id, employeeId: BigInt(id), startDate: new Date(), endDate: null },
+      });
+      assignmentsCreated++;
+      continue;
+    }
+
+    // Parent code: the employee's supervisor's code, or the root row for ordinary/demoted roots.
+    const parentEmpId = (isRoot(e) || demotedSelfRoots.includes(id)) ? null : e.supervisorId.toString();
     const reportsToId = parentEmpId ? (empToCodeRow.get(parentEmpId) ?? rootRow.id) : rootRow.id;
 
     const codeRow = await prisma.pccodes.create({
-      data: { code: codeFor.get(id), name: `${e.firstName} ${e.lastName}`.trim() || codeFor.get(id), reportsToId, isActive: true },
+      data: { code: codeFor.get(id), name: seatName(e, codeFor.get(id)), reportsToId, isActive: true },
     });
     empToCodeRow.set(id, codeRow.id);
     codesCreated++;

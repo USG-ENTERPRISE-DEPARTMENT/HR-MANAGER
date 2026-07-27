@@ -31,6 +31,25 @@ async function currentHolderTag(pcCodeId, client = prisma) {
   return emp?.rmRoType ?? null;
 }
 
+// A PC code names a POSITION, not the person in it — so label it by the holder's job title, never
+// their name (a name is confusing once they move or the seat is vacated). When the employee has no
+// job title, fall back to a neutral "Position <code>" label so it still reads as a slot rather than
+// a person, and never a bare, meaningless code.
+//   employee: an employee row (or null) — only `jobTitleId` is needed.
+//   code:     the seat's code, used to build the fallback label.
+const genericPositionName = (code) => `Position ${code}`;
+
+async function positionName(employee, code, client = prisma) {
+  const jt = employee?.jobTitleId;
+  if (jt != null) {
+    const clv = await client.codeListValue
+      .findUnique({ where: { id: Number(jt) }, select: { label: true } })
+      .catch(() => null);
+    if (clv?.label) return clv.label;
+  }
+  return genericPositionName(code);
+}
+
 // Generate the next code for a new child under `parentId` (root if null).
 async function generateChildCode(parentId, client = prisma) {
   const parent = parentId
@@ -80,6 +99,60 @@ async function vacateEmployeeAssignments(employeeId, client = prisma) {
     data:  { endDate: new Date() },
   });
   return res.count;
+}
+
+/**
+ * Re-seat an employee under a new supervisor after their supervisorId changes.
+ *
+ * The PC-code tree is a snapshot, separate from the live supervisorId, so it does NOT track
+ * supervisor edits on its own. This keeps them in sync per the agreed model: the employee VACATES
+ * their current seat and takes a FRESH seat created directly under the new supervisor's seat.
+ * (Seats mirror the org one-per-person, so a spare vacant seat rarely exists — we always create one.)
+ *
+ * Rules / safety:
+ *   - No-op if the employee holds no seat yet (e.g. not yet backfilled) — nothing to move.
+ *   - No-op if the new supervisor has no seat of their own — there'd be nowhere valid to attach; the
+ *     caller is told via the return value so it can be surfaced/logged rather than silently dropped.
+ *   - The employee's OLD seat is left in the tree (now vacant) rather than deleted, preserving history
+ *     and any codes that reported under it. Best-effort: never throws into the employee-update path.
+ *
+ * @returns {Promise<{moved:boolean, reason?:string, code?:string}>}
+ */
+async function reseatUnderSupervisor(employeeId, newSupervisorId, client = prisma) {
+  const empId = employeeId != null ? BigInt(employeeId) : null;
+  const supId = newSupervisorId != null ? BigInt(newSupervisorId) : null;
+  if (empId == null) return { moved: false, reason: 'no employee' };
+
+  // The employee must already occupy a seat — otherwise this isn't a "move", and creating one here
+  // would race the inline-PC-code creation done at employee create. Leave un-backfilled staff alone.
+  const ownOpen = await client.pccodeassignments.findFirst({ where: { employeeId: empId, endDate: null } });
+  if (!ownOpen) return { moved: false, reason: 'employee holds no PC code' };
+
+  // Self-supervision or cleared supervisor: nothing sensible to attach under — leave the seat as-is.
+  if (supId == null || supId === empId) return { moved: false, reason: 'no new supervisor to attach under' };
+
+  const supOpen = await client.pccodeassignments.findFirst({ where: { employeeId: supId, endDate: null } });
+  if (!supOpen) return { moved: false, reason: 'new supervisor holds no PC code' };
+
+  // Already correctly placed? (seat's parent is already the supervisor's seat) — nothing to do.
+  const ownSeat = await client.pccodes.findUnique({ where: { id: ownOpen.pcCodeId }, select: { reportsToId: true } });
+  if (ownSeat?.reportsToId && ownSeat.reportsToId === supOpen.pcCodeId) {
+    return { moved: false, reason: 'already under this supervisor' };
+  }
+
+  const emp = await client.employee.findUnique({ where: { id: empId }, select: { jobTitleId: true } });
+
+  // 1. Create a fresh seat directly under the supervisor's seat, named by the holder's job title.
+  const { code } = await generateChildCode(supOpen.pcCodeId, client);
+  const newSeat = await client.pccodes.create({
+    data: { code, name: await positionName(emp, code, client), reportsToId: supOpen.pcCodeId, isActive: true },
+  });
+
+  // 2. Move the employee onto it (assignEmployeeToCode closes their old open assignment first, so the
+  //    previous seat becomes vacant rather than double-held).
+  await assignEmployeeToCode(newSeat.id, empId, client);
+
+  return { moved: true, code };
 }
 
 // ── Enrichment for list/organogram ──────────────────────────────────────────
@@ -142,6 +215,13 @@ const getPcCodeOrganogram = asyncHandler(async (req, res) => {
   const codes = await prisma.pccodes.findMany({ orderBy: { code: 'asc' } });
   const holders = await holderMap(codes.map(c => c.id));
 
+  // ── "Ordinary root" detection ──────────────────────────────────────────────
+  // A seat placed directly under the synthetic root because its holder has NO usable supervisor —
+  // i.e. no supervisor at all, or a supervisor who is no longer an active/approved employee (they
+  // resigned/were terminated). These aren't top-of-org by design; they're orphaned, so the UI flags
+  // them for follow-up. The genuine top position (the self-supervising root occupant) is NOT flagged.
+  const ordinaryRoot = await computeOrdinaryRoots(codes, holders);
+
   respond.ok(res, 'PC code organogram retrieved', codes.map(c => ({
     id:            c.id.toString(),
     code:          c.code,
@@ -150,8 +230,64 @@ const getPcCodeOrganogram = asyncHandler(async (req, res) => {
     current_employee_name: holders[c.id.toString()]?.name ?? null,
     current_employee_id:   holders[c.id.toString()]?.employee_id ?? null,
     rm_ro_type:            holders[c.id.toString()]?.rmRoType ?? null,
+    is_ordinary_root:      ordinaryRoot.has(c.id.toString()),
   })));
 });
+
+// Returns the set of pcCode ids that are "ordinary roots" — seats whose holder has no active
+// supervisor. Mirrors the backfill's isRoot rule so the chart and the backfill agree.
+async function computeOrdinaryRoots(codes, holders) {
+  const rootCode = codes.find(c => !c.reportsToId);
+  const rootId = rootCode ? rootCode.id.toString() : null;
+  if (!rootId) return new Set();
+
+  // Only seats that hang directly off the synthetic root can be ordinary roots.
+  const underRoot = codes.filter(c => c.reportsToId && c.reportsToId.toString() === rootId);
+  if (!underRoot.length) return new Set();
+
+  // Pull the open assignment holder (numeric employee id) + that employee's supervisor + status.
+  const assigns = await prisma.pccodeassignments.findMany({
+    where: { pcCodeId: { in: underRoot.map(c => c.id) }, endDate: null },
+    select: { pcCodeId: true, employeeId: true },
+  });
+  const empByCode = {};
+  for (const a of assigns) empByCode[a.pcCodeId.toString()] = a.employeeId;
+  const holderEmployeeIds = [...new Set(Object.values(empByCode))];
+
+  if (!holderEmployeeIds.length) return new Set();
+
+  const emps = await prisma.employee.findMany({
+    where: { id: { in: holderEmployeeIds } },
+    select: { id: true, supervisorId: true },
+  });
+  const supByEmp = {};
+  for (const e of emps) supByEmp[e.id.toString()] = e.supervisorId ? e.supervisorId.toString() : null;
+
+  // Which supervisors are still active + approved? (A supervisor who is not is treated as absent.)
+  const supIds = [...new Set(Object.values(supByEmp).filter(Boolean))];
+  const activeSupSet = new Set();
+  if (supIds.length) {
+    const sups = await prisma.employee.findMany({
+      where: { id: { in: supIds.map(s => BigInt(s)) }, lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
+      select: { id: true },
+    });
+    for (const s of sups) activeSupSet.add(s.id.toString());
+  }
+
+  const result = new Set();
+  for (const c of underRoot) {
+    const empId = empByCode[c.id.toString()];
+    if (empId == null) continue;                       // vacant seat — not flagged
+    const supId = supByEmp[empId.toString()];
+    // Ordinary root = no supervisor, or the supervisor isn't an active/approved employee. A holder
+    // who reports to themselves is the intended root occupant (their seat is the ROOT code, which is
+    // excluded above since it has no parent), so this naturally does not flag them.
+    if (!supId || supId === empId.toString() || !activeSupSet.has(supId)) {
+      result.add(c.id.toString());
+    }
+  }
+  return result;
+}
 
 // GET /pc-codes/:id
 const getPcCodeById = asyncHandler(async (req, res) => {
@@ -355,6 +491,9 @@ module.exports = {
   // reusable internals for createEmployee / lifecycle hooks
   assignEmployeeToCode,
   vacateEmployeeAssignments,
+  reseatUnderSupervisor,
+  positionName,
+  genericPositionName,
   generateChildCode,
   currentHolderTag,
   openAssignmentForEmployee,

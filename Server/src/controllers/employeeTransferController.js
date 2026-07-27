@@ -8,6 +8,7 @@ const { logActivity, fromReq } = require('./auditController');
 const { reassignPendingSupervisorWork } = require('../helpers/supervisorHelper');
 const { FIELD_BY_KEY, effectiveTransferFields } = require('../config/employeeFormFields');
 const { syncEmployeeToExternalSystem } = require('./employeeController');
+const pcCodes = require('./pcCodeController');
 
 const FLOW_KEY = 'employee_transfer_approval_flow';
 const EMPLOYEE_FLOW_KEY = 'employee_approval_flow';
@@ -43,6 +44,14 @@ const todayUtc = () => {
 };
 const nullableBigInt = value => value === '' || value == null ? null : toBigInt(value);
 const nullableString = value => value === '' || value == null ? null : String(value);
+// current_job_title / proposed_job_title are `Int?` columns (job titles are code-list values, whose
+// ids became integers in the codelist CUID→Int migration). Coerce to a Number, not a String — the
+// column no longer accepts strings. Non-numeric input yields null rather than NaN.
+const nullableInt = value => {
+  if (value === '' || value == null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+};
 const transferNumber = () => `TRF-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
 const employeeName = emp => `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || emp?.employee_id || 'Employee';
 const parseValues = value => {
@@ -262,9 +271,10 @@ function draftData(body, employee, existing = null, configuredFields = []) {
     proposed_values: JSON.stringify(proposedValues),
   };
   for (const [, employeeField, currentField, proposedField] of TRANSFER_FIELDS) {
-    const isString = employeeField === 'jobTitleId';
-    data[currentField] = isString ? nullableString(currentValues[employeeField]) : nullableBigInt(currentValues[employeeField]);
-    data[proposedField] = isString ? nullableString(proposedValues[employeeField]) : nullableBigInt(proposedValues[employeeField]);
+    // jobTitle maps to Int? columns; the rest are BigInt? FK columns.
+    const coerce = employeeField === 'jobTitleId' ? nullableInt : nullableBigInt;
+    data[currentField] = coerce(currentValues[employeeField]);
+    data[proposedField] = coerce(proposedValues[employeeField]);
   }
   return data;
 }
@@ -295,6 +305,11 @@ async function applyTransferRecord(transferId, actor = null) {
         updateData[key] = nullableBigInt(value);
       } else if (DATE_FIELDS.has(key)) {
         updateData[key] = asDate(value);
+      } else if (CODE_VALUE_FIELDS.has(key) && key !== 'country') {
+        // Code-list ids (jobTitleId, genderId, etc.) are Int? columns after the codelist CUID→Int
+        // migration — writing them as strings throws "Expected Int, provided String". `country` is the
+        // only CODE_VALUE_FIELD that is still a plain string, so it's excluded here.
+        updateData[key] = nullableInt(value);
       } else {
         updateData[key] = nullableString(value);
       }
@@ -305,18 +320,43 @@ async function applyTransferRecord(transferId, actor = null) {
     return tx.employeetransfers.update({ where: { id: transfer.id }, data: { status: 'Effective', effective_at: new Date() } });
   });
   if (!updated || updated.status !== 'Effective') return updated;
-  if (changedSupervisor !== undefined) await reassignPendingSupervisorWork(updated.employee, changedSupervisor);
+  if (changedSupervisor !== undefined) {
+    await reassignPendingSupervisorWork(updated.employee, changedSupervisor);
+    // Supervisor changes for approved staff come through here (direct edits are blocked), so this is
+    // the primary place to keep the PC-code tree in sync: vacate the old seat, take a fresh seat under
+    // the new supervisor. Best-effort — never fail an already-effective transfer over a re-seating.
+    try {
+      const r = await pcCodes.reseatUnderSupervisor(updated.employee, changedSupervisor);
+      if (r.moved) logActivity({ module: 'PC Codes', action: 'reseat_on_transfer', entityId: String(updated.employee), details: `new code ${r.code} (transfer ${updated.transfer_number})` });
+    } catch (e) {
+      console.error('[reseatUnderSupervisor:transfer]', e.message);
+    }
+  }
   // Every activation path (approval of an already-due transfer, manual activation, and the hourly
   // scheduler) passes through here. Sync only after the local transaction commits so the external
   // system receives the complete post-transfer employee record. The existing sync helper records
   // success/failure on the employee and deliberately does not roll back an effective transfer when
   // the external service is temporarily unavailable; the normal employee Sync retry remains usable.
-  await syncEmployeeToExternalSystem(updated.employee);
+  const syncRes = await syncEmployeeToExternalSystem(updated.employee).catch(() => ({ success: false, message: 'sync error' }));
+
+  // A failed sync used to be invisible at the point of transfer — the transfer just reported success
+  // and the failure only showed as a badge in the Employees list. Surface it: flag it on the returned
+  // object (so the HTTP response can warn), and alert the approver via the bell so it's not missed.
+  // `syncRes` is undefined when the integration is disabled (no URL) — treat that as "not failed".
+  const syncFailed = syncRes ? syncRes.success === false : false;
+  if (syncFailed && actor?.id) {
+    notifyUser(actor.id, {
+      message: `Transfer ${updated.transfer_number} activated, but syncing the employee to the external system failed. Retry from the employee's page once the service is reachable.`,
+      action: 'Employees', type: 'employee_sync_failed', fromUser: actor.id,
+    });
+  }
+
   notifyEmployee(updated.employee, {
     message: `Your employee transfer ${updated.transfer_number} is now effective`,
     action: 'PersonalInfo', type: 'employee_transfer', fromUser: actor?.id,
   });
-  return updated;
+  // Attach the sync outcome so callers can tell the user. Non-enumerable-ish extra field on the row.
+  return Object.assign(updated, { _syncFailed: syncFailed });
 }
 
 exports.listTransfers = asyncHandler(async (req, res) => {
@@ -439,7 +479,12 @@ exports.approveTransfer = asyncHandler(async (req, res) => {
   });
   if (updated.effective_date <= todayUtc()) updated = await applyTransferRecord(id, req.user);
   logActivity({ module: 'Employee Transfers', action: updated.status === 'Effective' ? 'Approved and activated' : 'Approved and scheduled', entityId: id, entityName: updated.transfer_number, ...fromReq(req) });
-  respond.ok(res, updated.status === 'Effective' ? 'Employee transfer approved and activated' : 'Employee transfer approved and scheduled', (await decorateMany([updated], true))[0]);
+  const msg = updated.status === 'Effective'
+    ? (updated._syncFailed
+        ? 'Employee transfer approved and activated, but the external sync failed — retry from the employee page.'
+        : 'Employee transfer approved and activated')
+    : 'Employee transfer approved and scheduled';
+  respond.ok(res, msg, (await decorateMany([updated], true))[0]);
 });
 
 exports.rejectTransfer = asyncHandler(async (req, res) => {
@@ -502,7 +547,9 @@ exports.activateTransfer = asyncHandler(async (req, res) => {
   if (transfer.effective_date > todayUtc()) return respond.badReq(res, 'This transfer is not due yet; reschedule it first if it should take effect today');
   const updated = await applyTransferRecord(id, req.user);
   logActivity({ module: 'Employee Transfers', action: 'Activated', entityId: id, entityName: updated.transfer_number, ...fromReq(req) });
-  respond.ok(res, 'Employee transfer activated', (await decorateMany([updated], true))[0]);
+  respond.ok(res, updated._syncFailed
+    ? 'Employee transfer activated, but the external sync failed — retry from the employee page.'
+    : 'Employee transfer activated', (await decorateMany([updated], true))[0]);
 });
 
 exports.getApprovalFlow = asyncHandler(async (_req, res) => {

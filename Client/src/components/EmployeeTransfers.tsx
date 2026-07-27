@@ -181,8 +181,15 @@ export function EmployeeTransfers() {
   const filtered = useMemo(() => rows.filter(row => (status === 'All' || row.status === status) && `${row.transfer_number} ${row.employee_name} ${row.transfer_type}`.toLowerCase().includes(search.toLowerCase())), [rows, status, search]);
 
   const action = async (path: string, body: any, success: string) => {
-    try { await api.post(path, body); toast.success(success); load(); }
-    catch (error: any) { toast.error(error.response?.data?.message || 'Action failed'); }
+    try {
+      const res = await api.post(path, body);
+      // Prefer the server's message (it carries warnings the fixed `success` text can't), and show it
+      // as a warning rather than success when it flags a problem such as a failed external sync.
+      const serverMsg: string = res.data?.message || success;
+      if (/failed|error|but/i.test(serverMsg)) toast.warning(serverMsg);
+      else toast.success(success);
+      load();
+    } catch (error: any) { toast.error(error.response?.data?.message || 'Action failed'); }
   };
   const reschedule = async (row: Transfer) => {
     const effectiveDate = window.prompt('New effective date (YYYY-MM-DD)', String(row.effective_date).slice(0, 10));

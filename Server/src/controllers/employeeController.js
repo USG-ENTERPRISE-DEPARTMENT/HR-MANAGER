@@ -439,6 +439,62 @@ async function syncEmployeeToExternalSystem(employeeId) {
   return pushEmployeeToExternalSystem(enriched);
 }
 
+// ── Automatic retry of failed external syncs ─────────────────────────────────
+// A failed sync (e.g. transient external-service outage) leaves the employee at sync_status='failed'
+// with no automatic recovery — previously only a manual POST /employees/:id/sync would clear it.
+// This periodic job re-pushes those employees, with per-employee attempt tracking so a persistently
+// broken integration is not hammered forever.
+//
+// Attempt state is held in memory (not the DB) to avoid a schema change on a shared database. It is
+// keyed by employee id and resets on process restart — which is itself a sensible moment to retry
+// everything afresh. A successful sync clears sync_status to 'synced' (done inside the push helper),
+// so the row simply stops matching the failed filter.
+const SYNC_RETRY_MAX_ATTEMPTS = 5;         // give up (leave 'failed' for manual retry) after this many
+const SYNC_RETRY_BASE_DELAY_MS = 10 * 60 * 1000;  // 10 min, doubled each attempt (10,20,40,80,160)
+const _syncRetryState = new Map();          // employeeId(string) -> { attempts, nextAt(ms) }
+
+async function retryFailedSyncs() {
+  // Skip entirely when the integration isn't configured — nothing to sync to.
+  const apiCfg = await getApiConfig().catch(() => ({}));
+  if (!apiCfg?.employee_sync_url) return { considered: 0, retried: 0, recovered: 0, exhausted: 0 };
+
+  const failed = await prisma.employee.findMany({
+    where:  { sync_status: 'failed', approvalStatus: APPROVAL.APPROVED },
+    select: { id: true },
+  }).catch(() => []);
+
+  const now = Date.now();
+  const seen = new Set();
+  let retried = 0, recovered = 0, exhausted = 0;
+
+  for (const { id } of failed) {
+    const key = id.toString();
+    seen.add(key);
+    const st = _syncRetryState.get(key) || { attempts: 0, nextAt: 0 };
+
+    if (st.attempts >= SYNC_RETRY_MAX_ATTEMPTS) { exhausted++; continue; } // capped — leave for manual retry
+    if (now < st.nextAt) continue;                                          // still backing off
+
+    st.attempts += 1;
+    retried += 1;
+    const res = await syncEmployeeToExternalSystem(id).catch(() => ({ success: false }));
+    if (res?.success) {
+      recovered += 1;
+      _syncRetryState.delete(key);            // cleared — push helper already set status='synced'
+    } else {
+      // Exponential backoff: base * 2^(attempts-1).
+      st.nextAt = now + SYNC_RETRY_BASE_DELAY_MS * (2 ** (st.attempts - 1));
+      _syncRetryState.set(key, st);
+    }
+  }
+
+  // Forget rows that are no longer failed (recovered elsewhere, e.g. a manual sync or re-edit), so a
+  // future failure for the same employee starts its backoff fresh.
+  for (const key of _syncRetryState.keys()) if (!seen.has(key)) _syncRetryState.delete(key);
+
+  return { considered: failed.length, retried, recovered, exhausted };
+}
+
 async function loadEmployeeTransferFields() {
   const row = await prisma.settings
     .findFirst({ where: { name: 'employee_transfer_fields', category: 'app_controls' }, select: { value: true } })
@@ -853,8 +909,11 @@ const createEmployee = asyncHandler(async (req, res) => {
     if (inlinePcCodeName) {
       const supOpen = await prisma.pccodeassignments.findFirst({ where: { employeeId: supervisorId, endDate: null } });
       const { code } = await pcCodes.generateChildCode(supOpen.pcCodeId);
+      // A position is named for its ROLE, not the person. Prefer the name the user typed for the
+      // position; otherwise derive it from the employee's job title (never their name).
+      const posName = inlinePcCodeName || await pcCodes.positionName({ jobTitleId: toBigInt(d.jobTitleId) }, code);
       const newCode = await prisma.pccodes.create({
-        data: { code, name: inlinePcCodeName, reportsToId: supOpen.pcCodeId, isActive: true },
+        data: { code, name: posName, reportsToId: supOpen.pcCodeId, isActive: true },
       });
       await pcCodes.assignEmployeeToCode(newCode.id, employee.id);
     } else if (pcCodeIdToAssign) {
@@ -1073,7 +1132,20 @@ const updateEmployee = asyncHandler(async (req, res) => {
   if (Object.prototype.hasOwnProperty.call(updateData, 'supervisorId')) {
     const oldSup = existing.supervisorId != null ? String(existing.supervisorId) : null;
     const newSup = updateData.supervisorId != null ? String(updateData.supervisorId) : null;
-    if (oldSup !== newSup) await reassignPendingSupervisorWork(id, updateData.supervisorId ?? null);
+    if (oldSup !== newSup) {
+      await reassignPendingSupervisorWork(id, updateData.supervisorId ?? null);
+      // Keep the PC-code position tree in sync: vacate the current seat and give the employee a fresh
+      // seat under the new supervisor's seat. Best-effort — a re-seating problem must never fail the
+      // employee update itself (the supervisorId change has already been persisted above).
+      try {
+        const r = await pcCodes.reseatUnderSupervisor(id, updateData.supervisorId ?? null);
+        if (r.moved) {
+          logActivity({ module: 'PC Codes', action: 'reseat_on_supervisor_change', entityId: String(id), details: `new code ${r.code}`, ...fromReq(req) });
+        }
+      } catch (e) {
+        console.error('[reseatUnderSupervisor]', e.message);
+      }
+    }
   }
 
   const refreshed = await prisma.employee.findUnique({ where: { id } });
@@ -1539,6 +1611,7 @@ module.exports = {
   getAllNotches,
   syncEmployee,
   syncEmployeeToExternalSystem,
+  retryFailedSyncs,
   getEmployeePositionImpact,
   getEmployeeActivity,
 };

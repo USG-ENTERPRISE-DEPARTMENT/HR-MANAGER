@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Network, Briefcase, UserCheck, ChevronDown, ChevronRight,
-  AlignLeft, Search, X, ZoomIn, ZoomOut, Maximize2,
+  AlignLeft, Search, X, ZoomIn, ZoomOut, Maximize2, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
@@ -17,6 +17,9 @@ interface PcNode {
   current_employee_name: string | null;
   current_employee_id: string | null;
   rm_ro_type: string | null;
+  // Placed directly under the root because the holder has no active supervisor (none set, or their
+  // manager has left). Flagged distinctly so it can be followed up on. Server-computed.
+  is_ordinary_root?: boolean;
 }
 
 // ─── RM/RO accents ───────────────────────────────────────────────────────────
@@ -25,9 +28,18 @@ type Cfg = { accent: string; bg: string; border: string; text: string };
 const RM_CFG: Cfg = { accent: '#0066b3', bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8' };
 const RO_CFG: Cfg = { accent: '#059669', bg: '#f0fdf4', border: '#6ee7b7', text: '#065f46' };
 const VACANT_CFG: Cfg = { accent: '#64748b', bg: '#f8fafc', border: '#cbd5e1', text: '#334155' };
+// Amber = attention needed: an orphaned position (no active supervisor above the holder).
+const ORPHAN_CFG: Cfg = { accent: '#b45309', bg: '#fffbeb', border: '#fcd34d', text: '#92400e' };
+
+// One-line, plain-English explanation shown on hover and in the legend so anyone — not just HR —
+// understands why the node is highlighted.
+const ORPHAN_HINT =
+  'No active supervisor: this employee has no manager set, or their manager has left. ' +
+  'It sits at the top of the chart until a current supervisor is assigned.';
 
 function nodeCfg(n: PcNode): Cfg {
   if (!n.current_employee_name) return VACANT_CFG;
+  if (n.is_ordinary_root) return ORPHAN_CFG;   // orphaned takes precedence over the RM/RO colour
   return n.rm_ro_type === 'RO' ? RO_CFG : RM_CFG;
 }
 
@@ -125,6 +137,17 @@ function PcCard({ node, reports, expanded, onToggle, matched, dimmed }: {
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md"
               style={{ color: c.text, background: c.bg, border: `1px solid ${c.border}` }}>
               {node.rm_ro_type}
+            </span>
+          )}
+          {node.is_ordinary_root && (
+            // Amber "No supervisor" chip. `title` gives the full plain-English explanation on hover,
+            // so the highlight is self-explanatory to anyone viewing the chart.
+            <span
+              title={ORPHAN_HINT}
+              className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md cursor-help"
+              style={{ color: ORPHAN_CFG.text, background: ORPHAN_CFG.bg, border: `1px solid ${ORPHAN_CFG.border}` }}
+            >
+              <AlertTriangle size={9} /> No supervisor
             </span>
           )}
         </div>
@@ -238,6 +261,12 @@ function ListNode({ node, childrenMap, level, seen, highlight }: {
             {node.rm_ro_type}
           </span>
         )}
+        {node.is_ordinary_root && (
+          <span title={ORPHAN_HINT} className="shrink-0 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md cursor-help"
+            style={{ color: ORPHAN_CFG.text, background: ORPHAN_CFG.bg, border: `1px solid ${ORPHAN_CFG.border}` }}>
+            <AlertTriangle size={9} /> No supervisor
+          </span>
+        )}
         {hasChildren && (
           <span className="shrink-0 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{ background: c.bg, color: c.accent, border: `1px solid ${c.border}` }}>
             {children.length}
@@ -331,10 +360,13 @@ export function PcCodeOrganogram() {
     return findRoots(nodes.filter(s => visibleIds.has(s.id)), byId, childrenMap, visibleIds);
   }, [visibleIds, roots, nodes, byId, childrenMap]);
 
+  const orphanCount = nodes.filter(n => n.is_ordinary_root).length;
   const stats = [
     { label: 'Positions', value: nodes.length,  Icon: Briefcase },
     { label: 'Filled',    value: nodes.filter(n => n.current_employee_name).length, Icon: UserCheck },
     { label: 'Top Level', value: roots.length,  Icon: Network   },
+    // Only surface the "no supervisor" stat when there is at least one — otherwise it's noise.
+    ...(orphanCount > 0 ? [{ label: 'No supervisor', value: orphanCount, Icon: AlertTriangle }] : []),
   ];
 
   // Tree zoom-to-fit (mirrors StaffOrganogram)
@@ -411,6 +443,28 @@ export function PcCodeOrganogram() {
               </div>
             </div>
           </div>
+
+          {/* Orphan legend — only when there are flagged positions. Explains the amber highlight in
+              plain language so the chart is self-documenting for any viewer, not just HR. */}
+          {!loading && orphanCount > 0 && (
+            <div
+              className="px-3 sm:px-5 py-2.5 border-b flex items-start sm:items-center gap-2.5 text-[11.5px] sm:text-[12px] leading-snug"
+              style={{ background: ORPHAN_CFG.bg, borderColor: ORPHAN_CFG.border, color: ORPHAN_CFG.text }}
+            >
+              <span
+                className="inline-flex items-center gap-1 font-bold px-1.5 py-0.5 rounded-md shrink-0"
+                style={{ background: '#fff', border: `1px solid ${ORPHAN_CFG.border}` }}
+              >
+                <AlertTriangle size={11} /> No supervisor
+              </span>
+              <span>
+                <strong>{orphanCount}</strong> position{orphanCount === 1 ? '' : 's'} highlighted in amber:
+                the employee has no manager set, or their manager has left the organisation. They appear at
+                the top of the chart until a current supervisor is assigned — assign one and rebuild to
+                place them correctly.
+              </span>
+            </div>
+          )}
 
           {/* Canvas */}
           <div

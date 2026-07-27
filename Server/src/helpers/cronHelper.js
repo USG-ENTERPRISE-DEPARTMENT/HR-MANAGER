@@ -3,6 +3,7 @@ const leaveCtrl = require('../controllers/leaveController');
 const attendanceCtrl = require('../controllers/attendanceController');
 const userCtrl = require('../controllers/userController');
 const transferCtrl = require('../controllers/employeeTransferController');
+const employeeCtrl = require('../controllers/employeeController');
 const aiRag = require('./aiRag');
 
 // Runs daily at 03:00 — purges expired / long-revoked refresh tokens so the table doesn't grow unbounded
@@ -44,6 +45,15 @@ cron.schedule('10 * * * *', () => {
     .catch(err => console.error('[cron] Employee-transfer activation failed:', err.message));
 });
 
+// Runs every 15 minutes — re-pushes employees whose external sync previously failed (e.g. a transient
+// outage during a transfer activation). Per-employee exponential backoff and an attempt cap live in
+// the controller, so a persistently-broken integration is not hammered; no-ops when sync is disabled.
+cron.schedule('*/15 * * * *', () => {
+  employeeCtrl.retryFailedSyncs()
+    .then(({ retried, recovered }) => { if (retried) console.log(`[cron] Employee sync retry: ${retried} attempted, ${recovered} recovered`); })
+    .catch(err => console.error('[cron] Employee sync retry failed:', err.message));
+});
+
 // AI knowledge index — build shortly after startup (once the server and a locally-starting
 // Ollama have settled), then re-check every 30 minutes. ensureIndexed() no-ops when the index is
 // already built or when Ollama is unavailable, so this self-heals if Ollama comes up later and
@@ -55,5 +65,5 @@ cron.schedule('*/30 * * * *', () => {
   aiRag.ensureIndexed().catch(err => console.error('[ai] scheduled auto-index failed:', err.message));
 });
 
-console.log('[cron] Daily leave GL (06:00), attendance auto-absent, attendance digest (08:00), employee transfers (hourly) scheduled');
+console.log('[cron] Daily leave GL (06:00), attendance auto-absent, attendance digest (08:00), employee transfers (hourly), sync retry (15m) scheduled');
 console.log('[cron] AI knowledge auto-index scheduled (startup + every 30m)');
