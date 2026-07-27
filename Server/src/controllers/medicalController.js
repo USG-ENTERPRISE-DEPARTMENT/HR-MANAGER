@@ -344,12 +344,25 @@ exports.getStaffMedical = asyncHandler(async (req, res) => {
   })));
 });
 
+// Map uploaded files (multer `upload.array('attachments', 3)`) to the attachment1..3 columns.
+// Each stored file's hashed filename is the reference; it's served/downloaded via /documents/:filename
+// like every other upload. Falls back to string references in the body so a JSON-only request (or the
+// legacy two-step "upload first, then send attachment1") keeps working unchanged.
+function attachmentsFromReq(req) {
+  const files = Array.isArray(req.files) ? req.files : [];
+  return {
+    attachment1: files[0]?.filename || req.body.attachment1 || null,
+    attachment2: files[1]?.filename || req.body.attachment2 || null,
+    attachment3: files[2]?.filename || req.body.attachment3 || null,
+  };
+}
+
 // POST /medical/staff — create a new staff medical record in Draft status.
 exports.createStaffMedical = asyncHandler(async (req, res) => {
   const {
     employee, admission_date, discharged_date, admission_type,
     illness_type, medication, hospital, physician, cost,
-    mode_of_payment, attachment1, status,
+    mode_of_payment, status,
   } = req.body;
 
   if (!employee)       return respond.badReq(res, 'Employee is required');
@@ -357,6 +370,7 @@ exports.createStaffMedical = asyncHandler(async (req, res) => {
   if (!illness_type)   return respond.badReq(res, 'Illness type is required');
   if (!cost)           return respond.badReq(res, 'Cost is required');
 
+  const attach = attachmentsFromReq(req);
   const row = await prisma.staffmedical.create({
     data: {
       employee:        String(employee),
@@ -369,7 +383,9 @@ exports.createStaffMedical = asyncHandler(async (req, res) => {
       mode_of_payment: mode_of_payment || null,
       hospital:        hospital        || '',
       physician:       physician       || null,
-      attachment1:     attachment1     || null,
+      attachment1:     attach.attachment1,
+      attachment2:     attach.attachment2,
+      attachment3:     attach.attachment3,
       status:          'Draft',
       posted_by:       String(req.user?.id ?? ''),
       createdAt:       new Date(),
@@ -729,13 +745,15 @@ exports.createDependentMedical = asyncHandler(async (req, res) => {
     employee, dependent_id, relationship, dob,
     date_attended, date_discharged, admission_type,
     illness_type, medication, hospital, physician, cost,
-    mode_of_payment, attachment1, status,
+    mode_of_payment, status,
   } = req.body;
 
   if (!employee)      return respond.badReq(res, 'Employee is required');
   if (!date_attended) return respond.badReq(res, 'Date attended is required');
   if (!illness_type)  return respond.badReq(res, 'Illness type is required');
   if (!cost)          return respond.badReq(res, 'Cost is required');
+
+  const attach = attachmentsFromReq(req);
 
   // Look up dependent name
   let dependantName = '';
@@ -762,7 +780,9 @@ exports.createDependentMedical = asyncHandler(async (req, res) => {
       mode_of_payment:      mode_of_payment || null,
       hospital:             hospital        || '',
       physician:            physician       || null,
-      attachment1:          attachment1     || null,
+      attachment1:          attach.attachment1,
+      attachment2:          attach.attachment2,
+      attachment3:          attach.attachment3,
       status:               'Draft',
       posted_by:            String(req.user?.id ?? ''),
       dependent_id:         dependent_id ? toBigInt(dependent_id) : null,

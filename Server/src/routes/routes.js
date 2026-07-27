@@ -452,7 +452,9 @@ router.get   ('/payroll/runs/:id/employees/:empId/payslip.pdf', payslip.download
 // Medical routes
 // ─────────────────────────────────────────────
 router.get   ('/medical/staff',                             med.getStaffMedical);
-router.post  ('/medical/staff',                             med.createStaffMedical);
+// `attachments` (up to 3 files) is optional — multipart uploads populate attachment1..3; a JSON body
+// with attachment1 as a string reference still works for backward compatibility.
+router.post  ('/medical/staff',                             upload.array('attachments', 3), med.createStaffMedical);
 router.put   ('/medical/staff/:id',                         med.updateStaffMedical);
 router.delete('/medical/staff/:id',                         med.deleteStaffMedical);
 router.post  ('/medical/staff/:id/submit',                  med.submitStaffMedical);
@@ -463,7 +465,7 @@ router.post  ('/medical/staff/:id/finalize',                permissionGuard('app
 router.post  ('/medical/staff/:id/retry-gl',               permissionGuard('approve_medical'), med.retryStaffMedicalGL);
 
 router.get   ('/medical/dependents-requests',               med.getDependentMedical);
-router.post  ('/medical/dependents-requests',               med.createDependentMedical);
+router.post  ('/medical/dependents-requests',               upload.array('attachments', 3), med.createDependentMedical);
 router.put   ('/medical/dependents-requests/:id',           med.updateDependentMedical);
 router.delete('/medical/dependents-requests/:id',           med.deleteDependentMedical);
 router.post  ('/medical/dependents-requests/:id/submit',    med.submitDependentMedical);

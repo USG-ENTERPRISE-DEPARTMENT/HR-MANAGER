@@ -49,8 +49,10 @@ const COMMON_ERRORS = {
   429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
 };
 
-/** Build one path entry, folding in the shared error responses. */
-function op({ tag, summary, description, params = [], body = null, response, responses = {} }) {
+/** Build one path entry, folding in the shared error responses.
+ *  `multipart: true` renders the request body as multipart/form-data (so Swagger shows file pickers)
+ *  instead of application/json. */
+function op({ tag, summary, description, params = [], body = null, multipart = false, response, responses = {} }) {
   const o = {
     tags: [tag],
     summary,
@@ -68,7 +70,7 @@ function op({ tag, summary, description, params = [], body = null, response, res
   if (body) {
     o.requestBody = {
       required: true,
-      content: { 'application/json': { schema: body } },
+      content: { [multipart ? 'multipart/form-data' : 'application/json']: { schema: body } },
     };
   }
   return o;
@@ -209,7 +211,11 @@ const spec = {
           physician:       { type: 'string', nullable: true, example: 'Dr. Kamara' },
           cost:            { type: 'number', example: 250.00, description: 'Amount claimed' },
           mode_of_payment: { type: 'string', nullable: true, example: 'Cash' },
-          attachment1:     { type: 'string', nullable: true, description: 'Uploaded receipt/report reference', example: null },
+          attachments:     {
+            type: 'array',
+            items: { type: 'string', format: 'binary' },
+            description: 'Up to 3 supporting files (receipts/reports). PDF or image; 20 MB each. Optional.',
+          },
         },
       },
       // Body for POST /medical/dependents. As above, `employee` is server-set and must not be sent.
@@ -229,7 +235,11 @@ const spec = {
           physician:       { type: 'string', nullable: true, example: 'Dr. Bangura' },
           cost:            { type: 'number', example: 120.00 },
           mode_of_payment: { type: 'string', nullable: true, example: 'Cash' },
-          attachment1:     { type: 'string', nullable: true, example: null },
+          attachments:     {
+            type: 'array',
+            items: { type: 'string', format: 'binary' },
+            description: 'Up to 3 supporting files (receipts/reports). PDF or image; 20 MB each. Optional.',
+          },
         },
       },
     },
@@ -345,8 +355,8 @@ const spec = {
       get:  op({ tag: 'Medical', summary: 'List own staff medical claims', response: { type: 'array', items: { type: 'object' } } }),
       post: op({
         tag: 'Medical', summary: 'Create a staff medical claim',
-        description: 'Creates the claim as a Draft for the authenticated employee. Do not send `employee` — it is set from the auth headers. Call `/medical/staff/{id}/submit` afterwards to send it for approval.',
-        body: { $ref: '#/components/schemas/StaffMedicalClaim' }, response: { type: 'object' },
+        description: 'Multipart form. Creates the claim as a Draft for the authenticated employee. Do not send `employee` — it is set from the auth headers. Attach up to 3 supporting files under `attachments`. Call `/medical/staff/{id}/submit` afterwards to send it for approval.',
+        multipart: true, body: { $ref: '#/components/schemas/StaffMedicalClaim' }, response: { type: 'object' },
       }),
     },
     '/medical/staff/{id}/submit':      { post: op({ tag: 'Medical', summary: 'Submit a staff medical claim', params: [pathId], response: { type: 'object' } }) },
@@ -354,8 +364,8 @@ const spec = {
       get:  op({ tag: 'Medical', summary: 'List own dependent medical claims', response: { type: 'array', items: { type: 'object' } } }),
       post: op({
         tag: 'Medical', summary: 'Create a dependent medical claim',
-        description: 'Creates the claim as a Draft for one of the employee\'s registered dependants. Do not send `employee`. Call `/medical/dependents/{id}/submit` afterwards to send it for approval.',
-        body: { $ref: '#/components/schemas/DependentMedicalClaim' }, response: { type: 'object' },
+        description: 'Multipart form. Creates the claim as a Draft for one of the employee\'s registered dependants. Do not send `employee`. Attach up to 3 supporting files under `attachments`. Call `/medical/dependents/{id}/submit` afterwards to send it for approval.',
+        multipart: true, body: { $ref: '#/components/schemas/DependentMedicalClaim' }, response: { type: 'object' },
       }),
     },
     '/medical/dependents/{id}/submit': { post: op({ tag: 'Medical', summary: 'Submit a dependent medical claim', params: [pathId], response: { type: 'object' } }) },

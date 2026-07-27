@@ -13,6 +13,7 @@ const router  = express.Router();
 const swaggerUi = require('swagger-ui-express');
 
 const { mobileAuth, rateLimit } = require('../middleware/mobileAuth');
+const { upload } = require('../middleware/upload');
 const me = require('../controllers/meController');
 const mobileApiSpec = require('../config/mobileApiSpec');
 
@@ -75,10 +76,10 @@ router.get ('/attendance/timesheet', me.getTimesheet);
 // ── Medical ──────────────────────────────────────────────────────────────────
 router.get ('/medical/enquiry',   me.getMedicalEnquiry);
 router.get ('/medical/staff',     me.getStaffMedical);
-router.post('/medical/staff',     me.createStaffMedical);
+router.post('/medical/staff',     upload.array('attachments', 3), me.createStaffMedical);
 router.post('/medical/staff/:id/submit', me.staffMedicalOwnership, me.submitStaffMedical);
 router.get ('/medical/dependents', me.getDependentMedical);
-router.post('/medical/dependents', me.createDependentMedical);
+router.post('/medical/dependents', upload.array('attachments', 3), me.createDependentMedical);
 router.post('/medical/dependents/:id/submit', me.dependentMedicalOwnership, me.submitDependentMedical);
 
 // ── Training ─────────────────────────────────────────────────────────────────
