@@ -1,4 +1,7 @@
 node_modules/
 .env
 .env.*
+# Track Server/.env.development in the repo (intentional — carries XAuth + other app config).
+# NOTE: this file also contains DB, JWT and API secrets, which are therefore committed to history.
+!Server/.env.development
 dist/
