@@ -11,14 +11,11 @@ import './index.css';
 
 // Apply the saved per-user theme before first render to avoid a flash of the wrong mode.
 applyTheme();
-import '@fontsource/syne/400.css';
-import '@fontsource/syne/500.css';
-import '@fontsource/syne/600.css';
-import '@fontsource/syne/700.css';
-import '@fontsource/syne/800.css';
-import '@fontsource/dm-sans/400.css';
-import '@fontsource/dm-sans/500.css';
-import '@fontsource/dm-sans/600.css';
+import '@fontsource/poppins/300.css';
+import '@fontsource/poppins/400.css';
+import '@fontsource/poppins/500.css';
+import '@fontsource/poppins/600.css';
+import '@fontsource/poppins/700.css';
 
 initAuth()
   .then(user => {
@@ -42,7 +39,7 @@ initAuth()
       toastOptions={{
         duration: 3500,
         style: {
-          fontFamily: '"DM Sans", ui-sans-serif, system-ui, sans-serif',
+          fontFamily: 'Poppins, ui-sans-serif, system-ui, sans-serif',
           fontSize: '13px',
           fontWeight: '500',
           borderRadius: '12px',
