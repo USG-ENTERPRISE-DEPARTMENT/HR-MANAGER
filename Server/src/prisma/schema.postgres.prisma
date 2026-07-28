@@ -20,6 +20,7 @@ model users {
   last_wrong_attempt_at      DateTime? @db.Timestamp(0)
   last_password_requested_at DateTime? @db.Timestamp(0)
   employeeId                 BigInt? @map("employeeid")
+  xauth_employeeid           String? @unique @db.VarChar(20)
   posted_by                  BigInt?
   status                     String    @default("1") @db.Char(1)
   theme                      String?   @db.VarChar(10)

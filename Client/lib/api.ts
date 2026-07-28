@@ -73,7 +73,7 @@ api.interceptors.response.use(
 
     // Public routes (login, register) should never trigger a token refresh.
     // A 401 here means wrong credentials, not an expired session.
-    const PUBLIC_ROUTES = ['/login', '/register'];
+    const PUBLIC_ROUTES = ['/login', '/register', '/xauth/exchange'];
     const reqUrl = original.url ?? '';
     if (PUBLIC_ROUTES.some(p => reqUrl.endsWith(p))) {
       return Promise.reject(error);

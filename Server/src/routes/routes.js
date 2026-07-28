@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { checkToken, handleRefreshToken } = require("../middleware/authMiddleware");
 const { registerUser, loginUser, logoutUser, getAllUsers, getUserById, updateUser, changePassword, deactivateUser, activateUser,updateUserStatus,getMe,updateUserTheme } = require("../controllers/userController.js");
+const xauth = require('../controllers/xauthController');
 const { assignRoleToUser, revokeRoleFromUser, assignPermissionToUser, revokePermissionFromUser, getAllRoles, getAllPermissions, getUserAccess, addRole, deleteRole, updateRole, updateRoleStatus } = require('../controllers/rolePermissionController');
 const roleGuard       = require('../middleware/roleGuard');
 const permissionGuard = require('../middleware/permissionGuard');
@@ -98,6 +99,8 @@ router.get('/health', (req, res) => {
 });
 
 router.post('/login', loginUser);
+router.get('/xauth/login', xauth.initiate);
+router.post('/xauth/exchange', xauth.exchange);
 // Logout authenticates via the httpOnly refresh cookie (not the Bearer token), so it must sit BEFORE the
 // global checkToken — a user whose access token has already expired must still be able to log out.
 router.post('/logout', logoutUser);

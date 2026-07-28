@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, ArrowRight, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import api from '@/lib/api';
 import { setSession } from '@/lib/auth';
 import { normalizeFromLogin } from '@/lib/permissions';
@@ -18,6 +18,30 @@ export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const exchangingXAuth = useRef(false);
+
+  // Staff360 redirects to this SPA with an opaque token. Exchange it immediately with our
+  // backend; the backend is the only place that knows the XAuth app secret.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token || exchangingXAuth.current) return;
+    exchangingXAuth.current = true;
+    setIsLoading(true);
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    api.post<LoginResponse>('/xauth/exchange', { token })
+      .then(({ data }) => {
+        if (data.status !== '200' || !data.accessToken || !data.data) throw new Error('Authentication failed');
+        const appUser = normalizeFromLogin(data.data);
+        setSession(data.accessToken, appUser);
+        onLogin(appUser);
+      })
+      .catch((err: any) => {
+        const message = err?.response?.data?.message;
+        setError(message || 'Staff single sign-on failed. Please try again.');
+      })
+      .finally(() => setIsLoading(false));
+  }, [onLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +214,21 @@ export function Login({ onLogin }: LoginProps) {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </button>
+
+            <div className="relative py-1">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div>
+              <div className="relative flex justify-center"><span className="bg-slate-900 px-3 text-xs text-slate-400">or</span></div>
+            </div>
+
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => { window.location.assign('/v1/api/hr/xauth/login'); }}
+              className="w-full flex items-center justify-center gap-2 py-3 border border-white/15 rounded-[8px] text-[15px] font-semibold text-white bg-white/5 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70"
+            >
+              <KeyRound className="w-4 h-4" />
+              Sign in with Staff360
             </button>
           </form>
 
