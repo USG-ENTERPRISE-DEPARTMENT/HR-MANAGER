@@ -70,7 +70,7 @@ export function Login({ onLogin }: LoginProps) {
   return (
     <div
       className="min-h-screen w-full relative overflow-hidden font-sans bg-cover bg-center bg-[#0b0f19]"
-      style={{ backgroundImage: `url('${import.meta.env.BASE_URL}login-bg.jpg')` }}
+      style={{ backgroundImage: `url('${import.meta.env.BASE_URL}hr2.jpg')` }}
     >
       {/* Dark-to-transparent overlay: strong on the left where the card sits, fading out to the right */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#0b0f19] via-[#0b0f19]/80 to-[#0b0f19]/10" />
@@ -86,10 +86,10 @@ export function Login({ onLogin }: LoginProps) {
             SISL <span className="font-normal text-slate-400">Portal</span>
           </span>
         </div>
-        <div className="hidden sm:flex items-center gap-8 text-sm font-semibold text-slate-300">
+        {/* <div className="hidden sm:flex items-center gap-8 text-sm font-semibold text-slate-300">
           <span className="text-white">Sign In</span>
           <a href="#" className="hover:text-white transition-colors">Help</a>
-        </div>
+        </div> */}
       </div>
 
       {/* Card */}
@@ -121,7 +121,7 @@ export function Login({ onLogin }: LoginProps) {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     autoComplete="username"
-                    className="w-full !pl-11 !pr-4 !py-3 bg-slate-950/40 border border-white/10 rounded-lg text-white font-medium text-[14px] placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    className="w-full !pl-11 !pr-4 !py-2 bg-slate-950/40 border border-white/10 rounded-lg text-white font-medium text-[14px] placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                     placeholder="admin@usg.com or EMP-00004"
                   />
                 </div>
@@ -145,7 +145,7 @@ export function Login({ onLogin }: LoginProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     autoComplete="current-password"
-                    className="w-full !pl-11 !pr-10 !py-3 bg-slate-950/40 border border-white/10 rounded-lg text-white font-medium text-[14px] placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    className="w-full !pl-11 !pr-10 !py-2 bg-slate-950/40 border border-white/10 rounded-lg text-white font-medium text-[14px] placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                     placeholder="••••••••"
                   />
                   <button
@@ -184,7 +184,7 @@ export function Login({ onLogin }: LoginProps) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center py-3.5 border border-transparent rounded-[8px] shadow-[0_4px_14px_rgba(37,99,235,0.4)] text-[15px] font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70 mt-6 relative overflow-hidden group"
+              className="w-full flex items-center justify-center py-2 border border-transparent rounded-[8px] shadow-[0_4px_14px_rgba(37,99,235,0.4)] text-[15px] font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70 mt-6 relative overflow-hidden group"
             >
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -225,7 +225,7 @@ export function Login({ onLogin }: LoginProps) {
               type="button"
               disabled={isLoading}
               onClick={() => { window.location.assign('/v1/api/hr/xauth/login'); }}
-              className="w-full flex items-center justify-center gap-2 py-3 border border-white/15 rounded-[8px] text-[15px] font-semibold text-white bg-white/5 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70"
+              className="w-full flex items-center justify-center gap-2 py-2 border border-white/15 rounded-[8px] text-[15px] font-semibold text-white bg-white/5 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70"
             >
               <KeyRound className="w-4 h-4" />
               Sign in with Staff360
