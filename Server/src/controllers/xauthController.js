@@ -4,9 +4,10 @@ const asyncHandler = require('../middleware/asyncHandler');
 const helper = require('../helpers/dbQueryHelper');
 
 const xauthBaseUrl = () => (process.env.XAUTH_BASE_URL || 'http://10.203.14.15:8080').replace(/\/$/, '');
-// PostgreSQL's legacy `employeeid` is the numeric employee relation, so its schema uses
-// `xauth_employeeid` for the external identifier. MySQL uses the required `employeeid` column.
-const xauthColumn = () => helper.prisma?._activeProvider === 'postgresql' ? 'xauth_employeeid' : 'employeeid';
+
+// The XAuth staff identifier is stored in ONE place only: employee.employee_id. We deliberately do
+// NOT keep a copy on the users table — the link from an XAuth login to a local account is resolved
+// by joining the decoded staff id to employee.employee_id, then to the user via users.employeeId.
 
 function configured() {
   return Boolean(process.env.XAUTH_APP_KEY && process.env.XAUTH_APP_SECRET);
@@ -98,43 +99,34 @@ const exchange = asyncHandler(async (req, res) => {
     return res.status(401).json({ status: '401', message: 'Staff single sign-on could not be verified.' });
   }
 
-  const employeeid = typeof decoded?.employeeid === 'string' ? decoded.employeeid.trim() : '';
-  if (!employeeid) return res.status(401).json({ status: '401', message: 'Staff single sign-on returned no employee ID.' });
+  // Accept either the documented `staffId` or the legacy `employeeid` field from the decode response.
+  const staffId = typeof (decoded?.staffId ?? decoded?.employeeid) === 'string'
+    ? String(decoded.staffId ?? decoded.employeeid).trim()
+    : '';
+  if (!staffId) return res.status(401).json({ status: '401', message: 'Staff single sign-on returned no staff ID.' });
 
-  // First honour the mandatory XAuth identity mapping. For pre-existing accounts, safely backfill
-  // it only where their linked employee record has the same authoritative staff identifier.
-  const identityColumn = xauthColumn();
+  // Resolve the local account by the staff id held ONLY on the employee record: match
+  // employee.employee_id, then find the user linked to that employee via users.employeeId.
   let result = await helper.selectRecordsWithQuery(`
-    SELECT u.id, u.username, u.status, u.employeeId, u.theme, u.${identityColumn} AS xauthEmployeeid,
+    SELECT u.id, u.username, u.status, u.employeeId, u.theme,
            e.email, e.firstName, e.lastName, e.phone
-    FROM users u LEFT JOIN employee e ON e.id = u.employeeId
-    WHERE u.${identityColumn} = ? LIMIT 1
-  `, [employeeid]);
+    FROM employee e INNER JOIN users u ON u.employeeId = e.id
+    WHERE e.employee_id = ? LIMIT 1
+  `, [staffId]);
   let user = result.data?.[0];
 
   if (!user) {
-    result = await helper.selectRecordsWithQuery(`
-      SELECT u.id, u.username, u.status, u.employeeId, u.theme, u.${identityColumn} AS xauthEmployeeid,
-             e.email, e.firstName, e.lastName, e.phone
-      FROM users u INNER JOIN employee e ON e.id = u.employeeId
-      WHERE e.employee_id = ? LIMIT 1
-    `, [employeeid]);
-    user = result.data?.[0];
-    if (user) {
-      await helper.dynamicUpdateWithId('users', { [identityColumn]: employeeid }, user.id);
-      user.xauthEmployeeid = employeeid;
-    }
-  }
-
-  if (!user) {
+    // Employee exists but has no local user yet — auto-provision one. The staff id is NOT copied
+    // onto the users row; only the numeric employeeId link is stored, so the identifier stays in
+    // exactly one place (employee.employee_id).
     const employeeResult = await helper.selectRecordsWithQuery(`
       SELECT id, email, firstName, lastName, phone FROM employee WHERE employee_id = ? LIMIT 1
-    `, [employeeid]);
+    `, [staffId]);
     const employee = employeeResult.data?.[0];
     if (!employee) return res.status(403).json({ status: '403', message: 'Your staff record has not been provisioned for this portal.' });
 
     const created = await helper.dynamicInsert('users', {
-      username: decoded.username || employeeid, employeeId: helper.safeBigInt(employee.id), [identityColumn]: employeeid, status: '1',
+      username: decoded.username || staffId, employeeId: helper.safeBigInt(employee.id), status: '1',
     });
     if (created.status === 'error') throw new Error('Unable to create local XAuth user');
     user = { ...created.data, email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone };
