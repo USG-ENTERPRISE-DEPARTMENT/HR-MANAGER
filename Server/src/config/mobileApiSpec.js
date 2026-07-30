@@ -195,6 +195,33 @@ const spec = {
           employee_code: { type: 'string', example: 'EMP-00005' },
         },
       },
+      // Body for POST /training/nominations. `employee` is NOT listed: on the mobile /me/* path the
+      // server forces it to the authenticated employee, so the app must not send it. `nomination_type`
+      // is likewise omitted — self-nominations default to 'Self'. The record is created as a Draft;
+      // call /training/nominations/{id}/submit to send it for approval.
+      //
+      // Two ways to nominate:
+      //   • From the catalog — send `training_catalog_id` (from /training/catalog) and `start_date`.
+      //     Name, provider, category, type, cost and currency are back-filled from the catalog entry.
+      //   • Ad-hoc external course — send `training_name` and `start_date`, plus whatever else applies.
+      // `training_name` is required by the server in BOTH cases, so send it either way.
+      TrainingNomination: {
+        type: 'object',
+        required: ['training_name', 'start_date'],
+        properties: {
+          training_catalog_id: { ...id('12'), nullable: true, description: 'Catalog course id from /training/catalog. When set, the fields below are back-filled from the course and may be omitted.' },
+          training_name:       { type: 'string', example: 'Advanced Excel for Finance', description: 'Course title. Required even when `training_catalog_id` is supplied.' },
+          provider:            { type: 'string', nullable: true, example: 'Ghana Institute of Management' },
+          category:            { type: 'string', nullable: true, example: 'Technical' },
+          type:                { type: 'string', nullable: true, example: 'External', description: 'e.g. Internal / External / Online' },
+          start_date:          { type: 'string', format: 'date', example: '2026-09-14' },
+          end_date:            { type: 'string', format: 'date', nullable: true, example: '2026-09-18' },
+          venue:               { type: 'string', nullable: true, example: 'Accra Training Centre' },
+          cost:                { type: 'number', nullable: true, example: 1500.00 },
+          currency:            { type: 'string', nullable: true, example: 'GHS' },
+          notes:               { type: 'string', nullable: true, example: 'Relevant to my current reporting duties.' },
+        },
+      },
       // Body for POST /medical/staff. `employee` is NOT listed: on the mobile /me/* path the server
       // forces it to the authenticated employee, so the app must not send it. The record is created
       // as a Draft — call /medical/staff/{id}/submit to send it for approval.
@@ -373,7 +400,11 @@ const spec = {
     '/training/catalog':     { get: op({ tag: 'Training', summary: 'List available courses', description: 'Includes remaining seats per course and start date.', response: { type: 'array', items: { type: 'object' } } }) },
     '/training/nominations': {
       get:  op({ tag: 'Training', summary: 'List own nominations', response: { type: 'array', items: { type: 'object' } } }),
-      post: op({ tag: 'Training', summary: 'Nominate self for a course', body: { type: 'object' }, response: { type: 'object' } }),
+      post: op({
+        tag: 'Training', summary: 'Nominate self for a course',
+        description: 'Creates the nomination as a Draft for the authenticated employee. Do not send `employee` — it is set from the auth headers. Either link a catalog course with `training_catalog_id` or describe an external one; `training_name` and `start_date` are always required. Rejected with `400` if the employee already has a nomination for the same course and start date, or if the course has no seats left. Call `/training/nominations/{id}/submit` afterwards to send it for approval.',
+        body: { $ref: '#/components/schemas/TrainingNomination' }, response: { type: 'object' },
+      }),
     },
     '/training/nominations/{id}/submit': { post: op({ tag: 'Training', summary: 'Submit a nomination for approval', params: [pathId], response: { type: 'object' } }) },
 

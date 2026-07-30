@@ -27,13 +27,18 @@ router.use((req, res, next) => (req.path === '/' ? next('router') : next()));
 // account or a key. "Try it out" is disabled: the docs describe the API, they are not a console for
 // calling it against live employee data from an unauthenticated page.
 router.get('/docs/openapi.json', (_req, res) => res.json(mobileApiSpec));
-router.use('/docs', swaggerUi.serveFiles(mobileApiSpec, {}), swaggerUi.setup(mobileApiSpec, {
+// `serveFiles` is what actually serves swagger-ui-init.js, and that file carries the spec AND the UI
+// options into the browser. It must therefore get the SAME options object as `setup` — passing `{}`
+// here silently drops swaggerOptions/customCss, which is why "Try it out" reappeared and request
+// bodies rendered empty.
+const docsOptions = {
   customSiteTitle: 'HR Mobile API',
   // The Swagger topbar only holds a logo and a spec-URL box; both are noise when this is embedded
   // in the Settings tab, so it is hidden.
   customCss: '.swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0 }',
   swaggerOptions: { supportedSubmitMethods: [], defaultModelsExpandDepth: -1, docExpansion: 'list' },
-}));
+};
+router.use('/docs', swaggerUi.serveFiles(mobileApiSpec, docsOptions), swaggerUi.setup(mobileApiSpec, docsOptions));
 
 // Order matters: rate limit before the key check so a flood of bad keys is also throttled.
 router.use(rateLimit);
