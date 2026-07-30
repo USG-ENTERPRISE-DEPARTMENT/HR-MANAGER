@@ -22,21 +22,28 @@ const mobileApiSpec = require('../config/mobileApiSpec');
 // before any mobile auth runs, otherwise it would be rejected with 401 for lacking an API key.
 router.use((req, res, next) => (req.path === '/' ? next('router') : next()));
 
-// ── API documentation (public, no auth) ──────────────────────────────────────
-// Mounted BEFORE rateLimit/mobileAuth so the mobile developer can read the docs without an HR
-// account or a key. "Try it out" is disabled: the docs describe the API, they are not a console for
-// calling it against live employee data from an unauthenticated page.
+// ── API documentation (page is public, the API it calls is not) ──────────────
+// Mounted BEFORE rateLimit/mobileAuth so the mobile developer can READ the docs without an HR account
+// or a key. "Try it out" is enabled, but that only lets the page submit — it grants nothing: every
+// /me/* call still goes through rateLimit + mobileAuth below, so a request without a valid x-api-key
+// and x-employee-id is rejected exactly as any other client's would be. Use the Authorize button to
+// supply both headers (declared as security schemes in mobileApiSpec).
 router.get('/docs/openapi.json', (_req, res) => res.json(mobileApiSpec));
 // `serveFiles` is what actually serves swagger-ui-init.js, and that file carries the spec AND the UI
 // options into the browser. It must therefore get the SAME options object as `setup` — passing `{}`
-// here silently drops swaggerOptions/customCss, which is why "Try it out" reappeared and request
-// bodies rendered empty.
+// here silently drops swaggerOptions/customCss, which is what previously made supportedSubmitMethods
+// have no effect.
 const docsOptions = {
   customSiteTitle: 'HR Mobile API',
   // The Swagger topbar only holds a logo and a spec-URL box; both are noise when this is embedded
   // in the Settings tab, so it is hidden.
   customCss: '.swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0 }',
-  swaggerOptions: { supportedSubmitMethods: [], defaultModelsExpandDepth: -1, docExpansion: 'list' },
+  swaggerOptions: {
+    supportedSubmitMethods: ['get', 'post', 'put', 'delete'],
+    defaultModelsExpandDepth: -1,
+    docExpansion: 'list',
+    persistAuthorization: true,   // keep the entered key/employee id across page reloads
+  },
 };
 router.use('/docs', swaggerUi.serveFiles(mobileApiSpec, docsOptions), swaggerUi.setup(mobileApiSpec, docsOptions));
 
