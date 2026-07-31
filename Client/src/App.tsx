@@ -93,6 +93,16 @@ export default function App() {
     setActiveView(view);
   };
 
+  // Notification clicks only. A user can be a legitimate approver (named in an approval flow) without
+  // holding the target module's nav permission — sending them to that module would dead-end on Access
+  // Denied. Central Approval admits approvers by design and is where they can action the request, so
+  // fall back to it. Deliberately NOT applied to navigate(): sidebar/menu clicks must go where the
+  // user asked, and silently redirecting them would be wrong.
+  const navigateFromNotification = (view: string) => {
+    const blocked = currentUser && !canAccessNav(currentUser, view);
+    navigate(blocked && canAccessNav(currentUser, 'CentralApproval') ? 'CentralApproval' : view);
+  };
+
   React.useEffect(() => {
     if (currentUser && (!currentUser.name || currentUser.name.includes('undefined'))) {
       authLogout();
@@ -197,7 +207,7 @@ export default function App() {
         onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         onLogout={handleLogout}
         currentUser={currentUser}
-        onNavigate={navigate}
+        onNavigate={navigateFromNotification}
       />
       <div className="flex flex-1 overflow-hidden relative">
         {isMobileMenuOpen && (

@@ -229,7 +229,9 @@ exports.updateMedicalGLSettings = asyncHandler(async (req, res) => {
 
 // Shared GL posting for direct staff/dependent medical approvals.
 // creditAccount = employee's bankAccount from the employee record.
-async function postStaffMedicalGL({ id, prefix, employeeName, illnessType, cost, approvedBy, glExpense, creditAccount, branch, currency }) {
+// `employeeCode` is the staff-facing code from employee.employee_id (e.g. EMP001) — not the numeric
+// employee id. Both lines of this journal belong to the one employee, so both carry it.
+async function postStaffMedicalGL({ id, prefix, employeeName, illnessType, cost, approvedBy, glExpense, creditAccount, branch, currency, employeeCode }) {
   const amt = parseFloat(String(cost ?? 0));
   console.log(`[medical GL] MED_${prefix}_${id} — amt=${amt}, glExpense="${glExpense}", creditAccount="${creditAccount}", branch="${branch}", currency="${currency}"`);
   if (!amt || !glExpense || !creditAccount) {
@@ -241,21 +243,25 @@ async function postStaffMedicalGL({ id, prefix, employeeName, illnessType, cost,
   const payload = {
     approvedBy,
     referenceNo,
+    description: ['Medical claim', employeeName].filter(Boolean).join(' - '),
+    branch,
     debitAccounts: [{
       debitAmount:    amt,
       debitAccount:   glExpense,
       debitCurrency:  currency,
       debitNarration: narration,
-      debitProdRef:   `MED_${prefix}_${id}_EXP`,
+      debitProdRef:   `BS_${prefix}_${id}_EXP`,
       debitBranch:    branch,
+      ...(employeeCode ? { employeeCode } : {}),
     }],
     creditAccounts: [{
       creditAmount:    amt,
       creditAccount:   creditAccount,
       creditCurrency:  currency,
       creditNarration: narration,
-      creditProdRef:   `MED_${prefix}_${id}_CR`,
+      creditProdRef:   `NS_${prefix}_${id}_CR`,
       creditBranch:    branch,
+      ...(employeeCode ? { employeeCode } : {}),
     }],
   };
   console.log('[medical GL] payload:', JSON.stringify(payload, null, 2));
@@ -1387,6 +1393,9 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
       const creditAccounts = [];
       const approvedBy  = req.user?.username || req.user?.email || 'System';
       const referenceNo = `MC${id}${String(Date.now()).slice(-7)}`;
+      // item.employee_id is the NUMERIC employee id; the bank's employeeCode is the staff-facing
+      // employee.employee_id. empMap keys by the numeric id and carries the code.
+      const codes = await empMap(items.map(i => i.employee_id));
 
       // DEBIT: one entry per claim item → medical expense GL
       if (expenseGl) {
@@ -1399,13 +1408,15 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
             item.type === 'dependent' ? `Dep: ${item.dependent_name}` : null,
             item.narration || null,
           ].filter(Boolean).join(' - ');
+          const empCode = codes[String(item.employee_id)]?.employee_id || '';
           debitAccounts.push({
             debitAmount:    amt,
             debitAccount:   expenseGl,
             debitCurrency:  currency,
             debitNarration: narration,
-            debitProdRef:   `MED_${id}_${item.employee_id}`,
+            debitProdRef:   `BS_${id}_${item.employee_id}`,
             debitBranch:    branch,
+            ...(empCode ? { employeeCode: empCode } : {}),
           });
         }
       }
@@ -1418,7 +1429,7 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
           creditAccount:   claim.hospital_account,
           creditCurrency:  currency,
           creditNarration: `Hospital Payment - ${claim.hospital_name}`,
-          creditProdRef:   `MED_${id}`,
+          creditProdRef:   `NS_${id}`,
           creditBranch:    branch,
         });
       }
@@ -1431,7 +1442,7 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
           creditAccount:   whtGl,
           creditCurrency:  currency,
           creditNarration: `WHT - ${claim.hospital_name}`,
-          creditProdRef:   `MED_${id}_WHT`,
+          creditProdRef:   `NS_${id}_WHT`,
           creditBranch:    branch,
         });
       }
@@ -1439,7 +1450,11 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
       let documentRef = null;
       let paymentLog  = null;
       if (debitAccounts.length && creditAccounts.length) {
-        const result = await postToGL({ approvedBy, referenceNo, debitAccounts, creditAccounts });
+        const result = await postToGL({
+          approvedBy, referenceNo, debitAccounts, creditAccounts,
+          description: `Medical claim - ${claim.hospital_name}`,
+          branch,
+        });
         documentRef = result.documentRef;
         paymentLog  = JSON.stringify(result.raw);
         console.log('[medical approve] GL posting success, ref:', documentRef);
@@ -1520,7 +1535,7 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'STF', employeeName: emp?.name ?? String(rec.employee),
         illnessType: rec.type_of_illness, cost: rec.cost,
@@ -1529,6 +1544,7 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
         creditAccount: emp?.bankAccount || '',
         branch:        gl.branch,
         currency:      gl.currency,
+        employeeCode:  emp?.employee_id || '',
       });
       if (result) {
         glPayload = result._sentPayload;
@@ -1579,7 +1595,7 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'STF', employeeName: emp?.name ?? String(rec.employee),
         illnessType: rec.type_of_illness, cost: rec.cost,
@@ -1588,6 +1604,7 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
         creditAccount: emp?.bankAccount || '',
         branch:        gl.branch,
         currency:      gl.currency,
+        employeeCode:  emp?.employee_id || '',
       });
       if (result) {
         glPayload = result._sentPayload;
@@ -1644,7 +1661,7 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const desc = [rec.dependant_name, rec.type_of_illness].filter(Boolean).join(' - ');
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'DEP', employeeName: emp?.name ?? String(rec.employee),
@@ -1654,6 +1671,7 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
         creditAccount: emp?.bankAccount || '',
         branch:        gl.branch,
         currency:      gl.currency,
+        employeeCode:  emp?.employee_id || '',
       });
       if (result) {
         glPayload = result._sentPayload;
@@ -1702,7 +1720,7 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const desc = [rec.dependant_name, rec.type_of_illness].filter(Boolean).join(' - ');
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'DEP', employeeName: emp?.name ?? String(rec.employee),
@@ -1712,6 +1730,7 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
         creditAccount: emp?.bankAccount || '',
         branch:        gl.branch,
         currency:      gl.currency,
+        employeeCode:  emp?.employee_id || '',
       });
       if (result) {
         glPayload = result._sentPayload;
@@ -1736,7 +1755,7 @@ async function retryMedicalGL(table, id, req) {
 
   const gl = await loadGLSettings();
   const [emp] = await prisma.$queryRaw`
-    SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+    SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
 
   const prefix   = table === 'staffmedical' ? 'STF' : 'DEP';
   const desc     = table === 'staffmedical'
@@ -1753,6 +1772,7 @@ async function retryMedicalGL(table, id, req) {
     creditAccount: emp?.bankAccount || '',
     branch:        gl.branch,
     currency:      gl.currency,
+    employeeCode:  emp?.employee_id || '',
   });
   return result;
 }
@@ -1831,13 +1851,16 @@ exports.retryHospitalClaimGL = asyncHandler(async (req, res) => {
     const creditAccounts = [];
     const approvedBy  = req.user?.username || req.user?.email || 'System';
     const referenceNo = `MC${id}${String(Date.now()).slice(-7)}`;
+    // item.employee_id is the NUMERIC employee id; employeeCode must be employee.employee_id.
+    const codes = await empMap(items.map(i => i.employee_id));
 
     if (expenseGl) {
       for (const item of items) {
         const amt = parseFloat(item.amount ?? 0);
         if (!amt || amt <= 0) continue;
         const narration = ['Medical', item.employee_name, item.type === 'dependent' ? `Dep: ${item.dependent_name}` : null, item.narration || null].filter(Boolean).join(' - ');
-        debitAccounts.push({ debitAmount: amt, debitAccount: expenseGl, debitCurrency: currency, debitNarration: narration, debitProdRef: `BS_${id}_${item.employee_id}`, debitBranch: branch });
+        const empCode = codes[String(item.employee_id)]?.employee_id || '';
+        debitAccounts.push({ debitAmount: amt, debitAccount: expenseGl, debitCurrency: currency, debitNarration: narration, debitProdRef: `BS_${id}_${item.employee_id}`, debitBranch: branch, ...(empCode ? { employeeCode: empCode } : {}) });
       }
     }
     const creditAmt = parseFloat(String(claim.total_credit_amount ?? 0));
@@ -1850,7 +1873,11 @@ exports.retryHospitalClaimGL = asyncHandler(async (req, res) => {
     }
 
     if (debitAccounts.length && creditAccounts.length) {
-      const result = await postToGL({ approvedBy, referenceNo, debitAccounts, creditAccounts });
+      const result = await postToGL({
+        approvedBy, referenceNo, debitAccounts, creditAccounts,
+        description: `Medical claim - ${claim.hospital_name}`,
+        branch,
+      });
       await prisma.hospitalclaims.updateMany({ where: { id }, data: { status: 'Approved', document_ref: result.documentRef, payment_log: JSON.stringify(result.raw) } });
     }
   } catch (e) {

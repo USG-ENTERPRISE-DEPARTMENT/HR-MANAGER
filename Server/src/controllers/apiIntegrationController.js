@@ -88,6 +88,9 @@ async function getApiConfig() {
       trans_type:   process.env.POSTING_TRANS_TYPE       || '1504',
       currency:     process.env.POSTING_DEFAULT_CURRENCY || 'SLL',
       branch:       process.env.POSTING_DEFAULT_BRANCH   || '000',
+      // Terminal defaults to the X-FORWARDED-FOR value when left blank (see glHelper).
+      terminal:     process.env.POSTING_TERMINAL         || '',
+      posted_by:    process.env.POSTING_POSTED_BY        || '',
     })],
     ['employee_sync_url',          process.env.EMPLOYEE_SYNC_URL || ''],
     ['employee_sync_timeout',      '10000'],

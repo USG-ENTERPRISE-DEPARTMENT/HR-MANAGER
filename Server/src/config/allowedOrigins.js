@@ -11,6 +11,7 @@ const allowedOrigins = [
     'http://172.20.10.2:3002',
     'http://localhost:8083',
     'http://192.168.1.92:3099',
+    'http://192.168.1.135:3099'
     
 ]
 

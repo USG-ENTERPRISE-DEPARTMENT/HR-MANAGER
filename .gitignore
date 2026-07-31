@@ -5,3 +5,6 @@ node_modules/
 # NOTE: this file also contains DB, JWT and API secrets, which are therefore committed to history.
 !Server/.env.development
 dist/
+# GL posting audit logs — contain employee bank accounts, salary amounts and GL codes.
+logs/
+*.log

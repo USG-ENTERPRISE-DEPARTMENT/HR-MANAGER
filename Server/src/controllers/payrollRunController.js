@@ -608,7 +608,9 @@ const updatePayrollDataItem = asyncHandler(async (req, res) => {
 });
 
 // ── GL posting helper (shared by finalize + retry) ───────────────────────────
-async function buildAndPostGL(id, req) {
+// `runName` feeds the GL payload's top-level `description`; both callers already have the run row
+// loaded, so it is passed in rather than re-queried here.
+async function buildAndPostGL(id, req, runName) {
   const apiCfg = await getApiConfig();
   let glExtra  = {};
   try { glExtra = JSON.parse(apiCfg.gl_extra || '{}'); } catch {}
@@ -619,6 +621,7 @@ async function buildAndPostGL(id, req) {
     SELECT pd.employee, pd.amount,
            pc.name AS col_name, pc.payment_deduction, pc.salarycomponent_gl, pc.posting_branch,
            TRIM(CONCAT(COALESCE(e.firstName,''), ' ', COALESCE(e.lastName,''))) AS emp_name,
+           e.employee_id AS emp_code,
            e.bankAccount,
            COALESCE(pe.currency, ${defaultCurrency}) AS currency
     FROM   payrolldata pd
@@ -637,36 +640,104 @@ async function buildAndPostGL(id, req) {
   const fallbackDeductionGL = (process.env.PAYROLL_DEDUCTION_GL || '').trim();
   const fallbackNetGL       = (process.env.PAYROLL_NET_PAYABLE_GL || '').trim();
 
+  // Per-employee running totals, used to derive the net-pay credit below. Net pay is NOT a stored
+  // payroll column — it is always earnings minus deductions — so the cash leg of the journal has to be
+  // synthesized here. Without it the batch posts gross debits against deduction credits only and the
+  // ledger is out by exactly the net payroll.
+  const perEmp = new Map();
+  const empOrder = [];
+  const unmapped = [];   // rows we could not post for want of a GL account
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
   for (const row of postingRows) {
     const amount   = parseFloat(row.amount || '0');
     if (!amount || amount <= 0) continue;
     const branch   = row.posting_branch || defaultBranch;
     const currency = row.currency       || defaultCurrency;
-    const prodRef  = `HR_${id}_${row.employee}`;
-    const isNet    = (row.col_name || '').toLowerCase().startsWith('net');
+    // prodRef prefix encodes the side of the journal: BS_ for debits, NS_ for credits.
+    // Applies across all GL postings (payroll + medical) so the bank sees one convention.
+    const drProdRef = `BS_${id}_${row.employee}`;
+    const crProdRef = `NS_${id}_${row.employee}`;
+    // The bank's employeeCode is the staff-facing code from employee.employee_id (e.g. EMP001),
+    // NOT row.employee — that is the numeric database id.
+    const empCode  = row.emp_code || '';
 
-    if (isNet) {
-      const acct = row.bankAccount || fallbackNetGL;
-      if (!acct) continue;
-      creditAccounts.push({ creditAmount: amount, creditAccount: acct, creditCurrency: currency, creditNarration: `${row.col_name} - ${row.emp_name}`, creditProdRef: prodRef, creditBranch: branch });
-    } else if (row.payment_deduction === 'Deduction') {
+    const key = String(row.employee);
+    if (!perEmp.has(key)) {
+      perEmp.set(key, {
+        empCode, name: row.emp_name, bankAccount: row.bankAccount,
+        currency, branch, earnings: 0, deductions: 0,
+        drProdRef, crProdRef,
+      });
+      empOrder.push(key);
+    }
+    const agg = perEmp.get(key);
+
+    if (row.payment_deduction === 'Deduction') {
+      agg.deductions += amount;
       const acct = row.salarycomponent_gl || fallbackDeductionGL;
-      if (!acct) continue;
-      creditAccounts.push({ creditAmount: amount, creditAccount: acct, creditCurrency: currency, creditNarration: `${row.col_name} - ${row.emp_name}`, creditProdRef: prodRef, creditBranch: branch });
+      if (!acct) { unmapped.push(`${row.col_name} (${row.emp_name})`); continue; }
+      creditAccounts.push({ creditAmount: amount, creditAccount: acct, creditCurrency: currency, creditNarration: `${row.col_name} - ${row.emp_name}`, creditProdRef: crProdRef, creditBranch: branch, employeeCode: empCode });
     } else if (row.payment_deduction === 'Payment') {
+      agg.earnings += amount;
       const acct = row.salarycomponent_gl || fallbackExpenseGL;
-      if (!acct) continue;
-      debitAccounts.push({ debitAmount: amount, debitAccount: acct, debitCurrency: currency, debitNarration: `${row.col_name} - ${row.emp_name}`, debitProdRef: prodRef, debitBranch: branch });
+      if (!acct) { unmapped.push(`${row.col_name} (${row.emp_name})`); continue; }
+      debitAccounts.push({ debitAmount: amount, debitAccount: acct, debitCurrency: currency, debitNarration: `${row.col_name} - ${row.emp_name}`, debitProdRef: drProdRef, debitBranch: branch, employeeCode: empCode });
     }
   }
 
-  const totalDr = debitAccounts.reduce((s, e) => s + e.debitAmount, 0);
-  const totalCr = creditAccounts.reduce((s, e) => s + e.creditAmount, 0);
-  if (Math.abs(totalDr - totalCr) > 0.01) {
-    console.warn(`[payroll GL] run ${id} imbalanced — DR ${totalDr.toFixed(2)} CR ${totalCr.toFixed(2)} diff ${(totalCr - totalDr).toFixed(2)}.`);
+  // ── Net pay credit — the cash leg, one line per employee ─────────────────────
+  // Credited to the employee's bank account (PAYROLL_NET_PAYABLE_GL as fallback) so that
+  // debits (gross earnings) = credits (deductions + net pay) for every employee.
+  const missingNetAccount = [];
+  for (const key of empOrder) {
+    const agg = perEmp.get(key);
+    const net = round2(agg.earnings - agg.deductions);
+    if (net === 0) continue;
+    if (net < 0) {
+      unmapped.push(`negative net pay for ${agg.name} (${net.toFixed(2)})`);
+      continue;
+    }
+    const acct = agg.bankAccount || fallbackNetGL;
+    if (!acct) { missingNetAccount.push(`${agg.name} (${agg.empCode})`); continue; }
+    creditAccounts.push({
+      creditAmount: net, creditAccount: acct, creditCurrency: agg.currency,
+      creditNarration: `Net Pay - ${agg.name}`, creditProdRef: agg.crProdRef,
+      creditBranch: agg.branch, employeeCode: agg.empCode,
+    });
   }
 
-  return postToGL({ approvedBy, referenceNo, debitAccounts, creditAccounts });
+  // ── Balance gate ─────────────────────────────────────────────────────────────
+  // An unbalanced batch must never reach the bank: the GL accepts what we send without checking, so a
+  // bad payload posts silently and has to be unwound by hand. Fail loudly instead, naming the cause.
+  const totalDr = round2(debitAccounts.reduce((s, e) => s + e.debitAmount, 0));
+  const totalCr = round2(creditAccounts.reduce((s, e) => s + e.creditAmount, 0));
+  const diff    = round2(totalDr - totalCr);
+
+  if (Math.abs(diff) > 0.01) {
+    const reasons = [];
+    if (missingNetAccount.length) reasons.push(`no bank account or PAYROLL_NET_PAYABLE_GL fallback for: ${missingNetAccount.join(', ')}`);
+    if (unmapped.length)          reasons.push(`unmapped GL account for: ${unmapped.join(', ')}`);
+    const detail = reasons.length ? ` Cause: ${reasons.join('; ')}.` : '';
+    const err = new Error(
+      `GL posting blocked — journal does not balance. Debits ${totalDr.toFixed(2)} vs credits ${totalCr.toFixed(2)} ` +
+      `(difference ${diff.toFixed(2)}).${detail} Nothing was sent to the GL.`,
+    );
+    err.glImbalance = { totalDr, totalCr, diff, missingNetAccount, unmapped };
+    console.error(`[payroll GL] run ${id} imbalanced — DR ${totalDr.toFixed(2)} CR ${totalCr.toFixed(2)} diff ${diff.toFixed(2)}.`);
+    throw err;
+  }
+
+  // A balanced batch can still have dropped lines (e.g. an unmapped pair that cancels out); surface them.
+  if (missingNetAccount.length || unmapped.length) {
+    console.warn(`[payroll GL] run ${id} posted with skipped lines:`, { missingNetAccount, unmapped });
+  }
+
+  return postToGL({
+    approvedBy, referenceNo, debitAccounts, creditAccounts,
+    description: runName ? `Salary postings - ${runName}` : 'Salary postings',
+    branch:      defaultBranch,
+  });
 }
 
 // ── Finalize ──────────────────────────────────────────────────────────────────
@@ -684,6 +755,7 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   let documentRef = null;
   let paymentLog  = null;
   let finalStatus = 'Completed';
+  let glError     = null;   // surfaced to the caller so an imbalance is visible, not just logged
 
   // ── GL posting ───────────────────────────────────────────────────────────────
   // Skip entirely when payroll postings are switched off (record-only mode) — the run still
@@ -692,15 +764,16 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   const _glUrl = glEnabled ? (await getApiConfig()).gl_url : null;
   if (_glUrl) {
     try {
-      const result = await buildAndPostGL(id, req);
+      const result = await buildAndPostGL(id, req, run.name);
       documentRef = result.documentRef;
       paymentLog  = JSON.stringify(result.raw);
       console.log('[finalize] GL posting success, ref:', documentRef);
     } catch (e) {
       const errData = e.glResponse || e.response?.data || e.message;
       console.error('[finalize] GL posting error:', errData);
-      paymentLog  = JSON.stringify({ error: errData });
+      paymentLog  = JSON.stringify(e.glImbalance ? { error: e.message, imbalance: e.glImbalance } : { error: errData });
       finalStatus = 'GL Failed';
+      glError     = e.message;
     }
   }
 
@@ -713,7 +786,11 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   await logAudit(id, 'finalize', req, { documentRef });
   logActivity({ module: 'Payroll', action: 'finalize', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef } });
   const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
-  respond.ok(res, 'Payroll finalized', rows[0] || null);
+  respond.ok(
+    res,
+    glError ? `Payroll finalized, but GL posting failed. ${glError}` : 'Payroll finalized',
+    rows[0] ? { ...rows[0], glError } : null,
+  );
 });
 
 // ── Retry GL posting (for GL Failed runs) ────────────────────────────────────
@@ -728,7 +805,7 @@ const retryGLPosting = asyncHandler(async (req, res) => {
   if (!(await getApiConfig()).gl_url) return respond.badReq(res, 'GL API URL not configured');
 
   try {
-    const result = await buildAndPostGL(id, req);
+    const result = await buildAndPostGL(id, req, run.name);
     await exec`
       UPDATE payrollruns SET status='Completed', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)},
         updated_at=NOW() WHERE id=${BigInt(id)}`;
@@ -738,9 +815,10 @@ const retryGLPosting = asyncHandler(async (req, res) => {
   } catch (e) {
     const errData = e.glResponse || e.response?.data || e.message;
     console.error('[gl retry] error:', errData);
-    await exec`UPDATE payrollruns SET payment_log=${JSON.stringify({ error: errData })}, updated_at=NOW() WHERE id=${BigInt(id)}`;
+    const logJson = JSON.stringify(e.glImbalance ? { error: e.message, imbalance: e.glImbalance } : { error: errData });
+    await exec`UPDATE payrollruns SET payment_log=${logJson}, updated_at=NOW() WHERE id=${BigInt(id)}`;
     const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
-    respond.ok(res, 'GL posting failed', rows[0] || null);
+    respond.ok(res, `GL posting failed. ${e.message}`, rows[0] ? { ...rows[0], glError: e.message } : null);
   }
 });
 
@@ -793,6 +871,9 @@ function notifyStageApprovers(stage, runName, req) {
   const type = stage.approver_type ?? stage.approverType;
   const idv = stage.approver_id ?? stage.approverId;
   const stageName = stage.stage_name ?? stage.name;
+  // Action stays 'Payroll' — the client redirects to Central Approval automatically when the
+  // recipient cannot open the Payroll module (see navigate() in App.tsx), so users who DO have
+  // payroll access still land on the richer Payroll screen.
   const payload = { message: `Payroll run "${runName}" awaits your approval (${stageName})`, action: 'Payroll', type: 'payroll', fromUser: req.user?.id };
   if (type === 'user' && idv) notifyUser(idv, payload);
   else notifyUsersWithRole(idv, payload, req.user?.id, stage.approver_label ?? stage.approverLabel);
