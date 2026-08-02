@@ -283,6 +283,7 @@ const spec = {
     { name: 'Documents',     description: 'Personal, shared and company documents' },
     { name: 'Notifications', description: 'In-app notification feed' },
     { name: 'Approvals',     description: 'Supervisor actions for direct reports' },
+    { name: 'Payroll',       description: 'Payroll run lookup by GL reference. Unlike every other tag here, this is NOT self-scoped — it returns a whole payroll run. All calls are logged.' },
   ],
   paths: {
     '/whoami': {
@@ -446,5 +447,118 @@ for (const [module, label] of [['leave', 'leave request'], ['medical', 'medical 
     };
   }
 }
+
+// ── Payroll lookup by GL reference ───────────────────────────────────────────
+// Uses this router's own auth (x-api-key + x-employee-id), so the spec-level `security` and base path
+// both apply and are NOT overridden here.
+//
+// Still written longhand rather than via op(): that helper folds in COMMON_ERRORS, whose 403 and 404
+// text describes self-scoped record access ("not owned by this employee"), which would misdescribe
+// this endpoint's failure modes.
+spec.paths['/payroll/runs/by-reference/{reference}'] = {
+  get: {
+    tags: ['Payroll'],
+    summary: 'Get a payroll run by its GL reference number',
+    description: [
+      '⚠️ **Not self-scoped.** Every other endpoint in this API returns only the calling employee\'s own',
+      'records. This one returns an **entire payroll run** — every employee in it, with their salary',
+      'figures and bank accounts. Any caller holding a valid API key and any active employee id can',
+      'read it.',
+      '',
+      'Returns a single payroll run matched on `payrollruns.document_ref` — the reference returned by',
+      'the GL when the run was posted. Each employee is a separate object carrying the payroll columns',
+      'flagged for posting (`posting_column = \'Yes\'`), with their GL account, branch and currency, plus',
+      'derived `earnings`, `deductions` and `netPay`.',
+      '',
+      'The figures mirror what was actually sent to the GL: the same posting-column filter and the same',
+      '`earnings - deductions` net pay that the posting synthesizes. Zero-amount cells are omitted, as',
+      'they are never posted either.',
+      '',
+      '### Authentication',
+      '',
+      'The standard `x-api-key` + `x-employee-id` headers, and the same 120 req/min rate limit as the',
+      'rest of this API. **Every call is logged** — the caller\'s employee id, the reference requested,',
+      'the outcome and the source IP are written to `payroll_api_access_log`, including calls that are',
+      'refused.',
+      '',
+      '### Reachability',
+      '',
+      'Only runs that actually posted to the GL have a `document_ref`. Runs still in Draft, Processing,',
+      'Approved or GL Failed — and runs finalized while payroll GL posting was switched off — have no',
+      'reference and return `404`.',
+    ].join('\n'),
+    parameters: [{
+      name: 'reference', in: 'path', required: true,
+      schema: { type: 'string', example: 'PR1263886414' },
+      description: 'GL document reference stored on the run (`payrollruns.document_ref`).',
+    }],
+    responses: {
+      200: {
+        description: 'Success',
+        content: {
+          'application/json': {
+            schema: okEnvelope({
+              type: 'object',
+              properties: {
+                id:            id('126'),
+                name:          { type: 'string', example: 'PAYROLL FOR AUG 2026 - SNR MGT' },
+                status:        { type: 'string', example: 'Completed' },
+                document_ref:  { type: 'string', example: 'PR1263886414' },
+                reference:     { type: 'string', example: 'PR1263886414', description: 'Echo of the reference that was looked up.' },
+                employeeCount: { type: 'integer', example: 2 },
+                totals: {
+                  type: 'object',
+                  description: 'Sum across every employee in the run.',
+                  properties: {
+                    earnings:   { type: 'number', example: 473111.44 },
+                    deductions: { type: 'number', example: 175702.81 },
+                    netPay:     { type: 'number', example: 297408.63 },
+                  },
+                },
+                employees: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      employeeId:   id('45'),
+                      employeeCode: { type: 'string', example: 'P1991001', description: 'Staff-facing code (employee.employee_id) — this is what the GL receives as employeeCode.' },
+                      name:         { type: 'string', example: 'EMMANUEL BORBOR' },
+                      bankAccount:  { type: 'string', nullable: true, example: '0212300317101' },
+                      currency:     { type: 'string', example: 'Cedis' },
+                      branch:       { type: 'string', example: '000' },
+                      columns: {
+                        type: 'array',
+                        description: 'Posting columns for this employee, in payroll column order.',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            name:      { type: 'string', example: 'Salary Basic' },
+                            amount:    { type: 'number', example: 173970.15 },
+                            type:      { type: 'string', enum: ['Payment', 'Deduction'], example: 'Payment' },
+                            glAccount: { type: 'string', nullable: true, example: '012098776665', description: 'Null when the column had no GL account and the posting fell back to the env-level default.' },
+                            branch:    { type: 'string', example: '000' },
+                            currency:  { type: 'string', example: 'Cedis' },
+                          },
+                        },
+                      },
+                      earnings:   { type: 'number', example: 206564.83, description: 'Sum of Payment columns.' },
+                      deductions: { type: 'number', example: 79816.32, description: 'Sum of Deduction columns.' },
+                      netPay:     { type: 'number', example: 126748.51, description: 'earnings - deductions. Derived, not a stored column.' },
+                    },
+                  },
+                },
+              },
+            }, 'Payroll run retrieved'),
+          },
+        },
+      },
+      400: errorEnvelope('400', 'Reference number is required, or the x-employee-id header is missing'),
+      401: errorEnvelope('401', 'Missing or invalid API key'),
+      403: errorEnvelope('403', 'The employee record identified by x-employee-id is not active'),
+      404: errorEnvelope('404', 'No payroll run found for that reference number'),
+      429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
+    },
+  },
+};
 
 module.exports = spec;

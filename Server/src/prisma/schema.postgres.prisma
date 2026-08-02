@@ -1972,6 +1972,28 @@ model app_settings {
   setting_value String? @db.Text
 }
 
+// Who called the mobile-authenticated payroll lookup, and what they asked for. That endpoint uses the
+// shared-key + x-employee-id model where identity is not cryptographically bound to the caller, so
+// this is the trail that makes misuse detectable. `employee` is the CALLER, not the employees in the
+// returned run. See manual-migrations/20260802_payroll_api_access_log.*.sql.
+model payroll_api_access_log {
+  id             BigInt   @id @default(autoincrement())
+  employee       BigInt?
+  employee_code  String?  @db.VarChar(20)
+  employee_name  String?  @db.VarChar(200)
+  reference      String?  @db.VarChar(100)
+  payroll_run    BigInt?
+  outcome        String   @db.VarChar(20)   // ok | not_found | bad_request
+  employee_count Int?
+  ip             String?  @db.VarChar(45)
+  user_agent     String?  @db.VarChar(255)
+  created_at     DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([employee, created_at], map: "payroll_api_access_log_employee_idx")
+  @@index([reference], map: "payroll_api_access_log_reference_idx")
+  @@index([created_at], map: "payroll_api_access_log_created_at_idx")
+}
+
 model onboarding_submission {
   id          BigInt   @id @default(autoincrement())
   data        String   @db.Text

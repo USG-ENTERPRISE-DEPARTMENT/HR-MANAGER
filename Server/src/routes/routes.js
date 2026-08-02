@@ -365,6 +365,8 @@ router.post  ('/salary/notch-movements',              permissionGuard('manage_no
 const run = require('../controllers/payrollRunController');
 const { getAuditLogs, getAuditModules } = require('../controllers/auditController');
 router.get   ('/payroll/runs',                    run.getPayrollRuns);
+// NOTE: the by-reference lookup is NOT here. It authenticates with the mobile key + x-employee-id
+// model rather than a JWT, so it is mounted in meRoutes.js (which runs before the global checkToken).
 router.post  ('/payroll/runs',                    permissionGuard('process_payroll'), run.createPayrollRun);
 router.put   ('/payroll/runs/:id',                permissionGuard('process_payroll'), run.updatePayrollRun);
 router.delete('/payroll/runs/:id',                permissionGuard('process_payroll'), run.deletePayrollRun);

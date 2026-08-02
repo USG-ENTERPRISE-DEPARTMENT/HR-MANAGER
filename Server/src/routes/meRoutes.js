@@ -15,6 +15,8 @@ const swaggerUi = require('swagger-ui-express');
 const { mobileAuth, rateLimit } = require('../middleware/mobileAuth');
 const { upload } = require('../middleware/upload');
 const me = require('../controllers/meController');
+// Payroll lookup shares this router's auth model; the handler itself lives with the other payroll code.
+const payrollRun = require('../controllers/payrollRunController');
 const mobileApiSpec = require('../config/mobileApiSpec');
 
 // Express routes the bare path `/me` into this sub-router as '/'. That is the web app's
@@ -128,6 +130,16 @@ router.post('/approvals/medical/:id/approve', me.requireMedicalSubordinate,  me.
 router.post('/approvals/medical/:id/reject',  me.requireMedicalSubordinate,  me.rejectMedical);
 router.post('/approvals/training/:id/approve', me.requireTrainingSubordinate, me.approveTraining);
 router.post('/approvals/training/:id/reject',  me.requireTrainingSubordinate, me.rejectTraining);
+
+// ── Payroll lookup by GL reference ───────────────────────────────────────────
+// Not self-scoped like the rest of this router: it returns a WHOLE payroll run (every employee in
+// it), so it is the one route here where the caller sees data beyond their own. It lives on this
+// router because it shares the mobile auth model — the same x-api-key + x-employee-id checks and the
+// same rate limit applied above.
+//
+// Every call is recorded in payroll_api_access_log by the controller, successes and refusals alike,
+// so the caller behind any given lookup is identifiable after the fact.
+router.get('/payroll/runs/by-reference/:reference', payrollRun.getPayrollByReference);
 
 // ── Catch-all ────────────────────────────────────────────────────────────────
 // The bare `/me` path is already handed back to the parent router at the top of this file, so

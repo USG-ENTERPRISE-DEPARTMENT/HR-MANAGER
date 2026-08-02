@@ -607,6 +607,158 @@ const updatePayrollDataItem = asyncHandler(async (req, res) => {
   respond.ok(res, 'Updated');
 });
 
+// ── Lookup by GL reference ────────────────────────────────────────────────────
+/**
+ * Record one call to the payroll lookup in payroll_api_access_log.
+ *
+ * Written with prisma.payroll_api_access_log.create rather than raw SQL so the same code runs on
+ * MySQL and Postgres — Prisma emits the right dialect, and the `payroll_run` BigInt is bound as a
+ * parameter instead of being interpolated (the two providers disagree on bigint literal handling).
+ *
+ * Never allowed to fail the request: an audit write that 500s the caller would make the endpoint
+ * less reliable than it is unlogged. Failures are reported to the console instead.
+ */
+async function logPayrollApiAccess(req, { reference, runId, outcome, employeeCount }) {
+  try {
+    const self = req.self || {};
+    await prisma.payroll_api_access_log.create({
+      data: {
+        // req.self is populated by mobileAuth from the x-employee-id header — this is the CALLER,
+        // not any employee inside the returned run.
+        employee:       self.id ? BigInt(self.id) : null,
+        employee_code:  self.code ?? null,
+        employee_name:  self.name ?? null,
+        reference:      reference || null,
+        payroll_run:    runId != null ? BigInt(runId) : null,
+        outcome,
+        employee_count: employeeCount ?? null,
+        ip:             req.headers['x-forwarded-for']?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? null,
+        // Truncated to the column width; a long or hostile UA must not error the insert.
+        user_agent:     (req.headers['user-agent'] || '').slice(0, 255) || null,
+      },
+    });
+  } catch (e) {
+    console.error('[payroll api log] could not record access:', e.message);
+  }
+}
+
+// GET /payroll/runs/by-reference/:reference — fetch one finalized run by the GL document reference
+// stored on payrollruns.document_ref, with every employee as an object carrying their posting columns.
+//
+// Auth is the mobile model (x-api-key + x-employee-id), NOT the web app's JWT — see
+// middleware/mobileAuth.js. Because that model does not bind identity to the caller, every call here
+// is recorded in payroll_api_access_log, including the ones that are refused.
+//
+// Only runs that actually posted to the GL have a document_ref, so Draft / GL Failed runs (and runs
+// finalized while payroll GL posting was switched off) are not reachable here by design.
+//
+// The employee rows mirror buildAndPostGL: the same posting_column='Yes' filter and the same derived
+// net pay (earnings - deductions), so this reports what was posted rather than a second calculation.
+const getPayrollByReference = asyncHandler(async (req, res) => {
+  const reference = String(req.params.reference || '').trim();
+  if (!reference) {
+    await logPayrollApiAccess(req, { reference, runId: null, outcome: 'bad_request', employeeCount: null });
+    return respond.badReq(res, 'Reference number is required');
+  }
+
+  const [run] = await query`${RUNS_SELECT} WHERE pr.document_ref = ${reference} LIMIT 1`;
+  if (!run) {
+    // Logged too: repeated misses from one caller is what probing for valid references looks like.
+    await logPayrollApiAccess(req, { reference, runId: null, outcome: 'not_found', employeeCount: null });
+    return respond.notFound(res, 'No payroll run found for that reference number');
+  }
+
+  // Currency/branch fallbacks come from the same GL config the posting used.
+  const apiCfg = await getApiConfig();
+  let glExtra = {};
+  try { glExtra = JSON.parse(apiCfg.gl_extra || '{}'); } catch {}
+  const defaultCurrency = glExtra.currency || 'SLL';
+  const defaultBranch   = glExtra.branch   || '000';
+
+  // bankAccount is aliased to the single-case `bank_account` deliberately. Postgres folds unquoted
+  // identifiers, so selecting e.bankAccount returns the result key `bankaccount` there but
+  // `bankAccount` on MySQL; reading row.bankAccount would be undefined on Postgres and every bank
+  // account would silently serialise to null. A lower-case alias reads identically on both.
+  const postingRows = await query`
+    SELECT pd.employee, pd.amount,
+           pc.name AS col_name, pc.payment_deduction, pc.salarycomponent_gl, pc.posting_branch,
+           TRIM(CONCAT(COALESCE(e.firstName,''), ' ', COALESCE(e.lastName,''))) AS emp_name,
+           e.employee_id AS emp_code,
+           e.bankAccount AS bank_account,
+           COALESCE(pe.currency, ${defaultCurrency}) AS currency
+    FROM   payrolldata pd
+    JOIN   payrollcolumns    pc ON pc.id       = pd.payroll_item
+    JOIN   employee           e  ON e.id        = pd.employee
+    LEFT JOIN payrollemployees pe ON pe.employee = pd.employee
+    WHERE  pd.payroll = ${BigInt(run.id)} AND pc.posting_column = 'Yes'
+    ORDER  BY pd.employee, COALESCE(pc.colorder, 99999)`;
+
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const byEmp = new Map();   // keyed by employee id, insertion order = the ORDER BY above
+
+  for (const row of postingRows) {
+    const amount = parseFloat(row.amount || '0');
+    // Skip zero/blank cells — buildAndPostGL does the same, so they never reached the GL either.
+    if (!amount || amount <= 0) continue;
+
+    const key = String(row.employee);
+    if (!byEmp.has(key)) {
+      byEmp.set(key, {
+        employeeId:  key,
+        employeeCode: row.emp_code || '',
+        name:        row.emp_name,
+        bankAccount: row.bank_account || null,
+        currency:    row.currency || defaultCurrency,
+        branch:      row.posting_branch || defaultBranch,
+        columns:     [],
+        earnings:    0,
+        deductions:  0,
+        netPay:      0,
+      });
+    }
+    const emp = byEmp.get(key);
+
+    emp.columns.push({
+      name:      row.col_name,
+      amount:    round2(amount),
+      type:      row.payment_deduction,          // 'Payment' | 'Deduction'
+      glAccount: row.salarycomponent_gl || null, // null → the run fell back to the env-level GL
+      branch:    row.posting_branch || defaultBranch,
+      currency:  row.currency || defaultCurrency,
+    });
+
+    if (row.payment_deduction === 'Deduction') emp.deductions += amount;
+    else if (row.payment_deduction === 'Payment') emp.earnings += amount;
+  }
+
+  // Net pay is not a stored column — it is always earnings minus deductions, matching the cash leg
+  // buildAndPostGL synthesizes for the journal.
+  const employees = Array.from(byEmp.values()).map(emp => ({
+    ...emp,
+    earnings:   round2(emp.earnings),
+    deductions: round2(emp.deductions),
+    netPay:     round2(emp.earnings - emp.deductions),
+  }));
+
+  const totals = employees.reduce((acc, e) => ({
+    earnings:   round2(acc.earnings   + e.earnings),
+    deductions: round2(acc.deductions + e.deductions),
+    netPay:     round2(acc.netPay     + e.netPay),
+  }), { earnings: 0, deductions: 0, netPay: 0 });
+
+  await logPayrollApiAccess(req, {
+    reference, runId: run.id, outcome: 'ok', employeeCount: employees.length,
+  });
+
+  respond.ok(res, 'Payroll run retrieved', {
+    ...run,
+    reference,
+    employeeCount: employees.length,
+    totals,
+    employees,
+  });
+});
+
 // ── GL posting helper (shared by finalize + retry) ───────────────────────────
 // `runName` feeds the GL payload's top-level `description`; both callers already have the run row
 // loaded, so it is passed in rather than re-queried here.
@@ -1062,6 +1214,7 @@ const duplicatePayrollRun = asyncHandler(async (req, res) => {
 module.exports = {
   getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
+  getPayrollByReference,
   submitPayroll, approvePayroll, rejectPayroll, getPayrollAudit, duplicatePayrollRun,
   debugPayrollRun,
   getApprovalFlow, saveApprovalFlow, getRunStages,
