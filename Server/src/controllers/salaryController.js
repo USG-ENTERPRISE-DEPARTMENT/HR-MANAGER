@@ -17,6 +17,31 @@ function toDecimalString(val) {
   return Number.isFinite(n) ? n.toFixed(2) : null;
 }
 
+/**
+ * Reject a paygrade band whose minimum exceeds its maximum.
+ *
+ * An inverted band is silently unusable: the notch validation below requires
+ * `amount >= min && amount <= max`, so when min > max NO amount can satisfy it and every notch entry
+ * for that paygrade fails — with a message that reads as nonsense ("must be between 41,132.4 and
+ * 1,132.4") because it faithfully reports the stored values. Catching it at the point of entry keeps
+ * the impossible state out of the table.
+ *
+ * Only validated when both bounds are supplied; either may be left blank, and a band with just one
+ * bound is still meaningful (the notch check requires both before it applies).
+ *
+ * @returns {string|null} the error message, or null when the band is acceptable.
+ */
+function bandError(minStr, maxStr) {
+  if (minStr === null || maxStr === null) return null;
+  const min = Number(minStr);
+  const max = Number(maxStr);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  if (min <= max) return null;
+  return tmsg('salary.paygrade_band_inverted', {
+    min: min.toLocaleString(), max: max.toLocaleString(),
+  });
+}
+
 const { Prisma } = require('@prisma/client'); // Prisma.sql / Prisma.join for portable dynamic SQL
 
 // Tagged-template query helpers — portable (Prisma emits the right placeholders per provider).
@@ -496,12 +521,17 @@ const createPaygrade = asyncHandler(async (req, res) => {
   const dup = await prisma.paygrades.findFirst({ where: { name: name.trim() } });
   if (dup) return respond.conflict(res, 'Paygrade name already exists');
 
+  const minVal = toDecimalString(min_salary);
+  const maxVal = toDecimalString(max_salary);
+  const bandErr = bandError(minVal, maxVal);
+  if (bandErr) return respond.badReq(res, bandErr);
+
   const row = await prisma.paygrades.create({
     data: {
       name:       name.trim(),
       currency:   currency.trim().toUpperCase(),
-      min_salary: toDecimalString(min_salary),
-      max_salary: toDecimalString(max_salary),
+      min_salary: minVal,
+      max_salary: maxVal,
     },
   });
   respond.created(res, 'Paygrade created', serialize(row));
@@ -522,13 +552,18 @@ const updatePaygrade = asyncHandler(async (req, res) => {
   const dup = await prisma.paygrades.findFirst({ where: { name: name.trim(), id: { not: id } } });
   if (dup) return respond.conflict(res, 'Paygrade name already exists');
 
+  const minVal = toDecimalString(min_salary);
+  const maxVal = toDecimalString(max_salary);
+  const bandErr = bandError(minVal, maxVal);
+  if (bandErr) return respond.badReq(res, bandErr);
+
   const row = await prisma.paygrades.update({
     where: { id },
     data: {
       name:       name.trim(),
       currency:   currency.trim().toUpperCase(),
-      min_salary: toDecimalString(min_salary),
-      max_salary: toDecimalString(max_salary),
+      min_salary: minVal,
+      max_salary: maxVal,
     },
   });
   respond.ok(res, 'Paygrade updated', serialize(row));

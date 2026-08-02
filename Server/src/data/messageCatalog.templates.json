@@ -30,6 +30,7 @@
   { "key": "salary.component_removed", "category": "Salary", "kind": "template", "default": "{label} component removed", "placeholders": ["label"] },
   { "key": "salary.amount_out_of_band", "category": "Salary", "kind": "template", "default": "Amount must be between {min} and {max} for paygrade \"{paygrade}\"", "placeholders": ["min", "max", "paygrade"] },
   { "key": "salary.paygrade_notches_assigned", "category": "Salary", "kind": "template", "default": "Cannot delete: {count} notch(es) are assigned to this paygrade", "placeholders": ["count"] },
+  { "key": "salary.paygrade_band_inverted", "category": "Salary", "kind": "template", "default": "Minimum salary ({min}) cannot be greater than maximum salary ({max})", "placeholders": ["min", "max"] },
   { "key": "system.codelist_not_found", "category": "System", "kind": "template", "default": "No active code list found for code \"{code}\"", "placeholders": ["code"] },
   { "key": "system.values_retrieved", "category": "System", "kind": "template", "default": "Values for {code} retrieved successfully", "placeholders": ["code"] },
   { "key": "system.codelist_inactive", "category": "System", "kind": "template", "default": "Cannot add values to an inactive code list (\"{name}\")", "placeholders": ["name"] },

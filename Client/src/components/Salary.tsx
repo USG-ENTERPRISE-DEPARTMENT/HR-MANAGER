@@ -509,6 +509,15 @@ export function Salary() {
   const handleSavePg = async () => {
     if (!pgForm.name?.trim()) return toast.error('Paygrade name is required');
     if (!pgForm.currency?.trim()) return toast.error('Currency is required');
+    // An inverted band (min > max) makes every notch amount invalid, since the notch check requires
+    // amount >= min AND amount <= max. Caught here as well as server-side so the user is told before
+    // saving rather than when a later notch entry mysteriously fails.
+    const pgMin = Number(pgForm.min_salary);
+    const pgMax = Number(pgForm.max_salary);
+    if (pgForm.min_salary !== '' && pgForm.max_salary !== '' &&
+        Number.isFinite(pgMin) && Number.isFinite(pgMax) && pgMin > pgMax) {
+      return toast.error(`Minimum salary (${pgMin.toLocaleString()}) cannot be greater than maximum salary (${pgMax.toLocaleString()})`);
+    }
     setPgSaving(true);
     try {
       editingPg ? await api.put(`/salary/paygrades/${editingPg.id}`, pgForm) : await api.post('/salary/paygrades', pgForm);

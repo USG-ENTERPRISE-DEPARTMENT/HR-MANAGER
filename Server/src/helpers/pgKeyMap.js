@@ -12,13 +12,145 @@ const { Prisma } = require('@prisma/client');
 // camelCase SQL aliases used in raw queries (e.g. `SELECT COALESCE(MAX(id),0)+1 AS nextId`). Postgres
 // lower-cases these in the result set; the code reads the camelCase form. They are not Prisma fields so
 // the DMMF map below can't cover them — list them explicitly. Keyed by the lower-cased form.
-const ALIAS_SUPPLEMENT = {
+const COMPUTED_ALIASES = {
   nextid: 'nextId',
   nextitemid: 'nextItemId',
   nextorder: 'nextOrder',
   totalenabled: 'totalEnabled',
   componenttypename: 'componentTypeName',
 };
+
+// ── camelCase COLUMNS ────────────────────────────────────────────────────────
+// The DMMF map below only produces an entry where the LOADED schema carries an @map. That works when
+// running schema.postgres.prisma, but under schema.prisma (MySQL) these fields have no @map — the
+// MySQL columns really are camelCase (`SHOW COLUMNS` confirms `bankAccount`), so nothing to map.
+//
+// The result: with the MySQL client loaded, the DMMF map is empty for every camelCase column, and a
+// raw query written as `SELECT e.bankAccount` returns the key `bankAccount` on MySQL but `bankaccount`
+// on Postgres (which folds unquoted identifiers). Code reading `row.bankAccount` then silently gets
+// `undefined` on Postgres — no error, just a null. That has real consequences: payroll GL posting
+// would credit every employee's net pay to the fallback account instead of their bank account, and
+// medical GL postings would skip entirely for want of a creditAccount.
+//
+// So the case-only mappings are listed here explicitly rather than left to the DMMF, making raw-query
+// results identical on both providers regardless of which schema generated the client.
+//
+// Generated from the @map directives in schema.postgres.prisma, keeping only maps that differ purely
+// by case, and excluding:
+//   • keys that are a literal field name somewhere (`name`, `branch`, `tax`, `id`, …) — renaming
+//     those would hijack legitimately lower-case columns;
+//   • keys two models map to different camelCase names (`employee_id`, `staff_id`, `amount`);
+//   • legacy import-table fields whose Prisma name is ALL-CAPS (`CAR`, `SSN`, …) — their columns are
+//     already lower-case and no code reads them from raw SQL.
+// Regenerate the same way if the Postgres schema gains new case-only @maps.
+const COLUMN_ALIASES = {
+  actionreason:            'actionReason',
+  approvalstatus:          'approvalStatus',
+  bankaccount:             'bankAccount',
+  branchid:                'branchId',
+  closingdate:             'closingDate',
+  codelistid:              'codeListId',
+  companyname:             'companyName',
+  componenttype:           'componentType',
+  confirmationdate:        'confirmationDate',
+  createdat:               'createdAt',
+  customernumber:          'customerNumber',
+  datatype:                'dataType',
+  dateofbirth:             'dateOfBirth',
+  deliverylocation:        'deliveryLocation',
+  departmentid:            'departmentId',
+  driverlicenseexp:        'driverLicenseExp',
+  driverlicensenum:        'driverLicenseNum',
+  duedate:                 'dueDate',
+  educationlevel:          'educationLevel',
+  emailsent:               'emailSent',
+  employeeid:              'employeeId',
+  employementtype:         'employementType',
+  employmentstatusid:      'employmentStatusId',
+  enddate:                 'endDate',
+  expectedsalary:          'expectedSalary',
+  experiencelevel:         'experienceLevel',
+  facebookprofileid:       'facebookProfileId',
+  facebookprofilelink:     'facebookProfileLink',
+  firstname:               'firstName',
+  fromemployee:            'fromEmployee',
+  fromuser:                'fromUser',
+  genderid:                'genderId',
+  generatedcvfile:         'generatedCVFile',
+  googleprofileid:         'googleProfileId',
+  googleprofilelink:       'googleProfileLink',
+  hiredate:                'hireDate',
+  hiringmanager:           'hiringManager',
+  hiringstage:             'hiringStage',
+  htmlcvdata:              'htmlCVData',
+  iattstate:               'iAttState',
+  isactive:                'isActive',
+  isinvalid:               'isInvalid',
+  iverifymethod:           'iVerifyMethod',
+  jobfunction:             'jobFunction',
+  jobid:                   'jobId',
+  jobtitleid:              'jobTitleId',
+  lastname:                'lastName',
+  lifecyclestatus:         'lifecycleStatus',
+  linkedindata:            'linkedInData',
+  linkedinprofileid:       'linkedInProfileId',
+  linkedinprofilelink:     'linkedInProfileLink',
+  linkedinurl:             'linkedInUrl',
+  mapid:                   'mapId',
+  medicalclearance:        'medicalClearance',
+  middlename:              'middleName',
+  mobilephone:             'mobilePhone',
+  nationalidexpiry:        'nationalIdExpiry',
+  nationalidnumber:        'nationalIdNumber',
+  nationalityid:           'nationalityId',
+  notcheid:                'notcheId',
+  objecttype:              'objectType',
+  outletid:                'outletId',
+  paramorder:              'paramOrder',
+  passportexpiry:          'passportExpiry',
+  passportnumber:          'passportNumber',
+  paygradeid:              'paygradeId',
+  payrollcolumn:           'payrollColumn',
+  paysliptemplate:         'payslipTemplate',
+  pccodeid:                'pcCodeId',
+  policeclearance:         'policeClearance',
+  positionreason:          'positionReason',
+  postalcode:              'postalCode',
+  postedby:                'postedBy',
+  preferedcountries:       'preferedCountries',
+  preferedjobtype:         'preferedJobtype',
+  preferedpositions:       'preferedPositions',
+  profileimage:            'profileImage',
+  rangeamounts:            'rangeAmounts',
+  referredbyemail:         'referredByEmail',
+  religionid:              'religionId',
+  reportstoid:             'reportsToId',
+  rmrotype:                'rmRoType',
+  salarymax:               'salaryMax',
+  salarymin:               'salaryMin',
+  scheduleupdated:         'scheduleUpdated',
+  shortdescription:        'shortDescription',
+  showhiringmanager:       'showHiringManager',
+  sortorder:               'sortOrder',
+  startdate:               'startDate',
+  supervisorid:            'supervisorId',
+  tabletype:               'tableType',
+  textmapped:              'textMapped',
+  textorig:                'textOrig',
+  titleid:                 'titleId',
+  toemail:                 'toEmail',
+  totalmonthsofexperience: 'totalMonthsOfExperience',
+  totalyearsofexperience:  'totalYearsOfExperience',
+  touser:                  'toUser',
+  trainingsession:         'trainingSession',
+  twitterprofileid:        'twitterProfileId',
+  twitterprofilelink:      'twitterProfileLink',
+  unitid:                  'unitId',
+  updatedat:               'updatedAt',
+  userid:                  'userId',
+};
+
+const ALIAS_SUPPLEMENT = { ...COMPUTED_ALIASES, ...COLUMN_ALIASES };
 
 let _map = null;
 function dbToField() {

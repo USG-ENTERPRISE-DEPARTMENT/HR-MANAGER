@@ -3853,6 +3853,9 @@ enum payrollruns_status {
   Rejected
   Approved
   Completed
+  // Set by finalizePayroll when the GL journal could not be posted. The run keeps its generated
+  // data so retryGLPosting can re-attempt the posting without regenerating it.
+  GL_Failed        @map("GL Failed")
 }
 
 model performance_cycle {
