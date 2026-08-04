@@ -12,7 +12,7 @@ const express = require('express');
 const router  = express.Router();
 const swaggerUi = require('swagger-ui-express');
 
-const { mobileAuth, rateLimit } = require('../middleware/mobileAuth');
+const { mobileAuth, apiKeyOnly, rateLimit } = require('../middleware/mobileAuth');
 const { upload } = require('../middleware/upload');
 const me = require('../controllers/meController');
 // Payroll lookup shares this router's auth model; the handler itself lives with the other payroll code.
@@ -51,6 +51,13 @@ router.use('/docs', swaggerUi.serveFiles(mobileApiSpec, docsOptions), swaggerUi.
 
 // Order matters: rate limit before the key check so a flood of bad keys is also throttled.
 router.use(rateLimit);
+
+// ── Core banking callbacks (API key only, no employee identity) ──────────────
+// Mounted BEFORE `mobileAuth` because the caller is the bank's server, which has an API key but no
+// x-employee-id. These routes act on a payroll run identified by its GL reference and never read or
+// return an individual's data, so no employee context is needed or wanted.
+router.post('/payroll/runs/rejection', apiKeyOnly, payrollRun.rejectPayrollFromBank);
+
 router.use(mobileAuth);
 
 // ── Session / identity ───────────────────────────────────────────────────────

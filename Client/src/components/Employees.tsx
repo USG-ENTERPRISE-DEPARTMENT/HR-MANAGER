@@ -162,6 +162,15 @@ export function Employees() {
 
 
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  // Set when a save is refused because the chosen supervisor is tagged RO. Holds the server's
+  // explanation plus the details needed to offer a one-click retag to RM, and the original save
+  // args so the save can be retried automatically once the tag is changed.
+  const [roBlock, setRoBlock] = useState<{
+    message: string;
+    supervisor: { id: string; name: string };
+    pending: { data: any; id?: string };
+  } | null>(null);
+  const [retagging, setRetagging] = useState(false);
 
   const handleSync = async (emp: any) => {
     setSyncingId(emp.id);
@@ -189,7 +198,31 @@ export function Employees() {
       await fetchEmployees();
       setIsFormOpen(false);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Failed to save employee');
+      const body = err?.response?.data;
+      // The server refused because the selected supervisor is an RO. Rather than a dead-end toast,
+      // prompt to retag them RM and retry the save — the form stays open either way.
+      if (body?.remedy?.action === 'set_rm_ro_type' && body?.supervisor) {
+        setRoBlock({ message: body.message, supervisor: body.supervisor, pending: { data, id } });
+        return;
+      }
+      toast.error(body?.message ?? 'Failed to save employee');
+    }
+  };
+
+  /** Retag the blocking supervisor as RM, then retry the save that was refused. */
+  const confirmRetagSupervisor = async () => {
+    if (!roBlock) return;
+    const { supervisor, pending } = roBlock;
+    setRetagging(true);
+    try {
+      await api.put(`/employees/${supervisor.id}`, { rmRoType: 'RM' });
+      toast.success(`${supervisor.name} is now tagged RM`);
+      setRoBlock(null);
+      await handleSave(pending.data, pending.id);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Could not change the RM/RO tag');
+    } finally {
+      setRetagging(false);
     }
   };
 
@@ -450,6 +483,18 @@ export function Employees() {
           onSave={handleSave}
         />
       )}
+
+      {/* Supervisor is tagged RO — offer to retag them RM and retry, rather than dead-ending. */}
+      <ConfirmAlert
+        isOpen={!!roBlock}
+        variant="warning"
+        title="Supervisor is tagged RO"
+        message={roBlock ? `${roBlock.message}\n\nChange ${roBlock.supervisor.name} to RM and continue?` : ''}
+        confirmText={retagging ? 'Changing...' : 'Change to RM and save'}
+        cancelText="Cancel"
+        onConfirm={confirmRetagSupervisor}
+        onCancel={() => setRoBlock(null)}
+      />
 
       {importOpen && (
         <EmployeeImport

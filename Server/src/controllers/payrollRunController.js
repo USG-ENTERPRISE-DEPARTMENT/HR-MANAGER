@@ -908,6 +908,8 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   let paymentLog  = null;
   let finalStatus = 'Completed';
   let glError     = null;   // surfaced to the caller so an imbalance is visible, not just logged
+  let glInvalid   = null;   // unrecognised accounts, rendered as a table by the UI
+  let glImbalance = null;   // debit/credit totals + cause, rendered as a breakdown by the UI
 
   // ── GL posting ───────────────────────────────────────────────────────────────
   // Skip entirely when payroll postings are switched off (record-only mode) — the run still
@@ -923,7 +925,11 @@ const finalizePayroll = asyncHandler(async (req, res) => {
     } catch (e) {
       const errData = e.glResponse || e.response?.data || e.message;
       console.error('[finalize] GL posting error:', errData);
-      paymentLog  = JSON.stringify(e.glImbalance ? { error: e.message, imbalance: e.glImbalance } : { error: errData });
+      glInvalid   = e.glInvalidAccounts ?? null;
+      glImbalance = e.glImbalance ?? null;
+      paymentLog  = JSON.stringify(e.glImbalance      ? { error: e.message, imbalance: e.glImbalance }
+      : e.glInvalidAccounts ? { error: e.message, invalidAccounts: e.glInvalidAccounts }
+      : { error: errData });
       finalStatus = 'GL Failed';
       glError     = e.message;
     }
@@ -941,7 +947,7 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   respond.ok(
     res,
     glError ? `Payroll finalized, but GL posting failed. ${glError}` : 'Payroll finalized',
-    rows[0] ? { ...rows[0], glError } : null,
+    rows[0] ? { ...rows[0], glError, glInvalidAccounts: glInvalid, glImbalance } : null,
   );
 });
 
@@ -967,10 +973,17 @@ const retryGLPosting = asyncHandler(async (req, res) => {
   } catch (e) {
     const errData = e.glResponse || e.response?.data || e.message;
     console.error('[gl retry] error:', errData);
-    const logJson = JSON.stringify(e.glImbalance ? { error: e.message, imbalance: e.glImbalance } : { error: errData });
+    const logJson = JSON.stringify(e.glImbalance      ? { error: e.message, imbalance: e.glImbalance }
+      : e.glInvalidAccounts ? { error: e.message, invalidAccounts: e.glInvalidAccounts }
+      : { error: errData });
     await exec`UPDATE payrollruns SET payment_log=${logJson}, updated_at=NOW() WHERE id=${BigInt(id)}`;
     const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
-    respond.ok(res, `GL posting failed. ${e.message}`, rows[0] ? { ...rows[0], glError: e.message } : null);
+    respond.ok(res, `GL posting failed. ${e.message}`,
+      rows[0] ? {
+        ...rows[0], glError: e.message,
+        glInvalidAccounts: e.glInvalidAccounts ?? null,
+        glImbalance:       e.glImbalance ?? null,
+      } : null);
   }
 });
 
@@ -1211,10 +1224,90 @@ const duplicatePayrollRun = asyncHandler(async (req, res) => {
   respond.created(res, 'Run duplicated', rows[0] || null);
 });
 
+// ── Core banking rejection callback ──────────────────────────────────────────
+// POST /payroll/runs/rejection
+//
+// Once a run is finalized its journal is posted to the core banking system, where it goes through a
+// SECOND approval flow outside this application. When the bank rejects it, their system calls this
+// endpoint so the run stops showing as Completed here — otherwise HR believes staff were paid.
+//
+// The run is identified by the GL reference the bank was given (payrollruns.document_ref), because
+// that is the only identifier both systems share. `employeeId` is optional and purely informational:
+// a rejection applies to the whole batch, but the bank often knows which line caused it, and
+// recording that saves HR working it out. It is stored in the reason and the audit trail, never used
+// to select the run.
+//
+// Authenticated with the shared API key only (no x-employee-id) — the caller is a server, not a
+// person. See middleware/mobileAuth.js `apiKeyOnly`.
+const rejectPayrollFromBank = asyncHandler(async (req, res) => {
+  const reference  = String(req.body?.reference ?? '').trim();
+  const reason     = String(req.body?.reason ?? '').trim();
+  const employeeId = req.body?.employeeId != null ? String(req.body.employeeId).trim() : '';
+
+  if (!reference) return respond.badReq(res, 'reference is required (the GL document reference for the payroll run)');
+  if (!reason)    return respond.badReq(res, 'reason is required');
+
+  const [run] = await query`${RUNS_SELECT} WHERE pr.document_ref = ${reference} LIMIT 1`;
+  if (!run) return respond.notFound(res, `No payroll run found for reference "${reference}"`);
+
+  // Already rejected → succeed without changing anything. A callback can be retried or delivered
+  // twice, and the second delivery must not look like a failure to the bank.
+  if (run.status === 'Rejected') {
+    return respond.ok(res, 'Payroll run was already rejected', {
+      id: String(run.id), name: run.name, reference, status: run.status,
+      rejection_reason: run.rejection_reason ?? null,
+    });
+  }
+
+  // Only a run that actually reached the bank can be rejected by the bank. Anything else means the
+  // reference is stale or the call is out of order, and silently rewriting a Draft would be worse
+  // than refusing.
+  if (run.status !== 'Completed') {
+    return respond.badReq(res,
+      `Payroll run "${run.name}" is ${run.status}, not Completed — only a run that has been posted to the core banking system can be rejected by it`);
+  }
+
+  // Resolve the employee for the audit note only; an unknown code is not an error.
+  let employeeNote = null;
+  if (employeeId) {
+    const [emp] = await query`
+      SELECT employee_id, TRIM(CONCAT(COALESCE(firstName,''), ' ', COALESCE(lastName,''))) AS name
+      FROM employee WHERE employee_id = ${employeeId} OR CAST(id AS CHAR) = ${employeeId} LIMIT 1`
+      .catch(() => []);
+    employeeNote = emp ? `${emp.name} (${emp.employee_id})` : employeeId;
+  }
+
+  const fullReason = employeeNote
+    ? `Rejected by core banking for ${employeeNote}: ${reason}`
+    : `Rejected by core banking: ${reason}`;
+
+  await exec`
+    UPDATE payrollruns SET status='Rejected', rejection_reason=${fullReason}, updated_at=NOW()
+     WHERE id=${BigInt(run.id)}`;
+
+  await logAudit(run.id, 'bank_rejection', req, { reference, employeeId: employeeId || null, reason });
+  logActivity({
+    module: 'Payroll', action: 'bank_rejection', entityId: String(run.id), entityName: run.name,
+    userName: 'Core Banking', ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? null,
+    details: { reference, employeeId: employeeId || null, reason },
+  });
+
+  // Tell the people who can act on it. Without this the run silently flips to Rejected and nobody
+  // finds out until someone opens the payroll screen.
+  notifyUsersWithPermission('process_payroll', {
+    message: `Core banking rejected "${run.name}": ${reason}`,
+    action: 'Payroll', type: 'payroll',
+  }).catch(() => {});
+
+  respond.ok(res, 'Payroll run rejected', {
+    id: String(run.id), name: run.name, reference, status: 'Rejected', rejection_reason: fullReason,
+  });
+});
+
 module.exports = {
   getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
-  getPayrollByReference,
+  getPayrollByReference, rejectPayrollFromBank,
   submitPayroll, approvePayroll, rejectPayroll, getPayrollAudit, duplicatePayrollRun,
   debugPayrollRun,
   getApprovalFlow, saveApprovalFlow, getRunStages,

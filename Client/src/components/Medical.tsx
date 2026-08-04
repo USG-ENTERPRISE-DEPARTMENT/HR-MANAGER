@@ -17,6 +17,7 @@ import { FormModal } from './ui/FormModal';
 import { ConfirmAlert } from './ConfirmAlert';
 import { inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
+import { GlBlockedModal, type InvalidAccount, type GlImbalance } from './ui/GlBlockedModal';
 import { SearchSelect } from './ui/SearchSelect';
 import { OcrScanButton, type OcrFields } from './ai/OcrScanButton';
 import { toast } from 'sonner';
@@ -372,6 +373,8 @@ function MedicalDetailPanel({ record: initialRecord, type, adminMode, onClose, o
 }) {
   const [record, setRecord]       = useState(initialRecord);
   const [acting, setActing]         = useState(false);
+  // Why a GL posting was refused — shown as a modal so the accounts/totals are readable and actionable.
+  const [glBlocked, setGlBlocked] = useState<{ accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null>(null);
   const [docPreview, setDocPreview] = useState(false);
   const [rejecting, setRejecting]   = useState(false);
   const [reason, setReason]         = useState('');
@@ -420,6 +423,15 @@ function MedicalDetailPanel({ record: initialRecord, type, adminMode, onClose, o
       if (updated) setRecord((current: any) => ({ ...current, ...updated }));
       onRefresh();
       if (updated?.status === 'GL Failed') {
+        // Blocked for a reason the user can act on (unknown accounts / unbalanced journal) → modal,
+        // since the detail is a list. Anything else stays a toast.
+        if (updated?.glInvalidAccounts?.length || updated?.glImbalance) {
+          setGlBlocked({
+            accounts:  updated.glInvalidAccounts ?? null,
+            imbalance: updated.glImbalance ?? null,
+          });
+          return;
+        }
         const glError = medicalGlError(updated);
         toast.error(
           `Medical request approved, but GL posting failed${glError ? ': ' + glError : ''}. Use Retry GL Posting below.`,
@@ -692,6 +704,14 @@ function MedicalDetailPanel({ record: initialRecord, type, adminMode, onClose, o
           {!rejecting && <button onClick={onClose} className="secondary-btn">Close</button>}
         </div>
       </motion.div>
+
+      <GlBlockedModal
+        isOpen={!!glBlocked}
+        accounts={glBlocked?.accounts}
+        imbalance={glBlocked?.imbalance}
+        context={record?.employee_name ?? undefined}
+        onClose={() => setGlBlocked(null)}
+      />
     </div>
   );
 }
@@ -1839,6 +1859,7 @@ function HospitalClaimDetailPanel({ row: initialRow, onClose, onRefresh }: { row
   const canApprove = can('approve_medical');
   const [row, setRow]             = useState(initialRow);
   const [acting, setActing]     = useState(false);
+  const [glBlocked, setGlBlocked] = useState<{ accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason]     = useState('');
   const appCurrency = getSettings().general.currency;
@@ -1861,6 +1882,13 @@ function HospitalClaimDetailPanel({ row: initialRow, onClose, onRefresh }: { row
       if (updated) setRow((current: any) => ({ ...current, ...updated }));
       onRefresh();
       if (updated?.status === 'GL Failed') {
+        if (updated?.glInvalidAccounts?.length || updated?.glImbalance) {
+          setGlBlocked({
+            accounts:  updated.glInvalidAccounts ?? null,
+            imbalance: updated.glImbalance ?? null,
+          });
+          return;
+        }
         const glError = medicalGlError(updated);
         toast.error(
           `Medical claim approved, but GL posting failed${glError ? ': ' + glError : ''}. Use Retry GL Posting below.`,
@@ -2035,6 +2063,14 @@ function HospitalClaimDetailPanel({ row: initialRow, onClose, onRefresh }: { row
           {!rejecting && <button onClick={onClose} className="secondary-btn">Close</button>}
         </div>
       </motion.div>
+
+      <GlBlockedModal
+        isOpen={!!glBlocked}
+        accounts={glBlocked?.accounts}
+        imbalance={glBlocked?.imbalance}
+        context={row?.hospital_name ?? undefined}
+        onClose={() => setGlBlocked(null)}
+      />
     </div>
   );
 }

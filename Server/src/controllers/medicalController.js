@@ -227,6 +227,40 @@ exports.updateMedicalGLSettings = asyncHandler(async (req, res) => {
   respond.ok(res, 'GL settings saved');
 });
 
+/**
+ * Normalise a failed GL posting into the shape the UI renders.
+ *
+ * postToGL refuses a batch for two reasons that the user can actually act on — accounts the core
+ * system does not recognise, and a journal whose debits and credits disagree — and attaches the
+ * detail to the thrown error. Every medical GL call site catches that error, so this keeps the
+ * unpacking in one place: the message for `payment_log`, plus the structured fields the client turns
+ * into a table instead of a wall of text.
+ */
+function glFailure(e) {
+  const errData = e.glResponse || e.response?.data || e.message;
+  return {
+    // What goes into payment_log — keeps the structured detail on the record, not just the string.
+    log: e.glInvalidAccounts ? { error: e.message, invalidAccounts: e.glInvalidAccounts }
+       : e.glImbalance       ? { error: e.message, imbalance: e.glImbalance }
+       : { error: errData },
+    // What goes into the HTTP response for the modal.
+    glError:           e.message,
+    glInvalidAccounts: e.glInvalidAccounts ?? null,
+    glImbalance:       e.glImbalance ?? null,
+    errData,
+  };
+}
+
+/** Spread into a response body: the blocking detail when GL failed, nothing when it did not. */
+function glDetail(glFail) {
+  if (!glFail) return {};
+  return {
+    glError:           glFail.glError,
+    glInvalidAccounts: glFail.glInvalidAccounts,
+    glImbalance:       glFail.glImbalance,
+  };
+}
+
 // Shared GL posting for direct staff/dependent medical approvals.
 // creditAccount = employee's bankAccount from the employee record.
 // `employeeCode` is the staff-facing code from employee.employee_id (e.g. EMP001) — not the numeric
@@ -1355,6 +1389,7 @@ exports.submitHospitalClaim = asyncHandler(async (req, res) => {
 exports.approveHospitalClaim = asyncHandler(async (req, res) => {
   const id = toInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
+  let glFail = null;   // set when GL posting is refused, so the response can carry the reason
 
   // Fetch claim + hospital account
   const [claim] = await prisma.$queryRaw`
@@ -1464,15 +1499,16 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
         await prisma.hospitalclaims.updateMany({ where: { id }, data: { document_ref: documentRef, payment_log: paymentLog } });
       }
     } catch (e) {
-      const errData = e.glResponse || e.response?.data || e.message;
-      console.error('[medical approve] GL posting error:', errData);
-      await prisma.hospitalclaims.updateMany({ where: { id }, data: { status: 'GL Failed', payment_log: JSON.stringify({ error: errData }) } });
+      glFail = glFailure(e);
+      console.error('[medical approve] GL posting error:', glFail.errData);
+      await prisma.hospitalclaims.updateMany({ where: { id }, data: { status: 'GL Failed', payment_log: JSON.stringify(glFail.log) } });
     }
   }
 
   const [updated] = await prisma.$queryRaw`SELECT * FROM hospitalclaims WHERE id = ${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'Claim approved, but GL posting failed' : 'Claim approved', response);
+  respond.ok(res, response.status === 'GL Failed' ? 'Claim approved, but GL posting failed' : 'Claim approved',
+    { ...response, ...glDetail(glFail) });
 });
 
 // POST /medical/hospital-claims/:id/reject — reject a hospital claim with an optional reason.
@@ -1531,6 +1567,7 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE staffmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null}, updatedAt=NOW() WHERE id=${id}`;
   let glPayload = null;
+  let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
     try {
       const gl  = await loadGLSettings();
@@ -1551,14 +1588,15 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
         await prisma.$executeRaw`UPDATE staffmedical SET document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)} WHERE id=${id}`;
       }
     } catch (e) {
-      const errData = e.glResponse || e.response?.data || e.message;
-      console.error('[staff medical approve] GL error:', errData);
-      await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify({ error: errData })} WHERE id=${id}`;
+      glFail = glFailure(e);
+      console.error('[staff medical approve] GL error:', glFail.errData);
+      await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'Approved, but GL posting failed' : 'Approved', { ...response, gl_payload: glPayload });
+  respond.ok(res, response.status === 'GL Failed' ? 'Approved, but GL posting failed' : 'Approved',
+    { ...response, gl_payload: glPayload, ...glDetail(glFail) });
 });
 
 // POST /medical/staff/:id/reject — reject a Pending Approval staff medical record with an optional reason.
@@ -1591,6 +1629,7 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE staffmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null}, updatedAt=NOW() WHERE id=${id}`;
   let glPayload = null;
+  let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
     try {
       const gl  = await loadGLSettings();
@@ -1611,14 +1650,14 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
         await prisma.$executeRaw`UPDATE staffmedical SET document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)} WHERE id=${id}`;
       }
     } catch (e) {
-      const errData = e.glResponse || e.response?.data || e.message;
-      console.error('[staff medical finalize] GL error:', errData);
-      await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify({ error: errData })} WHERE id=${id}`;
+      glFail = glFailure(e);
+      console.error('[staff medical finalize] GL error:', glFail.errData);
+      await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'Finalized, but GL posting failed' : 'Finalized', { ...response, gl_payload: glPayload });
+  respond.ok(res, response.status === 'GL Failed' ? 'Finalized, but GL posting failed' : 'Finalized', { ...response, gl_payload: glPayload, ...glDetail(glFail) });
 });
 
 // ── DEPENDENT MEDICAL — Action endpoints ──────────────────────────────────────
@@ -1657,6 +1696,7 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE dependentmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null} WHERE id=${id}`;
   let glPayload = null;
+  let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
     try {
       const gl  = await loadGLSettings();
@@ -1678,14 +1718,14 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
         await prisma.$executeRaw`UPDATE dependentmedical SET document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)} WHERE id=${id}`;
       }
     } catch (e) {
-      const errData = e.glResponse || e.response?.data || e.message;
-      console.error('[dep medical approve] GL error:', errData);
-      await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify({ error: errData })} WHERE id=${id}`;
+      glFail = glFailure(e);
+      console.error('[dep medical approve] GL error:', glFail.errData);
+      await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'Approved, but GL posting failed' : 'Approved', { ...response, gl_payload: glPayload });
+  respond.ok(res, response.status === 'GL Failed' ? 'Approved, but GL posting failed' : 'Approved', { ...response, gl_payload: glPayload, ...glDetail(glFail) });
 });
 
 // POST /medical/dependent/:id/reject — reject a Pending Approval dependent medical record with an optional reason.
@@ -1716,6 +1756,7 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE dependentmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null} WHERE id=${id}`;
   let glPayload = null;
+  let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
     try {
       const gl  = await loadGLSettings();
@@ -1737,14 +1778,14 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
         await prisma.$executeRaw`UPDATE dependentmedical SET document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)} WHERE id=${id}`;
       }
     } catch (e) {
-      const errData = e.glResponse || e.response?.data || e.message;
-      console.error('[dep medical finalize] GL error:', errData);
-      await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify({ error: errData })} WHERE id=${id}`;
+      glFail = glFailure(e);
+      console.error('[dep medical finalize] GL error:', glFail.errData);
+      await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'Finalized, but GL posting failed' : 'Finalized', { ...response, gl_payload: glPayload });
+  respond.ok(res, response.status === 'GL Failed' ? 'Finalized, but GL posting failed' : 'Finalized', { ...response, gl_payload: glPayload, ...glDetail(glFail) });
 });
 
 // ── GL Retry endpoints ────────────────────────────────────────────────────────
@@ -1788,18 +1829,20 @@ exports.retryStaffMedicalGL = asyncHandler(async (req, res) => {
   if (rec.document_ref) return respond.badReq(res, 'GL already posted for this record');
   if (!(await medicalPaymentsEnabled())) return respond.badReq(res, 'Medical GL posting is disabled in settings');
   if (!(await glConfig()).url) return respond.badReq(res, "POSTING_API_URL not configured");
+  let glFail = null;
   try {
     const result = await retryMedicalGL('staffmedical', id, req);
     if (result) {
       await prisma.$executeRaw`UPDATE staffmedical SET status='Approved', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)} WHERE id=${id}`;
     }
   } catch (e) {
-    const errData = e.glResponse || e.response?.data || e.message;
-    await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify({ error: errData })} WHERE id=${id}`;
+    glFail = glFailure(e);
+    await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'GL posting failed' : 'GL posted successfully', response);
+  respond.ok(res, response.status === 'GL Failed' ? 'GL posting failed' : 'GL posted successfully',
+    { ...response, ...glDetail(glFail) });
 });
 
 // POST /medical/dependent/:id/retry-gl — re-attempt GL posting for a dependent medical record stuck in 'GL Failed'.
@@ -1812,18 +1855,20 @@ exports.retryDependentMedicalGL = asyncHandler(async (req, res) => {
   if (rec.document_ref) return respond.badReq(res, 'GL already posted for this record');
   if (!(await medicalPaymentsEnabled())) return respond.badReq(res, 'Medical GL posting is disabled in settings');
   if (!(await glConfig()).url) return respond.badReq(res, "POSTING_API_URL not configured");
+  let glFail = null;
   try {
     const result = await retryMedicalGL('dependentmedical', id, req);
     if (result) {
       await prisma.$executeRaw`UPDATE dependentmedical SET status='Approved', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)} WHERE id=${id}`;
     }
   } catch (e) {
-    const errData = e.glResponse || e.response?.data || e.message;
-    await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify({ error: errData })} WHERE id=${id}`;
+    glFail = glFailure(e);
+    await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'GL posting failed' : 'GL posted successfully', response);
+  respond.ok(res, response.status === 'GL Failed' ? 'GL posting failed' : 'GL posted successfully',
+    { ...response, ...glDetail(glFail) });
 });
 
 // POST /medical/hospital-claims/:id/retry-gl — re-attempt full GL posting for a hospital claim stuck in 'GL Failed';
@@ -1831,6 +1876,7 @@ exports.retryDependentMedicalGL = asyncHandler(async (req, res) => {
 exports.retryHospitalClaimGL = asyncHandler(async (req, res) => {
   const id = toInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
+  let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   const [claim] = await prisma.$queryRaw`
     SELECT hc.*, rh.name AS hospital_name, rh.account AS hospital_account
     FROM hospitalclaims hc
@@ -1881,12 +1927,13 @@ exports.retryHospitalClaimGL = asyncHandler(async (req, res) => {
       await prisma.hospitalclaims.updateMany({ where: { id }, data: { status: 'Approved', document_ref: result.documentRef, payment_log: JSON.stringify(result.raw) } });
     }
   } catch (e) {
-    const errData = e.glResponse || e.response?.data || e.message;
-    await prisma.hospitalclaims.updateMany({ where: { id }, data: { payment_log: JSON.stringify({ error: errData }) } });
+    glFail = glFailure(e);
+    await prisma.hospitalclaims.updateMany({ where: { id }, data: { payment_log: JSON.stringify(glFail.log) } });
   }
   const [updated] = await prisma.$queryRaw`SELECT * FROM hospitalclaims WHERE id = ${id}`;
   const response = serializeMedical(updated);
-  respond.ok(res, response.status === 'GL Failed' ? 'GL posting failed' : 'GL posted successfully', response);
+  respond.ok(res, response.status === 'GL Failed' ? 'GL posting failed' : 'GL posted successfully',
+    { ...response, ...glDetail(glFail) });
 });
 
 // ── YEAR-END UTILIZATION RESET ──────────────────────────────────────────────────

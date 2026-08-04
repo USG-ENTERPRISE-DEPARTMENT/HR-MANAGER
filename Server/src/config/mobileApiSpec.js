@@ -284,6 +284,7 @@ const spec = {
     { name: 'Notifications', description: 'In-app notification feed' },
     { name: 'Approvals',     description: 'Supervisor actions for direct reports' },
     { name: 'Payroll',       description: 'Payroll run lookup by GL reference. Unlike every other tag here, this is NOT self-scoped — it returns a whole payroll run. All calls are logged.' },
+    { name: 'Core Banking',  description: 'Server-to-server callbacks from the core banking system. Authenticated with the API key ALONE — no x-employee-id, because the caller is a system rather than a person.' },
   ],
   paths: {
     '/whoami': {
@@ -556,6 +557,81 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
       401: errorEnvelope('401', 'Missing or invalid API key'),
       403: errorEnvelope('403', 'The employee record identified by x-employee-id is not active'),
       404: errorEnvelope('404', 'No payroll run found for that reference number'),
+      429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
+    },
+  },
+};
+
+// ── Core banking: payroll rejection callback ─────────────────────────────────
+// Written longhand rather than via op(): `security` is overridden to the API key alone (this caller
+// has no employee identity), and the error set differs from the self-scoped /me/* defaults.
+spec.paths['/payroll/runs/rejection'] = {
+  post: {
+    tags: ['Core Banking'],
+    summary: 'Reject a finalized payroll run',
+    description: [
+      'Called by the **core banking system** when a payroll batch it received is rejected during',
+      'its own approval flow. The run is set to `Rejected` in HR-MANAGER with the supplied reason,',
+      'so payroll staff can see the payment did not go through and act on it.',
+      '',
+      '### Authentication',
+      '',
+      'The `x-api-key` header **only** — do not send `x-employee-id`. The caller is a system, not an',
+      'employee. The same 120 requests/minute per IP rate limit applies.',
+      '',
+      '### Identifying the run',
+      '',
+      '`reference` is the GL document reference returned when the batch was posted (the value in',
+      '`documentRef` / `referenceNo`). It is the identifier both systems share.',
+      '',
+      '`employeeId` is **optional and informational**. A rejection applies to the whole batch, but',
+      'the bank often knows which line caused it; when supplied it is recorded in the rejection',
+      'reason and the audit trail. It is never used to decide which run to reject. Accepts either',
+      'the staff code (`P1991001`) or the numeric employee id.',
+      '',
+      '### Repeat delivery',
+      '',
+      'Safe to retry. A run that is already `Rejected` returns `200` and is left unchanged, so a',
+      'duplicate callback does not read as a failure.',
+    ].join('\n'),
+    security: [{ ApiKeyAuth: [] }],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['reference', 'reason'],
+            properties: {
+              reference:  { type: 'string', example: 'PR1263886414', description: 'GL document reference of the posted payroll batch.' },
+              reason:     { type: 'string', example: 'Insufficient funds in the settlement account', description: 'Why the batch was rejected. Shown to payroll staff.' },
+              employeeId: { type: 'string', nullable: true, example: 'P1991001', description: 'Optional. The employee whose line triggered the rejection — recorded for context only.' },
+            },
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Run rejected (or was already rejected)',
+        content: {
+          'application/json': {
+            schema: okEnvelope({
+              type: 'object',
+              properties: {
+                id:               id('126'),
+                name:             { type: 'string', example: 'PAYROLL FOR AUG 2026 - SNR MGT' },
+                reference:        { type: 'string', example: 'PR1263886414' },
+                status:           { type: 'string', example: 'Rejected' },
+                rejection_reason: { type: 'string', example: 'Rejected by core banking for EMMANUEL BORBOR (P1991001): Insufficient funds' },
+              },
+            }, 'Payroll run rejected'),
+          },
+        },
+      },
+      400: errorEnvelope('400', 'reference or reason missing, or the run is not in a Completed state'),
+      401: errorEnvelope('401', 'Missing or invalid API key'),
+      404: errorEnvelope('404', 'No payroll run found for that reference'),
       429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
     },
   },

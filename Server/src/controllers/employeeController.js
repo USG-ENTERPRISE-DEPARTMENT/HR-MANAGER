@@ -75,6 +75,42 @@ async function readControlSetting(name, defaultOn) {
   return row ? row.value === '1' : defaultOn;
 }
 
+/**
+ * Reject a supervisor who is tagged RO.
+ *
+ * Only an RM may have people reporting to them — the same rule the PC-code hierarchy already
+ * enforces ("A position can only report to an RM-held position"). Applied here as well because a
+ * supervisor can be set directly on the employee record without going through a PC code, which
+ * would otherwise let an RO acquire reports through the back door.
+ *
+ * Returns null when the assignment is allowed. Otherwise returns a payload describing the problem,
+ * including the offending supervisor's id/name so the caller can offer to retag them RM rather than
+ * leaving the user to work out who is blocking the save.
+ */
+async function roSupervisorBlock(supervisorId) {
+  if (!supervisorId) return null;
+  const sup = await prisma.employee.findUnique({
+    where:  { id: supervisorId },
+    select: { id: true, firstName: true, lastName: true, employee_id: true, rmRoType: true },
+  }).catch(() => null);
+  // A missing supervisor is validated elsewhere; an untagged one is not this check's business.
+  if (!sup || sup.rmRoType !== 'RO') return null;
+
+  const name = [sup.firstName, sup.lastName].filter(Boolean).join(' ') || sup.employee_id || 'This employee';
+  return {
+    message: `${name} is tagged RO and cannot supervise other employees. Only an RM can have direct reports. `
+           + `Change their RM/RO tag to RM to allow this.`,
+    supervisor: {
+      id:          String(sup.id),
+      name,
+      employee_id: sup.employee_id ?? null,
+      rmRoType:    sup.rmRoType,
+    },
+    // Lets the client offer a one-click retag instead of making the user navigate away and back.
+    remedy: { action: 'set_rm_ro_type', employeeId: String(sup.id), to: 'RM' },
+  };
+}
+
 /** Load the admin-configured employee-form field config (Settings → Controls → Employee Form).
  *  Returns the parsed `{ key: { visible, required } }` map, or `{}` when never saved. */
 async function loadEmployeeFieldConfig() {
@@ -797,6 +833,11 @@ const createEmployee = asyncHandler(async (req, res) => {
     return respond.badReq(res, 'RM/RO tag is required (must be "RM" or "RO")');
   }
 
+  // An RO cannot take on reports. Rejected with the supervisor's details attached so the client can
+  // offer to retag them RM in place (see roSupervisorBlock).
+  const roBlock = await roSupervisorBlock(toBigInt(d.supervisorId) || null);
+  if (roBlock) return res.status(400).json({ status: '400', ...roBlock });
+
   // Resolve the PC code to assign: an existing vacant code, or an inline new one that reports
   // to the supervisor's currently-held code. Validated here (before the insert) so we don't
   // create an employee we then can't place.
@@ -997,7 +1038,31 @@ const updateEmployee = asyncHandler(async (req, res) => {
   if ('branchId'           in d) updateData.branchId           = toBigInt(d.branchId);
   if ('unitId'             in d) updateData.unitId             = toBigInt(d.unitId);
   if ('outletId'           in d) updateData.outletId           = toBigInt(d.outletId);
-  if ('supervisorId'       in d) updateData.supervisorId       = toBigInt(d.supervisorId);
+  if ('supervisorId'       in d) {
+    // Same RO guard as create — a supervisor can be changed on an existing record too.
+    const roBlock = await roSupervisorBlock(toBigInt(d.supervisorId) || null);
+    if (roBlock) return res.status(400).json({ status: '400', ...roBlock });
+    updateData.supervisorId = toBigInt(d.supervisorId);
+  }
+  // RM/RO tag. The create path validates this; it was previously ignored on update, so a record
+  // could never be retagged after the fact — which is exactly the remedy an RO-supervisor block
+  // offers. Demoting an RM who still has direct reports is refused, since that would leave those
+  // employees reporting to an RO.
+  if ('rmRoType' in d) {
+    const tag = d.rmRoType ? String(d.rmRoType).trim().toUpperCase() : null;
+    if (tag !== 'RM' && tag !== 'RO') {
+      return respond.badReq(res, 'RM/RO tag is required (must be "RM" or "RO")');
+    }
+    if (tag === 'RO' && existing.rmRoType === 'RM') {
+      const reports = await prisma.employee.count({ where: { supervisorId: id } });
+      if (reports > 0) {
+        return respond.badReq(res,
+          `Cannot change this employee to RO — ${reports} employee(s) report to them. `
+          + `Reassign those employees to another supervisor first.`);
+      }
+    }
+    updateData.rmRoType = tag;
+  }
   if ('hireDate'           in d) updateData.hireDate           = d.hireDate         ? new Date(d.hireDate)         : null;
   if ('confirmationDate'   in d) updateData.confirmationDate   = d.confirmationDate ? new Date(d.confirmationDate) : null;
   // Next of Kin
@@ -1594,6 +1659,7 @@ const syncEmployee = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  roSupervisorBlock,
   getAllEmployees,
   getEmployeeApprovals,
   getEmployeeApprovalFlow,

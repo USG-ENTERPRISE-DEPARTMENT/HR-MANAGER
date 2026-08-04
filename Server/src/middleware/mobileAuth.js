@@ -90,6 +90,28 @@ function rateLimit(req, res, next) {
   next();
 }
 
+// ── API key only ─────────────────────────────────────────────────────────────
+// For server-to-server callers that authenticate with the shared key but have no employee identity
+// — the core banking system posting back a payroll decision, for example. `mobileAuth` below builds
+// on this and additionally resolves the employee.
+//
+// Note this is a WEAKER check than mobileAuth: there is no second factor at all, just the key. Only
+// mount it on routes that neither read nor return an individual's data.
+const apiKeyOnly = asyncHandler(async (req, res, next) => {
+  const provided = req.headers['x-api-key'];
+  if (!provided) return res.status(401).json({ status: '401', message: 'Missing API key' });
+
+  const expected = await getMobileApiKey();
+  if (!keyMatches(provided, expected)) {
+    logActivity({
+      module: 'MobileAPI', action: 'auth_failed', ip: clientIp(req),
+      details: { path: req.originalUrl, reason: 'invalid api key' },
+    });
+    return res.status(401).json({ status: '401', message: 'Invalid API key' });
+  }
+  next();
+});
+
 // ── Authenticate + resolve the employee ──────────────────────────────────────
 const mobileAuth = asyncHandler(async (req, res, next) => {
   const provided = req.headers['x-api-key'];
@@ -116,20 +138,28 @@ const mobileAuth = asyncHandler(async (req, res, next) => {
   const value = String(raw).trim();
   const numericId = toBigInt(value);
 
-  const rows = numericId != null
+  // Employee codes are NOT always non-numeric — many are bare digits (e.g. '2016001'). So a value that
+  // parses as a number is ambiguous: it may be the database id OR the code. Try the id first (exact,
+  // indexed), then fall back to the code; a non-numeric value only ever matches a code. Treating the
+  // two as mutually exclusive made every employee with an all-digit code unreachable.
+  let rows = numericId != null
     ? await prisma.$queryRaw`
         SELECT e.id, e.status, e.firstName, e.lastName, e.employee_id, e.supervisorid,
                e.email, e.work_email
           FROM employee e WHERE e.id = ${numericId} LIMIT 1`.catch(() => [])
-    : await prisma.$queryRaw`
-        SELECT e.id, e.status, e.firstName, e.lastName, e.employee_id, e.supervisorid,
-               e.email, e.work_email
-          FROM employee e WHERE e.employee_id = ${value} LIMIT 1`.catch(() => []);
+    : [];
+
+  if (!rows.length) {
+    rows = await prisma.$queryRaw`
+      SELECT e.id, e.status, e.firstName, e.lastName, e.employee_id, e.supervisorid,
+             e.email, e.work_email
+        FROM employee e WHERE e.employee_id = ${value} LIMIT 1`.catch(() => []);
+  }
 
   const emp = rows[0];
   if (!emp) {
     // Name both accepted forms — "not found" is otherwise indistinguishable from "wrong format".
-    return respond.notFound(res, `No employee found for "${value}". Send either the numeric employee id (e.g. 12) or the employee code (e.g. EMP-2026-0012).`);
+    return respond.notFound(res, `No employee found for "${value}". Send either the numeric employee id (e.g. 12) or the employee code (e.g. 2016001).`);
   }
   if (emp.status !== '1') return respond.forbidden(res, 'This employee record is not active');
 
@@ -173,4 +203,4 @@ const mobileAuth = asyncHandler(async (req, res, next) => {
   next();
 });
 
-module.exports = { mobileAuth, rateLimit, getMobileApiKey, SETTING_KEY };
+module.exports = { mobileAuth, apiKeyOnly, rateLimit, getMobileApiKey, SETTING_KEY };

@@ -30,6 +30,107 @@ function glLog(section, body) {
   }
 }
 
+// ── Account validation ───────────────────────────────────────────────────────
+// The GL accepts a payload without checking that the accounts in it exist, so a posting to a bad
+// account number is accepted and then has to be traced and unwound at the bank. The core system
+// exposes a validator; every posting is screened through it first.
+//
+// Endpoint defaults to the GL URL's own host (they are the same service) so a deployment that moves
+// the core API does not need a second setting. Override with GL_VALIDATE_URL or gl_extra.validate_url.
+function validateUrlFrom(cfg, extra) {
+  const explicit = process.env.GL_VALIDATE_URL || extra.validate_url;
+  if (explicit) return explicit;
+  if (!cfg.gl_url) return null;
+  try {
+    const u = new URL(cfg.gl_url);
+    // …/account/performBulkPayment → …/account/validateNormalAccounts
+    return `${u.origin}${u.pathname.replace(/\/[^/]*$/, '/validateNormalAccounts')}`;
+  } catch { return null; }
+}
+
+/**
+ * Ask the core system which of `accounts` do not exist.
+ *
+ * Returns a Set of invalid account numbers, or null when the check could not be performed (not
+ * configured, unreachable, or an unexpected response). Null means "unknown", NOT "all valid" — the
+ * caller decides what to do with that, and must never treat it as a pass.
+ */
+async function invalidAccounts(accounts, cfg, extra, headers) {
+  const list = [...new Set(accounts.filter(Boolean).map(String))];
+  if (!list.length) return new Set();
+
+  const url = validateUrlFrom(cfg, extra);
+  if (!url) return null;
+
+  try {
+    const res = await axios.post(url, { accountList: list }, {
+      headers, timeout: Number(cfg.gl_timeout) || 30000,
+    });
+    const code = String(res.data?.responseCode ?? '');
+    if (code && code !== '00' && code !== '000' && code !== '0') {
+      glLog('VALIDATE REJECTED', { url, responseCode: code, message: res.data?.message ?? null });
+      return null;
+    }
+    const invalid = res.data?.data?.invalidAccounts;
+    if (!Array.isArray(invalid)) {
+      glLog('VALIDATE UNEXPECTED SHAPE', { url, body: res.data });
+      return null;
+    }
+    return new Set(invalid.map(String));
+  } catch (e) {
+    glLog('VALIDATE TRANSPORT FAILURE', {
+      url, message: e.message, status: e.response?.status ?? null, body: e.response?.data ?? null,
+    });
+    return null;
+  }
+}
+
+/**
+ * Describe an account in the terms the user will recognise.
+ *
+ * Journal lines carry a narration built by the caller — "Basic Salary - Jane Doe" for a payroll
+ * component, "Net Pay - Jane Doe" for the cash leg, "Medical - Jane Doe - Malaria" for a claim. That
+ * narration is the only place the GL component name or employee name survives into this helper, so
+ * it is what gets reported back. `employeeCode` is included when the line carries one.
+ */
+function describeAccounts(invalidSet, debitAccounts, creditAccounts) {
+  const byAccount = new Map();
+  const add = (acct, narration, empCode, side) => {
+    if (!acct || !invalidSet.has(String(acct))) return;
+    const key = String(acct);
+    if (!byAccount.has(key)) {
+      byAccount.set(key, { account: key, labels: new Set(), employeeCodes: new Set(), sides: new Set() });
+    }
+    const entry = byAccount.get(key);
+    if (narration) entry.labels.add(String(narration));
+    if (empCode) entry.employeeCodes.add(String(empCode));
+    entry.sides.add(side);
+  };
+  for (const d of debitAccounts  || []) add(d.debitAccount,  d.debitNarration,  d.employeeCode, 'debit');
+  for (const c of creditAccounts || []) add(c.creditAccount, c.creditNarration, c.employeeCode, 'credit');
+
+  return [...byAccount.values()].map(e => {
+    const labels = [...e.labels];
+    // Narrations are built as "<component> - <employee>"; the leading segment is the GL component
+    // (e.g. "Salary Basic"), and "Net Pay" marks the cash leg paid to an employee's own bank
+    // account. That distinction is what tells the user WHERE to go and fix the number: a component's
+    // GL account lives in Payroll Setup, an employee's bank account on their record.
+    const isNetPay = labels.some(l => /^net pay\b/i.test(l));
+    const sources  = [...new Set(labels.map(l => String(l).split(' - ')[0].trim()).filter(Boolean))];
+    const people   = [...new Set(labels.map(l => String(l).split(' - ').slice(1).join(' - ').trim()).filter(Boolean))];
+    return {
+      account:       e.account,
+      // 'employee' → an employee bank account; 'component' → a payroll/medical GL account.
+      kind:          isNetPay ? 'employee' : 'component',
+      sourceNames:   sources,           // GL component names, e.g. ["Salary Basic", "Lunch"]
+      employeeNames: people,            // employee names taken from the narration
+      employeeCodes: [...e.employeeCodes],
+      sides:         [...e.sides],
+      labels,                           // raw narrations, kept for the log and as a fallback
+    };
+  });
+}
+
 /**
  * Post a bulk payment to the GL system.
  *
@@ -91,6 +192,46 @@ async function postToGL({
   } else {
     if (cfg.gl_api_key)    headers['x-api-key']    = cfg.gl_api_key;
     if (cfg.gl_api_secret) headers['x-api-secret'] = cfg.gl_api_secret;
+  }
+
+  // ── Account validation gate ─────────────────────────────────────────────────
+  // Screen every account in the journal against the core system before sending. Runs after the
+  // headers are built so it reuses the same credentials as the posting itself.
+  //
+  // Any unrecognised account stops the posting outright — the bulk-payment API is never called.
+  // Posting to an account the core system does not know produces entries that have to be traced and
+  // unwound by hand at the bank, so a refusal the user can act on is always the better outcome.
+  //
+  // GL_VALIDATE_ACCOUNTS=off disables the check entirely (escape hatch for an environment where the
+  // validator is unavailable); anything else, including unset, enforces it.
+  //
+  // A check that could not be COMPLETED (endpoint down, unexpected response) does not block: an
+  // unreachable validator must not stop payroll, and the posting's own error handling still applies.
+  // That case is logged loudly so it is never mistaken for a clean pass.
+  if (String(process.env.GL_VALIDATE_ACCOUNTS ?? '').toLowerCase() !== 'off') {
+    const accounts = [
+      ...(debitAccounts  || []).map(d => d.debitAccount),
+      ...(creditAccounts || []).map(c => c.creditAccount),
+    ];
+    const invalid = await invalidAccounts(accounts, cfg, extra, headers);
+
+    if (invalid === null) {
+      glLog(`VALIDATE SKIPPED ${referenceNo}`, 'Account validation unavailable — posting proceeded unchecked.');
+      console.warn(`[gl validate] ${referenceNo}: validator unavailable, posting unchecked`);
+    } else if (invalid.size) {
+      const details = describeAccounts(invalid, debitAccounts, creditAccounts);
+      glLog(`BLOCKED ${referenceNo} — invalid accounts`, { invalid: [...invalid], details });
+      console.error(`[gl validate] ${referenceNo}: blocked — ${invalid.size} invalid account(s)`);
+
+      const err = new Error(
+        `GL posting blocked — ${invalid.size} account(s) are not recognised by the core system. `
+        + `Nothing was sent to the GL.`,
+      );
+      // The UI renders these as a table; the message above is the summary line only, so it stays
+      // readable when a run has dozens of bad accounts.
+      err.glInvalidAccounts = details;
+      throw err;
+    }
   }
 
   // Field order mirrors the bank's documented payload. `terminal` reuses the X-FORWARDED-FOR value

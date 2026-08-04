@@ -15,6 +15,7 @@ import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
+import { GlBlockedModal, type InvalidAccount, type GlImbalance } from './ui/GlBlockedModal';
 import { Combobox } from './EmployeeTabs';
 import api from '../../lib/api';
 import { getCurrentUser } from '../../lib/auth';
@@ -1447,6 +1448,11 @@ export function Payroll() {
   const [generating,        setGenerating]        = useState(false);
   const [finalizing,        setFinalizing]        = useState(false);
   const [retryingGL,        setRetryingGL]        = useState(false);
+  // Why a GL posting was refused — unrecognised accounts and/or an unbalanced journal. Shown in a
+  // modal rather than a toast: a run can have dozens of lines, and each needs to be read and acted on.
+  const [glBlocked, setGlBlocked] = useState<
+    { accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null
+  >(null);
 
   // ── Approval ────────────────────────────────────────────────────────────────
   const [approvalSettings]                        = useState(() => getSettings().approvals);
@@ -1810,6 +1816,13 @@ export function Payroll() {
       // Inform user whether GL posting succeeded
       if (updated?.document_ref) {
         toast.success(`GL posted — Ref: ${updated.document_ref}`, { duration: 6000 });
+      } else if ((updated as any)?.glInvalidAccounts?.length || (updated as any)?.glImbalance) {
+        // A blocked posting gets the modal, not a toast: the detail is the actionable part and a
+        // toast would truncate it and disappear.
+        setGlBlocked({
+          accounts:  (updated as any).glInvalidAccounts ?? null,
+          imbalance: (updated as any).glImbalance ?? null,
+        });
       } else {
         let glErr = '';
         try { const log = JSON.parse(updated?.payment_log ?? '{}'); glErr = log?.error?.message || log?.message || JSON.stringify(log); } catch {}
@@ -1829,6 +1842,11 @@ export function Payroll() {
       const updated: PayrollRun | null = res.data?.data ?? null;
       if (updated?.document_ref) {
         toast.success(`GL posted — Ref: ${updated.document_ref}`, { duration: 6000 });
+      } else if ((updated as any)?.glInvalidAccounts?.length || (updated as any)?.glImbalance) {
+        setGlBlocked({
+          accounts:  (updated as any).glInvalidAccounts ?? null,
+          imbalance: (updated as any).glImbalance ?? null,
+        });
       } else {
         let glErr = '';
         try { const log = JSON.parse(updated?.payment_log ?? '{}'); glErr = log?.error?.message || log?.error?.responseCode ? `[${log.error.responseCode}] ${log.error.message || ''}` : JSON.stringify(log.error ?? log); } catch {}
@@ -4083,6 +4101,14 @@ export function Payroll() {
             </FormModal>
           )}
         </AnimatePresence>
+
+        <GlBlockedModal
+          isOpen={!!glBlocked}
+          accounts={glBlocked?.accounts}
+          imbalance={glBlocked?.imbalance}
+          context={activeRun?.name}
+          onClose={() => setGlBlocked(null)}
+        />
 
       </div>
     </div>

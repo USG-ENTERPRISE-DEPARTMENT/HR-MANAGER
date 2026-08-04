@@ -7,7 +7,7 @@ const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRo
 const { logActivity, fromReq } = require('./auditController');
 const { reassignPendingSupervisorWork } = require('../helpers/supervisorHelper');
 const { FIELD_BY_KEY, effectiveTransferFields } = require('../config/employeeFormFields');
-const { syncEmployeeToExternalSystem } = require('./employeeController');
+const { syncEmployeeToExternalSystem, roSupervisorBlock } = require('./employeeController');
 const pcCodes = require('./pcCodeController');
 
 const FLOW_KEY = 'employee_transfer_approval_flow';
@@ -290,6 +290,23 @@ function validateDraft(data, res) {
   return true;
 }
 
+/**
+ * Block a draft that proposes an RO as the new supervisor.
+ *
+ * Checked when the draft is written rather than when the transfer becomes effective: an RO
+ * supervisor is a mistake in the request itself, and discovering it only at activation would mean
+ * the transfer had already cleared its whole approval chain. Returns true when the response has
+ * been sent.
+ */
+async function rejectRoSupervisor(data, res) {
+  const proposed = parseValues(data.proposed_values);
+  if (!Object.prototype.hasOwnProperty.call(proposed, 'supervisorId')) return false;
+  const block = await roSupervisorBlock(toBigInt(proposed.supervisorId) || null);
+  if (!block) return false;
+  res.status(400).json({ status: '400', ...block });
+  return true;
+}
+
 async function applyTransferRecord(transferId, actor = null) {
   let changedSupervisor;
   const updated = await prisma.$transaction(async tx => {
@@ -389,6 +406,7 @@ exports.createTransfer = asyncHandler(async (req, res) => {
   if (!configuredFields.length) return respond.badReq(res, 'No Employee Transfer fields are enabled in Control Setup');
   const data = draftData(req.body, employee, null, configuredFields);
   if (!validateDraft(data, res)) return;
+  if (await rejectRoSupervisor(data, res)) return;
   const created = await prisma.employeetransfers.create({ data: {
     ...data, transfer_number: transferNumber(), status: 'Draft', initiated_by: toBigInt(req.user?.id),
   } });
@@ -407,6 +425,7 @@ exports.updateTransfer = asyncHandler(async (req, res) => {
   const employee = await prisma.employee.findUnique({ where: { id: existing.employee } });
   const data = draftData(req.body, employee, existing);
   if (!validateDraft(data, res)) return;
+  if (await rejectRoSupervisor(data, res)) return;
   const updated = await prisma.employeetransfers.update({ where: { id }, data });
   logActivity({ module: 'Employee Transfers', action: 'Updated', entityId: id, entityName: updated.transfer_number, ...fromReq(req) });
   respond.ok(res, 'Employee transfer updated', (await decorateMany([updated], true))[0]);
