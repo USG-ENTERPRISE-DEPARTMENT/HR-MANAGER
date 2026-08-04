@@ -516,6 +516,7 @@ function GeneralSection({
 // makes payments. When off, the module is record-only — no journal entries / payouts are generated.
 function PostingsSection({
   payLeave, setPayLeave, payMedical, setPayMedical, payPayroll, setPayPayroll,
+  validateAccounts, setValidateAccounts,
 }: any) {
   return (
     <div className="space-y-4">
@@ -551,6 +552,25 @@ function PostingsSection({
             checked={payPayroll}
             onChange={(v) => { setPayPayroll(v); saveSetting('payments', { payroll: v }); }}
           />
+        </SectionCard>
+      </div>
+
+      {/* Applies to every GL posting (payroll + medical), so it sits apart from the per-module
+          switches above rather than inside one of them. */}
+      <div className="grid grid-cols-1 gap-4 auto-rows-min">
+        <SectionCard icon={<ShieldCheck size={13} />} title="GL Account Validation">
+          <ControlRow
+            label="Validate GL Accounts Before Posting"
+            description="When on, every account in a journal is checked against the core banking system first, and a posting containing an unrecognised account is blocked. Turn off while accounts are still being set up — postings will then go through even if the core system does not recognise the accounts. Balance checks still apply either way."
+            checked={validateAccounts}
+            onChange={(v) => { setValidateAccounts(v); saveSetting('payments', { validateAccounts: v }); }}
+          />
+          {!validateAccounts && (
+            <p className="mt-2 text-[12px] text-[var(--warning,#f59e0b)] leading-relaxed">
+              Validation is off — journals are sent without screening accounts. Entries posted to an
+              account the core system does not recognise have to be traced and corrected at the bank.
+            </p>
+          )}
         </SectionCard>
       </div>
     </div>
@@ -1228,6 +1248,7 @@ function ControlsTab() {
   const [payLeave,             setPayLeave]             = useState(() => getSettings().payments.leave);
   const [payMedical,           setPayMedical]           = useState(() => getSettings().payments.medical);
   const [payPayroll,           setPayPayroll]           = useState(() => getSettings().payments.payroll);
+  const [validateAccounts,     setValidateAccounts]     = useState(() => getSettings().payments.validateAccounts);
   const [employeeApproval,     setEmployeeApproval]     = useState(() => getSettings().approvals.employeeApproval);
   const [employeeSelfApproval, setEmployeeSelfApproval] = useState(() => getSettings().approvals.employeeSelfApproval);
   const [employeeUpdateApproval, setEmployeeUpdateApproval] = useState(() => getSettings().approvals.employeeUpdateApproval);
@@ -1472,6 +1493,7 @@ function ControlsTab() {
             payLeave={payLeave}     setPayLeave={setPayLeave}
             payMedical={payMedical} setPayMedical={setPayMedical}
             payPayroll={payPayroll} setPayPayroll={setPayPayroll}
+            validateAccounts={validateAccounts} setValidateAccounts={setValidateAccounts}
           />
         )}
         {subTab === 'Leave' && (

@@ -840,12 +840,12 @@ async function buildAndPostGL(id, req, runName) {
       agg.deductions += amount;
       const acct = row.salarycomponent_gl || fallbackDeductionGL;
       if (!acct) { unmapped.push(`${row.col_name} (${row.emp_name})`); continue; }
-      creditAccounts.push({ creditAmount: amount, creditAccount: acct, creditCurrency: currency, creditNarration: `${row.col_name} - ${row.emp_name}`, creditProdRef: crProdRef, creditBranch: branch, employeeCode: empCode });
+      creditAccounts.push({ creditAmount: amount, creditAccount: acct, creditCurrency: currency, creditNarration: `${row.col_name} - ${row.emp_name}`, creditProdRef: crProdRef, creditBranch: branch, employeeCode: empCode, payrollColumn: row.col_name || '' });
     } else if (row.payment_deduction === 'Payment') {
       agg.earnings += amount;
       const acct = row.salarycomponent_gl || fallbackExpenseGL;
       if (!acct) { unmapped.push(`${row.col_name} (${row.emp_name})`); continue; }
-      debitAccounts.push({ debitAmount: amount, debitAccount: acct, debitCurrency: currency, debitNarration: `${row.col_name} - ${row.emp_name}`, debitProdRef: drProdRef, debitBranch: branch, employeeCode: empCode });
+      debitAccounts.push({ debitAmount: amount, debitAccount: acct, debitCurrency: currency, debitNarration: `${row.col_name} - ${row.emp_name}`, debitProdRef: drProdRef, debitBranch: branch, employeeCode: empCode, payrollColumn: row.col_name || '' });
     }
   }
 
@@ -867,6 +867,9 @@ async function buildAndPostGL(id, req, runName) {
       creditAmount: net, creditAccount: acct, creditCurrency: agg.currency,
       creditNarration: `Net Pay - ${agg.name}`, creditProdRef: agg.crProdRef,
       creditBranch: agg.branch, employeeCode: agg.empCode,
+      // Net pay is derived (earnings - deductions), not a stored payrollcolumns row, so it carries a
+      // fixed label rather than a column name — every line still has the field populated.
+      payrollColumn: 'Net Pay',
     });
   }
 

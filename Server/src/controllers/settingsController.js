@@ -161,6 +161,9 @@ const CONTROL_KEYS = [
   'employee_id_format',   // template for auto-generated employee IDs, e.g. EMP-{YYYY}-{SEQ4}
   // Master payment/GL-posting switches per module. '0' = record-only (skip all GL postings).
   'leave_payments_enabled', 'medical_payments_enabled', 'payroll_payments_enabled',
+  // Screen every GL account against the core system before posting. '0' = post without checking,
+  // for environments whose accounts are not yet registered with the validator.
+  'gl_validate_accounts',
 ];
 
 // GET /settings/controls — flat map of saved keys (client merges over its defaults)

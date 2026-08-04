@@ -2,6 +2,23 @@ const axios          = require('axios');
 const fs             = require('fs');
 const path           = require('path');
 const { getApiConfig } = require('../controllers/apiIntegrationController');
+const { prisma }       = require('./dbQueryHelper');
+
+/**
+ * Is GL account validation switched on?
+ *
+ * Settings → App Controls (`gl_validate_accounts`) is authoritative and defaults to ON, so an
+ * install that never touches the setting keeps screening accounts. GL_VALIDATE_ACCOUNTS=off in the
+ * environment still forces it off, which keeps the pre-existing escape hatch working for deployments
+ * that set it before this switch existed.
+ */
+async function validationEnabled() {
+  if (String(process.env.GL_VALIDATE_ACCOUNTS ?? '').toLowerCase() === 'off') return false;
+  const row = await prisma.settings
+    .findFirst({ where: { name: 'gl_validate_accounts', category: 'app_controls' }, select: { value: true } })
+    .catch(() => null);
+  return row ? row.value === '1' : true;   // never saved → on
+}
 
 // ── GL posting audit log ─────────────────────────────────────────────────────
 // Every GL call (payroll + medical) is appended to Server/logs/gl-postings.log as one pretty-printed
@@ -202,13 +219,14 @@ async function postToGL({
   // Posting to an account the core system does not know produces entries that have to be traced and
   // unwound by hand at the bank, so a refusal the user can act on is always the better outcome.
   //
-  // GL_VALIDATE_ACCOUNTS=off disables the check entirely (escape hatch for an environment where the
-  // validator is unavailable); anything else, including unset, enforces it.
+  // Turn it off in Settings → App Controls ("Validate GL accounts before posting"), or with
+  // GL_VALIDATE_ACCOUNTS=off in the environment. Off means accounts the core system does not
+  // recognise are posted anyway — intended for environments still being set up.
   //
   // A check that could not be COMPLETED (endpoint down, unexpected response) does not block: an
   // unreachable validator must not stop payroll, and the posting's own error handling still applies.
   // That case is logged loudly so it is never mistaken for a clean pass.
-  if (String(process.env.GL_VALIDATE_ACCOUNTS ?? '').toLowerCase() !== 'off') {
+  if (await validationEnabled()) {
     const accounts = [
       ...(debitAccounts  || []).map(d => d.debitAccount),
       ...(creditAccounts || []).map(c => c.creditAccount),
@@ -232,6 +250,11 @@ async function postToGL({
       err.glInvalidAccounts = details;
       throw err;
     }
+  } else {
+    // Recorded on every posting so an unchecked batch is never silent in the audit trail — this is
+    // the log you want when reconciling a posting that turned out to reference a bad account.
+    glLog(`VALIDATE DISABLED ${referenceNo}`, 'Account validation is switched off — posting sent without screening accounts.');
+    console.warn(`[gl validate] ${referenceNo}: validation disabled, posting unchecked`);
   }
 
   // Field order mirrors the bank's documented payload. `terminal` reuses the X-FORWARDED-FOR value

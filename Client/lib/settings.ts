@@ -31,6 +31,8 @@ export interface AppSettings {
     leave: boolean;
     medical: boolean;
     payroll: boolean;
+    /** Screen every GL account against the core system before posting. Off = post unchecked. */
+    validateAccounts: boolean;
   };
   medicalClaims: {
     hospitalWhtRate: number;
@@ -70,6 +72,7 @@ const DEFAULTS: AppSettings = {
     leave: true,
     medical: true,
     payroll: true,
+    validateAccounts: true,
   },
   medicalClaims: {
     hospitalWhtRate: 0,
@@ -142,6 +145,7 @@ const SERVER_KEYS: Record<string, Record<string, string>> = {
     leave:   'leave_payments_enabled',
     medical: 'medical_payments_enabled',
     payroll: 'payroll_payments_enabled',
+    validateAccounts: 'gl_validate_accounts',
   },
 };
 
