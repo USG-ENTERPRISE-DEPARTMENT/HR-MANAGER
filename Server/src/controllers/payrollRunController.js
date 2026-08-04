@@ -372,6 +372,17 @@ const generatePayroll = asyncHandler(async (req, res) => {
   if (run.status === 'Pending Approval') return respond.badReq(res, 'Withdraw the approval request before regenerating');
   if (run.status === 'Approved')         return respond.badReq(res, 'Cannot regenerate an approved payroll run');
 
+  // A run that has already been posted to the GL is closed to further work, even after a rejection.
+  // A rejected posting never reaches the main GL accounts, so there is nothing to reverse — but the
+  // reference was consumed, and re-running this payroll under it would post a second batch against a
+  // spent reference. The correct recovery is a NEW run, which gets its own reference; this one stays
+  // as the historical record of what was sent and why it was refused.
+  if (run.document_ref) {
+    return respond.badReq(res,
+      `This payroll was already posted to the GL (reference ${run.document_ref}) and cannot be regenerated. ` +
+      `Create a new payroll run for this period instead — the rejected posting never reached the main GL accounts, so no reversal is needed.`);
+  }
+
   // Mark as Processing and clear any prior approval state
   await exec`UPDATE payrollruns SET status='Processing', submitted_by=NULL, approved_by=NULL, approved_at=NULL, rejection_reason=NULL, updated_at=NOW() WHERE id=${BigInt(id)}`;
   await exec`DELETE FROM payrollrun_stages WHERE run_id = ${BigInt(id)}`; // clear any prior approval progress
@@ -938,8 +949,11 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   // status is an @map'd enum ('GL Failed' has a space); a bound text param won't cast to the enum on
   // Postgres, so inline it as a SQL literal chosen from the known 2-value set.
   const statusSql = finalStatus === 'GL Failed' ? Prisma.sql`'GL Failed'` : Prisma.sql`'Completed'`;
+  // Never overwrite a real reference with NULL — on a failed posting `documentRef` is null, and a
+  // blind write would erase a reference the bank already holds.
+  const refToStore = documentRef ?? run.document_ref ?? null;
   await exec`
-    UPDATE payrollruns SET status=${statusSql}, document_ref=${documentRef}, payment_log=${paymentLog},
+    UPDATE payrollruns SET status=${statusSql}, document_ref=${refToStore}, payment_log=${paymentLog},
       finalized_at=NOW(), updated_at=NOW() WHERE id=${BigInt(id)}`;
   await logAudit(id, 'finalize', req, { documentRef });
   logActivity({ module: 'Payroll', action: 'finalize', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef } });
@@ -958,7 +972,12 @@ const retryGLPosting = asyncHandler(async (req, res) => {
   const [run] = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
   if (run.status !== 'GL Failed') return respond.badReq(res, 'Only a GL Failed run can retry GL posting');
-  if (run.document_ref) return respond.badReq(res, 'GL already posted for this run');
+  // A reference means a batch already went to the bank under it. Retrying would send a second batch
+  // against a spent reference, so refuse and let the operator raise a new run instead.
+  if (run.document_ref) {
+    return respond.badReq(res,
+      `This payroll was already posted to the GL (reference ${run.document_ref}). Create a new payroll run instead of retrying this one.`);
+  }
   if (!(await readControlSetting('payroll_payments_enabled', true))) return respond.badReq(res, 'Payroll GL posting is disabled in settings');
   if (!(await getApiConfig()).gl_url) return respond.badReq(res, 'GL API URL not configured');
 

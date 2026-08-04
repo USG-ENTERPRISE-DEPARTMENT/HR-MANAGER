@@ -420,10 +420,15 @@ function persistInlineAttachment(value) {
   const raw = value.trim();
   if (!raw) return null;
 
-  // A stored reference is a short hashed filename; anything long enough to be file content is not.
+  // A stored reference is a hashed filename: hex + a known extension, and never contains base64-only
+  // characters. Decide on CONTENT rather than length — the deciding test is whether the value decodes
+  // to something carrying a real file signature (see sniffExt), so a short file is caught just as a
+  // large one is, and a genuine filename is never mistaken for content.
   const dataUri = raw.match(/^data:([\w/+.-]+);base64,(.*)$/s);
-  const b64     = dataUri ? dataUri[2].replace(/\s/g, '') : raw.replace(/\s/g, '');
-  if (!dataUri && (raw.length < 512 || !/^[A-Za-z0-9+/=]+$/.test(b64))) return raw;
+  if (!dataUri && /^[A-Fa-f0-9]{32,}\.[A-Za-z0-9]{2,5}$/.test(raw)) return raw;  // already a filename
+
+  const b64 = dataUri ? dataUri[2].replace(/\s/g, '') : raw.replace(/\s/g, '');
+  if (!dataUri && (b64.length < 16 || b64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64))) return raw;
 
   let buf;
   try { buf = Buffer.from(b64, 'base64'); } catch { return raw; }

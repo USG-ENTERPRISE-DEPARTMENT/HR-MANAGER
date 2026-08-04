@@ -622,7 +622,7 @@ function PayrollGrid({
   staleColumnCount, hiddenColIds, netExcludedIds, approvalSettings, currentUserId, currentUserRoles, runStages,
   auditLog, auditLoading, payslipEnabled, colLabelMap, payslipSettings,
   onBack, onGenerate, onFinalize, onRetryGL, onExport, onToggleEdit, onCellUpdate, onReorderCols,
-  onSubmit, onApprove, onReject, onLoadAudit,
+  onSubmit, onApprove, onReject, onLoadAudit, onNewRun,
 }: {
   gridData: GridCell[];
   activeRun: PayrollRun;
@@ -657,6 +657,8 @@ function PayrollGrid({
   onApprove: () => void;
   onReject: () => void;
   onLoadAudit: () => void;
+  /** Open the New Run modal prefilled from this run — the recovery path for a rejected posted run. */
+  onNewRun: () => void;
 }) {
   const { can } = useCan();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -990,21 +992,54 @@ function PayrollGrid({
             {activeRun.rejection_reason && (
               <span className="text-[var(--text-muted)] ml-2">— {activeRun.rejection_reason}</span>
             )}
+            {/* Once posted, the reference is spent: this run is closed and the fix is a new one.
+                A rejected posting never reaches the main GL accounts, so nothing is reversed. */}
+            {activeRun.document_ref && (
+              <p className="text-[var(--text-muted)] text-[12px] mt-1">
+                This run was already posted to the GL and cannot be regenerated. Create a new run for this period —
+                the rejected posting never reached the main GL accounts, so no reversal is needed.
+              </p>
+            )}
           </div>
-          <button className="secondary-btn text-[12px] shrink-0" onClick={onGenerate} disabled={generating}>
-            <RefreshCw size={12} className={generating ? 'animate-spin' : ''} /> Re-generate
-          </button>
+          {activeRun.document_ref ? (
+            <button className="secondary-btn text-[12px] shrink-0" onClick={onNewRun}>
+              <Plus size={12} /> New Run
+            </button>
+          ) : (
+            <button className="secondary-btn text-[12px] shrink-0" onClick={onGenerate} disabled={generating}>
+              <RefreshCw size={12} className={generating ? 'animate-spin' : ''} /> Re-generate
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── GL document reference banner (shown after finalization) ── */}
-      {isLocked && (
+      {/* ── GL document reference banner (shown after finalization) ──
+          Also shown for a Rejected run that already posted: the money reached the bank, so the
+          reference stays visible for reconciliation even though the run is being regenerated. */}
+      {(isLocked || (isRejected && activeRun.document_ref)) && (
         activeRun.document_ref ? (
-          <div className="px-4 py-3 border border-[var(--success,#10b981)] bg-[rgba(16,185,129,0.07)] rounded-[12px] flex items-center gap-3 text-[13px]">
-            <CheckCircle size={15} className="text-[var(--success,#10b981)] shrink-0" />
-            <span className="font-semibold text-[var(--success,#10b981)]">GL Posted</span>
+          <div className={`px-4 py-3 border rounded-[12px] flex items-center gap-3 text-[13px] ${
+            isRejected
+              ? 'border-[var(--warning,#f59e0b)] bg-[color-mix(in_srgb,var(--warning,#f59e0b)_8%,transparent)]'
+              : 'border-[var(--success,#10b981)] bg-[rgba(16,185,129,0.07)]'}`}>
+            <CheckCircle size={15} className={`shrink-0 ${isRejected ? 'text-[var(--warning,#f59e0b)]' : 'text-[var(--success,#10b981)]'}`} />
+            <span className={`font-semibold ${isRejected ? 'text-[var(--warning,#f59e0b)]' : 'text-[var(--success,#10b981)]'}`}>
+              {isRejected ? 'Previously GL Posted' : 'GL Posted'}
+            </span>
             <span className="text-[var(--text-muted)]">Document Ref:</span>
             <code className="font-mono text-[var(--text-primary)] bg-[var(--surface-hover,rgba(0,0,0,0.04))] px-2 py-0.5 rounded text-[12px]">{activeRun.document_ref}</code>
+            {/* A re-posted run (rejected → regenerated → posted again) records the reference it
+                replaced; show it so both postings can be reconciled at the bank. */}
+            {(() => {
+              let prior = '';
+              try { prior = JSON.parse(activeRun.payment_log ?? '{}')?.priorDocumentRef ?? ''; } catch {}
+              return prior ? (
+                <>
+                  <span className="text-[var(--text-muted)]">replaces</span>
+                  <code className="font-mono text-[var(--text-muted)] bg-[var(--surface-hover,rgba(0,0,0,0.04))] px-2 py-0.5 rounded text-[12px] line-through">{prior}</code>
+                </>
+              ) : null;
+            })()}
             {activeRun.finalized_at && (
               <span className="text-[var(--text-muted)] ml-auto text-[11px]">
                 {new Date(activeRun.finalized_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false })}
@@ -3143,6 +3178,7 @@ export function Payroll() {
           onApprove={approveRun}
           onReject={() => setRejectOpen(true)}
           onLoadAudit={loadAuditLog}
+          onNewRun={() => { setActiveRun(null); openRunDuplicate(activeRun); }}
           onExport={exportRunCsv}
           onToggleEdit={() => setEditMode(m => !m)}
           onCellUpdate={updateCell}
@@ -3208,14 +3244,15 @@ export function Payroll() {
                   <th className="th text-left">Period</th>
                   <th className="th text-left">Type</th>
                   <th className="th text-left">Status</th>
+                  <th className="th text-left">GL Reference</th>
                   <th className="th text-right"></th>
                 </tr>
               </thead>
               <tbody>
                 {runLoading ? (
-                  <tr><td colSpan={7} className="td text-center py-10 text-[var(--text-muted)]">Loading…</td></tr>
+                  <tr><td colSpan={8} className="td text-center py-10 text-[var(--text-muted)]">Loading…</td></tr>
                 ) : filteredRuns.length === 0 ? (
-                  <tr><td colSpan={7} className="td text-center py-12 text-[var(--text-muted)]">
+                  <tr><td colSpan={8} className="td text-center py-12 text-[var(--text-muted)]">
                     No payroll runs yet. Click <b>New Run</b> to get started.
                   </td></tr>
                 ) : pagedRuns.map((run, i) => {
@@ -3241,6 +3278,16 @@ export function Payroll() {
                           : <span className="text-[var(--text-muted)] opacity-50">—</span>}
                       </td>
                       <td className="td"><span className={runStatusCls}>{run.status}</span></td>
+                      {/* GL reference stays visible for a Rejected run that already posted — the
+                          money reached the bank, so it is still needed for reconciliation. */}
+                      <td className="td">
+                        {run.document_ref
+                          ? <code
+                              className="font-mono text-[11px] bg-[var(--surface-hover,rgba(0,0,0,0.04))] px-1.5 py-0.5 rounded text-[var(--text-primary)]"
+                              title={run.document_ref}
+                            >{run.document_ref}</code>
+                          : <span className="text-[var(--text-muted)] opacity-50">—</span>}
+                      </td>
                       <td className="td text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-end">
                           <RowActions actions={[
