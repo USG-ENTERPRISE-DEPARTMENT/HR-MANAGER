@@ -196,6 +196,11 @@ exports.getMyDocuments   = (req, res, next) => docs.getMyPersonalDocs(req, res, 
 exports.getSharedDocuments = (req, res, next) => docs.getMySharedDocs(req, res, next);
 exports.getCompanyDocs   = (req, res, next) => docs.getCompanyDocs(req, res, next);
 
+// Serve an uploaded file by its stored filename. The web app uses the public /documents/:filename for
+// this; mobile needs the same capability under /me. Filenames are unguessable HMAC-SHA256 hashes and
+// the caller is already authenticated by mobileAuth, so this matches the web route's exposure.
+exports.downloadDocument = (req, res, next) => docs.downloadDocument(req, res, next);
+
 exports.getNotifications = (req, res, next) => notif.list(req, res, next);
 exports.markRead    = (req, res, next) => notif.markRead(req, res, next);
 exports.markAllRead = (req, res, next) => notif.markAllRead(req, res, next);

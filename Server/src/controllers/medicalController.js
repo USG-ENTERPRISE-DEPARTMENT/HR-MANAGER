@@ -1,5 +1,9 @@
+const fs            = require('fs');
+const path          = require('path');
+const crypto        = require('crypto');
 const { prisma }    = require('../helpers/dbQueryHelper');
 const { Prisma }    = require('@prisma/client'); // Prisma.raw for the date-cutoff SQL fragments
+const { UPLOAD_DIR } = require('../middleware/upload');
 const asyncHandler  = require('../middleware/asyncHandler');
 const respond       = require('../helpers/respondHelper');
 const { tmsg }      = require('../helpers/messageStore');
@@ -390,12 +394,63 @@ exports.getStaffMedical = asyncHandler(async (req, res) => {
 // Each stored file's hashed filename is the reference; it's served/downloaded via /documents/:filename
 // like every other upload. Falls back to string references in the body so a JSON-only request (or the
 // legacy two-step "upload first, then send attachment1") keeps working unchanged.
+//
+// A body value may also be raw base64 file CONTENT (optionally as a data: URI). Mobile clients that
+// have no multipart upload step send the file that way, and storing it verbatim put a multi-KB blob
+// in the column where a filename belongs — the attachment then 404s forever, because
+// /documents/:filename looks for a file on disk named after the entire base64 string. Decode and
+// persist those to the upload dir so they behave exactly like a multipart upload.
+const ATTACH_EXT_BY_MIME = {
+  'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png',
+  'image/gif': '.gif', 'image/webp': '.webp',
+};
+
+// Magic-number sniff — the mobile payload usually carries no mime hint at all.
+function sniffExt(buf) {
+  if (buf.length > 4 && buf.toString('latin1', 0, 4) === '%PDF') return '.pdf';
+  if (buf.length > 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return '.jpg';
+  if (buf.length > 8 && buf.toString('latin1', 1, 4) === 'PNG') return '.png';
+  if (buf.length > 6 && buf.toString('latin1', 0, 3) === 'GIF') return '.gif';
+  if (buf.length > 12 && buf.toString('latin1', 8, 12) === 'WEBP') return '.webp';
+  return null;
+}
+
+function persistInlineAttachment(value) {
+  if (typeof value !== 'string') return value ?? null;
+  const raw = value.trim();
+  if (!raw) return null;
+
+  // A stored reference is a short hashed filename; anything long enough to be file content is not.
+  const dataUri = raw.match(/^data:([\w/+.-]+);base64,(.*)$/s);
+  const b64     = dataUri ? dataUri[2].replace(/\s/g, '') : raw.replace(/\s/g, '');
+  if (!dataUri && (raw.length < 512 || !/^[A-Za-z0-9+/=]+$/.test(b64))) return raw;
+
+  let buf;
+  try { buf = Buffer.from(b64, 'base64'); } catch { return raw; }
+  if (!buf.length) return raw;
+
+  const ext = (dataUri && ATTACH_EXT_BY_MIME[dataUri[1]]) || sniffExt(buf);
+  if (!ext) return raw;   // unrecognised content — leave untouched rather than guess
+
+  try {
+    const secret   = process.env.DOC_SECRET || 'hr_doc_secret_key';
+    const random   = crypto.randomBytes(16).toString('hex');
+    const filename = `${crypto.createHmac('sha256', secret).update(random).digest('hex')}${ext}`;
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
+    return filename;
+  } catch (e) {
+    console.error('[medical] could not persist inline attachment:', e.message);
+    return raw;
+  }
+}
+
 function attachmentsFromReq(req) {
   const files = Array.isArray(req.files) ? req.files : [];
   return {
-    attachment1: files[0]?.filename || req.body.attachment1 || null,
-    attachment2: files[1]?.filename || req.body.attachment2 || null,
-    attachment3: files[2]?.filename || req.body.attachment3 || null,
+    attachment1: files[0]?.filename || persistInlineAttachment(req.body.attachment1) || null,
+    attachment2: files[1]?.filename || persistInlineAttachment(req.body.attachment2) || null,
+    attachment3: files[2]?.filename || persistInlineAttachment(req.body.attachment3) || null,
   };
 }
 
@@ -714,7 +769,7 @@ exports.updateStaffMedical = asyncHandler(async (req, res) => {
         ...(physician       !== undefined && { physician: physician || null }),
         ...(cost            && { cost: parseFloat(cost) }),
         ...(mode_of_payment !== undefined && { mode_of_payment: mode_of_payment || null }),
-        ...(attachment1     !== undefined && { attachment1: attachment1 || null }),
+        ...(attachment1     !== undefined && { attachment1: persistInlineAttachment(attachment1) || null }),
         updatedAt: new Date(),
       },
     });
@@ -893,7 +948,7 @@ exports.updateDependentMedical = asyncHandler(async (req, res) => {
         ...(physician      !== undefined && { physician: physician || null }),
         ...(cost           && { cost: parseFloat(cost) }),
         ...(mode_of_payment !== undefined && { mode_of_payment: mode_of_payment || null }),
-        ...(attachment1     !== undefined && { attachment1: attachment1 || null }),
+        ...(attachment1     !== undefined && { attachment1: persistInlineAttachment(attachment1) || null }),
       },
     });
     // Editing a rejected record restores it to Draft so it can be resubmitted (literal status → auto-cast)

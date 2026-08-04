@@ -120,6 +120,13 @@ router.get('/documents',          me.getMyDocuments);
 router.get('/documents/shared',   me.getSharedDocuments);
 router.get('/documents/company',  me.getCompanyDocs);
 
+// Fetch an attachment/document file by its stored filename (medical claim attachments, personal
+// document scans, …). The web app hits the public /documents/:filename for this, but a mobile client
+// pointed at /me/... found no such route here and fell through to the JWT-guarded parent router,
+// which answered "Not authorized, no token". Declared LAST in this block so the literal paths above
+// still win. mobileAuth has already authenticated the caller.
+router.get('/documents/:filename', me.downloadDocument);
+
 // ── Notifications ────────────────────────────────────────────────────────────
 router.get('/notifications',              me.getNotifications);
 router.get('/notifications/unread-count', me.unreadCount);

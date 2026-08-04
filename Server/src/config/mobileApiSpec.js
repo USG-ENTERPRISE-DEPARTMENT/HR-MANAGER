@@ -420,6 +420,26 @@ const spec = {
     '/documents':         { get: op({ tag: 'Documents', summary: 'Own personal documents', response: { type: 'array', items: { type: 'object' } } }) },
     '/documents/shared':  { get: op({ tag: 'Documents', summary: 'Documents shared with this employee', response: { type: 'array', items: { type: 'object' } } }) },
     '/documents/company': { get: op({ tag: 'Documents', summary: 'Company-wide documents', response: { type: 'array', items: { type: 'object' } } }) },
+    '/documents/{filename}': {
+      get: {
+        tags: ['Documents'],
+        summary: 'Fetch an attachment or document file',
+        description:
+          'Streams the stored file. Pass the filename exactly as it appears in a record — e.g. a medical ' +
+          'claim\'s `attachment1`, or `filename` on a document listing. Served inline for viewing; add ' +
+          '`?download=1` to force a download. Returns 404 if the file is missing from storage.',
+        parameters: [
+          { name: 'filename', in: 'path', required: true, schema: { type: 'string' },
+            example: 'da7a4a950ffc8e62882cbb989568dc8613c1a6b47729875974ada1a12044166a.png' },
+          { name: 'download', in: 'query', required: false, schema: { type: 'string', enum: ['1'] },
+            description: 'Set to 1 to force a download instead of inline display.' },
+        ],
+        responses: {
+          200: { description: 'The file', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } },
+          404: { description: 'Document not found' },
+        },
+      },
+    },
 
     '/notifications':              { get: op({ tag: 'Notifications', summary: 'Latest notifications', description: 'Newest 50, with an unread count.', response: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/Notification' } }, unreadCount: { type: 'integer', example: 3 } } } }) },
     '/notifications/unread-count': { get: op({ tag: 'Notifications', summary: 'Unread badge count', description: 'Cheap enough to poll for a badge.', response: { type: 'object', properties: { count: { type: 'integer', example: 3 } } } }) },
