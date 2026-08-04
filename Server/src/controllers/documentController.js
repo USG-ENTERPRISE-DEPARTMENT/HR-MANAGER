@@ -65,15 +65,23 @@ const downloadDocument = asyncHandler(async (req, res) => {
 // GET /documents/my-shared
 // Company documents shared with the current user (via department or employee ID)
 const getMySharedDocs = asyncHandler(async (req, res) => {
-  const userId = toBigInt(req.user?.id);
-  if (!userId) return respond.ok(res, 'Not authenticated', []);
+  // Mobile (/me/*) callers have no user account — req.user.id is null and the users lookup below
+  // finds nothing, so shared documents came back empty for them. mobileAuth sets req.user.employeeId
+  // (and req.self.id) from the authenticated employee, so prefer those when present.
+  const selfEmp = req.self?.id ?? req.user?.employeeId;
+  let empId = selfEmp != null ? selfEmp : null;
 
-  // Resolve employee ID from users table
-  const userRow = await prisma.users
-    .findUnique({ where: { id: userId }, select: { employeeId: true } })
-    .catch(() => null);
+  if (empId == null) {
+    const userId = toBigInt(req.user?.id);
+    if (!userId) return respond.ok(res, 'Not authenticated', []);
 
-  const empId = userRow?.employeeId;
+    // Resolve employee ID from users table
+    const userRow = await prisma.users
+      .findUnique({ where: { id: userId }, select: { employeeId: true } })
+      .catch(() => null);
+
+    empId = userRow?.employeeId;
+  }
   if (!empId) return respond.ok(res, 'No employee record linked', []);
 
   const empIdStr = String(empId);

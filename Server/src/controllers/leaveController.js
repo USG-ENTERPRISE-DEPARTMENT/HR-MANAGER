@@ -1416,12 +1416,20 @@ exports.getLeaves = asyncHandler(async (req, res) => {
   // ?all=1 returns every employee's leaves (reports/admin views — screen access is the gate).
   let scopedEmployee = null;
   if (req.query.all !== '1') {
-    // Alias the columns: on Postgres unquoted `employeeId` returns as key `employeeid`, so reading
-    // `.employeeId` off the row is undefined and every employee's own-leave list comes back empty.
-    const userEmp = await prisma.$queryRaw`SELECT employeeId AS emp_link, employee AS emp_fallback FROM users WHERE id=${toBigInt(req.user.id)}`.catch(() => []);
-    const ownEmpId = userEmp[0]?.emp_link || userEmp[0]?.emp_fallback;
-    if (!ownEmpId) return respond.ok(res, 'Leaves', []);
-    scopedEmployee = String(ownEmpId);
+    // Mobile (/me/*) callers authenticate with an employee id and have no user account, so the
+    // users-table lookup below finds nothing for them. Trust the already-resolved employee when the
+    // caller supplies one — meController pins it to the authenticated employee, so it cannot widen
+    // the scope. Without this, an employee with no linked user account always got an empty list.
+    if (req.self?.id) {
+      scopedEmployee = String(req.self.id);
+    } else {
+      // Alias the columns: on Postgres unquoted `employeeId` returns as key `employeeid`, so reading
+      // `.employeeId` off the row is undefined and every employee's own-leave list comes back empty.
+      const userEmp = await prisma.$queryRaw`SELECT employeeId AS emp_link, employee AS emp_fallback FROM users WHERE id=${toBigInt(req.user?.id)}`.catch(() => []);
+      const ownEmpId = userEmp[0]?.emp_link || userEmp[0]?.emp_fallback;
+      if (!ownEmpId) return respond.ok(res, 'Leaves', []);
+      scopedEmployee = String(ownEmpId);
+    }
   }
 
   const conds = [Prisma.sql`1=1`];
@@ -1571,10 +1579,19 @@ exports.getAllEmployeeLeaves = asyncHandler(async (req, res) => {
 // supervisor-assign permission, and allowance eligibility before creating the leave record and its day entries.
 exports.applyLeave = asyncHandler(async (req, res) => {
   const {
-    employee: bodyEmployee, leave_type, leave_period, date_start, date_end,
+    employee: bodyEmployee, leave_type, date_start, date_end,
     details, req_allowance, position, emp_acc_no, branch, department,
     amount: bodyAmount,
   } = req.body;
+  let { leave_period } = req.body;
+
+  // Leave period is an HR-managed concept, not something a mobile user knows or should have to send.
+  // Default to the currently active period so clients can omit it; an explicit value still wins.
+  if (leave_period == null || String(leave_period).trim() === '') {
+    const active = await prisma.leaveperiods.findMany({ where: { status: 'Active' } }).catch(() => []);
+    if (!active.length) return respond.badReq(res, 'No active leave period is configured. Contact HR.');
+    leave_period = String(active[0].id);
+  }
 
   // Resolve employee first — use body value if provided, otherwise look up from user account
   let employee = bodyEmployee;
@@ -1586,8 +1603,9 @@ exports.applyLeave = asyncHandler(async (req, res) => {
   }
   if (!employee) return respond.badReq(res, 'No employee record linked to your account. Contact HR to link your profile.');
 
-  if (!leave_type || !leave_period || !date_start || !date_end)
-    return respond.badReq(res, 'leave_type, leave_period, date_start and date_end are required');
+  // leave_period is not listed: it defaults to the active period above when omitted.
+  if (!leave_type || !date_start || !date_end)
+    return respond.badReq(res, 'leave_type, date_start and date_end are required');
 
   // ── Date sanity ───────────────────────────────────────────────────────────
   const dStart = new Date(date_start + 'T00:00:00');
@@ -1643,7 +1661,10 @@ exports.applyLeave = asyncHandler(async (req, res) => {
 
   // ── Permission checks ─────────────────────────────────────────────────────
   const isAdmin = req.user?.roles?.some(r => ['admin', 'super-admin'].includes(r));
-  const isSelf  = String(req.user?.id) === String(employee) ||
+  // req.self is set by mobileAuth for /me/* callers, who have no user account — without this they
+  // never register as "self" and fall through to the supervisor branch.
+  const isSelf  = (req.self?.id && String(req.self.id) === String(employee)) ||
+                  String(req.user?.id) === String(employee) ||
                   await prisma.$queryRaw`SELECT id FROM users WHERE id=${toBigInt(req.user?.id)} AND employeeId=${toBigInt(employee)}`
                     .then(r => r.length > 0).catch(() => false);
   const isSupervisorOf = !isSelf && await prisma.$queryRaw`

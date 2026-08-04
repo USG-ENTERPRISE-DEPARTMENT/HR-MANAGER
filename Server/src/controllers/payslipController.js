@@ -280,8 +280,16 @@ const downloadPayslip = asyncHandler(async (req, res) => {
 
 // ── My payslips list (for employee self-service) ──────────────────────────────
 const getMyPayslips = asyncHandler(async (req, res) => {
-  const [self] = await query`SELECT id FROM employee WHERE email = ${req.user?.email || ''} OR work_email = ${req.user?.email || ''} OR employee_id = ${req.user?.username || ''} LIMIT 1`;
-  if (!self) return respond.notFound(res, 'Employee record not found for this user');
+  // Prefer the exact employee id (mobileAuth sets req.self/req.user.employeeId). The email/username
+  // match is the web fallback and is ambiguous if two employees ever share an address — payslips are
+  // the most sensitive data here, so an exact link is used whenever one is available.
+  let selfId = req.self?.id ?? (req.user?.employeeId ? String(req.user.employeeId) : null);
+  if (!selfId) {
+    const [self] = await query`SELECT id FROM employee WHERE email = ${req.user?.email || ''} OR work_email = ${req.user?.email || ''} OR employee_id = ${req.user?.username || ''} LIMIT 1`;
+    selfId = self ? String(self.id) : null;
+  }
+  if (!selfId) return respond.notFound(res, 'Employee record not found for this user');
+  const self = { id: selfId };
   const rows = await query`
     SELECT pr.id AS run_id, pr.name, pr.date_start, pr.date_end, pr.status,
            pf.name AS freq_name

@@ -280,6 +280,13 @@ exports.getNominations = asyncHandler(async (req, res) => {
   if (!personalView) {
     // Approval list: never show Drafts (they are private to the originator)
     rows = await prisma.$queryRaw`SELECT * FROM trainingnomination WHERE status != 'Draft' ORDER BY id DESC`;
+  } else if (req.self?.id) {
+    // Mobile (/me/*) callers authenticate by employee id and have no user account, so the users join
+    // below matches nothing and their own nominations come back empty. Scope by employee directly.
+    rows = await prisma.$queryRaw`
+      SELECT tn.* FROM trainingnomination tn
+       WHERE tn.employee = ${toBigInt(req.self.id)} AND (tn.status != 'Draft' OR tn.nomination_type = 'Self')
+       ORDER BY tn.id DESC`.catch(err => { console.error('getNominations personal query failed:', err); return []; });
   } else {
     // Personal view: join on users table; Drafts only visible when self-originated
     rows = await prisma.$queryRaw`

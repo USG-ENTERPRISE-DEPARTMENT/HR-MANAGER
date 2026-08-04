@@ -357,13 +357,15 @@ exports.getStaffMedical = asyncHandler(async (req, res) => {
     // Manage Medical viewers see submitted records + their own Drafts
     rows = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE status != 'Draft' OR posted_by = ${String(req.user?.id ?? '')} ORDER BY id DESC`;
   } else {
-    // Employees only see their own records (all statuses including Draft)
-    const self = await prisma.employee.findFirst({
+    // Employees only see their own records (all statuses including Draft).
+    // req.self is set by mobileAuth and is exact; the email/username match below is a fallback for
+    // web callers and is ambiguous if two employees share an address.
+    const selfId = req.self?.id ?? (await prisma.employee.findFirst({
       where: { OR: [{ email: req.user?.email || '' }, { work_email: req.user?.email || '' }, { employee_id: req.user?.username || '' }] },
       select: { id: true },
-    }).catch(() => null);
-    if (!self) return respond.ok(res, 'Staff medical records', []);
-    rows = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE employee = ${String(self.id)} ORDER BY id DESC`;
+    }).catch(() => null))?.id;
+    if (!selfId) return respond.ok(res, 'Staff medical records', []);
+    rows = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE employee = ${String(selfId)} ORDER BY id DESC`;
   }
   const em  = await empMap(rows.map(r => r.employee));
   const um  = await userMap([
@@ -746,12 +748,13 @@ exports.getDependentMedical = asyncHandler(async (req, res) => {
   if (canViewAll) {
     rows = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE status != 'Draft' OR posted_by = ${String(req.user?.id ?? '')} ORDER BY id DESC`;
   } else {
-    const self = await prisma.employee.findFirst({
+    // req.self (mobileAuth) is exact; the email/username match is the web fallback. See getStaffMedical.
+    const selfId = req.self?.id ?? (await prisma.employee.findFirst({
       where: { OR: [{ email: req.user?.email || '' }, { work_email: req.user?.email || '' }, { employee_id: req.user?.username || '' }] },
       select: { id: true },
-    }).catch(() => null);
-    if (!self) return respond.ok(res, 'Dependent medical records', []);
-    rows = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE employee = ${String(self.id)} ORDER BY id DESC`;
+    }).catch(() => null))?.id;
+    if (!selfId) return respond.ok(res, 'Dependent medical records', []);
+    rows = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE employee = ${String(selfId)} ORDER BY id DESC`;
   }
   const em  = await empMap(rows.map(r => r.employee));
   const um  = await userMap([
@@ -1141,9 +1144,16 @@ exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
 // GET /medical/my-enquiry — return the authenticated user's own medical limit, utilisation, and full record history
 // (all statuses). Utilisation includes Approved, Pending Approval, and Draft records to show worst-case balance.
 exports.getMyMedicalEnquiry = asyncHandler(async (req, res) => {
-  // Find the employee linked to this user
-  const userRow = await prisma.users.findUnique({ where: { id: BigInt(req.user?.id) }, select: { employeeId: true } }).catch(() => null);
-  const empId = userRow?.employeeId ? String(userRow.employeeId) : null;
+  // Find the employee linked to this user. Mobile (/me/*) callers have no user account, so the users
+  // lookup finds nothing — and BigInt(null) would throw outright. Prefer the employee mobileAuth
+  // already resolved; fall back to the account link for web callers.
+  let empId = req.self?.id ? String(req.self.id) : (req.user?.employeeId ? String(req.user.employeeId) : null);
+  if (!empId) {
+    const uid = toBigInt(req.user?.id);
+    const userRow = uid == null ? null
+      : await prisma.users.findUnique({ where: { id: uid }, select: { employeeId: true } }).catch(() => null);
+    empId = userRow?.employeeId ? String(userRow.employeeId) : null;
+  }
   if (!empId) return respond.ok(res, 'My medical enquiry', null);
 
   const [emp] = await prisma.$queryRaw`
