@@ -120,16 +120,10 @@ exports.deleteLeave = (req, res, next) => leave.deleteLeave(req, res, next);
 exports.leaveOwnership = requireOwnership('employeeleaves');
 
 // ── Payslips ─────────────────────────────────────────────────────────────────
-// How these resolve the employee differs, which matters because payslips are the most sensitive
-// data on this API:
-//   • getMyTaxSummary prefers req.user.employeeId (set by mobileAuth) — exact, nothing to do.
-//   • getMyPayslips resolves ONLY by string match:
-//       employee.email = req.user.email OR work_email = req.user.email OR employee_id = req.user.username
-//     It never consults employeeId, so it cannot be pinned from here without editing that
-//     controller. mobileAuth fills email/username from the resolved employee row, so the match does
-//     land on the right person, and every response echoes `data.employeeId` — assert on that in
-//     tests. If two employees ever share an email address this becomes ambiguous; fixing it properly
-//     means teaching payslipController to prefer employeeId, as getMyTaxSummary already does.
+// Payslips are the most sensitive data on this API, so all three resolve the employee the same way:
+// prefer the exact id (req.self.id / req.user.employeeId, both set by mobileAuth) and fall back to
+// the web email/username string match only when no id is available. Every response echoes
+// `data.employeeId` — assert on that in tests.
 
 exports.getMyPayslips = (req, res, next) => payslip.getMyPayslips(req, res, next);
 

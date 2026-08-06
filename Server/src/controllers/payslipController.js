@@ -74,8 +74,14 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     permissions.includes('export_reports');
 
   if (!canDownloadForOthers) {
-    const [self] = await query`SELECT id FROM employee WHERE email = ${req.user?.email || ''} OR work_email = ${req.user?.email || ''} OR employee_id = ${req.user?.username || ''} LIMIT 1`;
-    if (!self || String(self.id) !== String(empId)) {
+    // Prefer the exact employee id (mobileAuth sets req.self/req.user.employeeId); the email/username
+    // match is the web fallback and fails outright when the user row carries no matching address.
+    let selfId = req.self?.id ?? (req.user?.employeeId ? String(req.user.employeeId) : null);
+    if (!selfId) {
+      const [self] = await query`SELECT id FROM employee WHERE email = ${req.user?.email || ''} OR work_email = ${req.user?.email || ''} OR employee_id = ${req.user?.username || ''} LIMIT 1`;
+      selfId = self ? String(self.id) : null;
+    }
+    if (!selfId || String(selfId) !== String(empId)) {
       return respond.badReq(res, 'You can only download your own payslip');
     }
   }
