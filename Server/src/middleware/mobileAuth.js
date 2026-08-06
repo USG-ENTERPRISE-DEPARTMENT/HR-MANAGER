@@ -34,19 +34,34 @@ const clientIp = (req) =>
 // Generated lazily on first read so a fresh install works without manual setup. Mirrors the
 // attendance device-key pattern in attendanceController.
 async function getMobileApiKey() {
+  // A FAILED read and "no key stored" are different outcomes and must not be conflated. Swallowing
+  // the error here used to return null, which fell through to minting a replacement key and
+  // overwriting the real one — so a transient DB hiccup (or a query issued while the connection was
+  // still coming up, e.g. right after a deploy) silently rotated the key and locked out every mobile
+  // client. Let a read error propagate: the caller returns 401 for that request, which is recoverable,
+  // whereas a rotated key is not.
   const row = await prisma.app_settings
-    .findUnique({ where: { setting_key: SETTING_KEY }, select: { setting_value: true } })
-    .catch(() => null);
+    .findUnique({ where: { setting_key: SETTING_KEY }, select: { setting_value: true } });
 
   if (row?.setting_value) return row.setting_value;
 
+  // Genuinely absent (fresh install) — create one. `create` rather than `upsert` so that if a
+  // concurrent request created it first, this loses the race and re-reads that value instead of
+  // overwriting it.
   const key = crypto.randomBytes(24).toString('hex');
-  await prisma.app_settings.upsert({
-    where:  { setting_key: SETTING_KEY },
-    update: { setting_value: key },
-    create: { setting_key: SETTING_KEY, setting_value: key },
-  }).catch(() => {});
-  return key;
+  try {
+    await prisma.app_settings.create({
+      data: { setting_key: SETTING_KEY, setting_value: key },
+    });
+    return key;
+  } catch {
+    // Unique-constraint violation (someone else won) or a write failure — re-read and use whatever
+    // is actually stored rather than returning a key that was never persisted.
+    const existing = await prisma.app_settings
+      .findUnique({ where: { setting_key: SETTING_KEY }, select: { setting_value: true } });
+    if (existing?.setting_value) return existing.setting_value;
+    throw new Error('Mobile API key could not be read or created');
+  }
 }
 
 // Constant-time compare so a wrong key can't be recovered by timing the response.

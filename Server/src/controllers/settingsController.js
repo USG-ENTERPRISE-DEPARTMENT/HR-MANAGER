@@ -331,6 +331,25 @@ const getMobileApiSettings = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Return the key in full, for an admin who needs to read it again.
+ *
+ * The key is stored in plain text (it has to be — it is compared against the header on every mobile
+ * request), so masking it in getMobileApiSettings only guards against a shoulder-surfed screen, not
+ * against anyone who can reach this endpoint. Making the value re-readable therefore gives up no
+ * secrecy that was actually being kept, and it removes the real hazard of the old behaviour:
+ * "generate once or lose it" pushed admins into regenerating the key just to read it, which silently
+ * broke every mobile client and every integration already using the old value.
+ *
+ * Reveals are written to the activity log so the read is attributable.
+ */
+const revealMobileApiKey = asyncHandler(async (req, res) => {
+  const key = await getMobileApiKey();
+  if (!key) return respond.notFound(res, 'No mobile API key has been generated yet');
+  logActivity({ module: 'Settings', action: 'reveal_mobile_api_key', ...fromReq(req) });
+  respond.ok(res, 'Mobile API key', { key });
+});
+
 const regenerateMobileApiKey = asyncHandler(async (req, res) => {
   const key = crypto.randomBytes(24).toString('hex');
   await prisma.app_settings.upsert({
@@ -341,7 +360,7 @@ const regenerateMobileApiKey = asyncHandler(async (req, res) => {
   logActivity({ module: 'Settings', action: 'regenerate_mobile_api_key', ...fromReq(req) });
   // Every installed copy of the mobile app must be updated with this key — rotating it logs out all
   // mobile clients until they ship the new value.
-  respond.ok(res, 'Mobile API key regenerated — copy it now, it will not be shown again', { key });
+  respond.ok(res, 'Mobile API key regenerated — every mobile client must be updated with this key', { key });
 });
 
-module.exports = { getEmailSettings, updateEmailSettings, sendTestEmail, getModuleSettings, saveModuleSettings, getControlSettings, saveControlSettings, getAppSetup, saveAppSetup, getNotificationSettings, saveNotificationSettings, getMessages, saveMessage, resetMessage, getMobileApiSettings, regenerateMobileApiKey };
+module.exports = { getEmailSettings, updateEmailSettings, sendTestEmail, getModuleSettings, saveModuleSettings, getControlSettings, saveControlSettings, getAppSetup, saveAppSetup, getNotificationSettings, saveNotificationSettings, getMessages, saveMessage, resetMessage, getMobileApiSettings, revealMobileApiKey, regenerateMobileApiKey };

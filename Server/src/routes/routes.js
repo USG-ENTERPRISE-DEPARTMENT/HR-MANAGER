@@ -412,8 +412,11 @@ router.put ('/settings/email',             permissionGuard('manage_settings'), a
 router.post('/settings/email/test',        permissionGuard('manage_settings'), appCfg.sendTestEmail);
 router.get ('/settings/api-integrations',  apiInteg.getApiIntegrations);
 router.put ('/settings/api-integrations',  permissionGuard('manage_settings'), apiInteg.updateApiIntegrations);
-// Staff mobile app key — read returns a masked value; regenerate reveals the new key once.
+// Staff mobile app key — the list read returns a masked value; /reveal returns it in full (logged),
+// and regenerate replaces it. Reveal carries the same guard as regenerate: an admin who can rotate
+// the key can already obtain its value, so gating the read more tightly would protect nothing.
 router.get ('/settings/mobile-api',            permissionGuard('manage_settings'), appCfg.getMobileApiSettings);
+router.get ('/settings/mobile-api/reveal',     permissionGuard('manage_settings'), appCfg.revealMobileApiKey);
 router.post('/settings/mobile-api/regenerate', permissionGuard('manage_settings'), appCfg.regenerateMobileApiKey);
 
 // ─────────────────────────────────────────────

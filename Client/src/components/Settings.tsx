@@ -2184,7 +2184,8 @@ const DOCS_URL = '/v1/api/hr/me/docs/';
 
 function MobileApiTab() {
   const [info, setInfo]       = useState<{ configured: boolean; masked: string | null } | null>(null);
-  const [freshKey, setFresh]  = useState<string | null>(null);   // shown once, never re-fetched
+  const [shownKey, setShownKey] = useState<string | null>(null);   // full key, while revealed
+  const [revealing, setRevealing] = useState(false);
   const [busy, setBusy]       = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -2193,12 +2194,27 @@ function MobileApiTab() {
     .catch(() => toast.error('Failed to load mobile API settings'));
   useEffect(() => { load(); }, []);
 
+  /** Fetch the key in full. Returns it so copy can reuse the same request. */
+  const fetchKey = async (): Promise<string | null> => {
+    const r = await api.get('/settings/mobile-api/reveal');
+    return r.data?.data?.key ?? null;
+  };
+
+  const toggleReveal = async () => {
+    if (shownKey) { setShownKey(null); return; }
+    setRevealing(true);
+    try {
+      setShownKey(await fetchKey());
+    } catch { toast.error('Failed to reveal key'); }
+    finally { setRevealing(false); }
+  };
+
   const regenerate = async () => {
     setBusy(true);
     try {
       const r = await api.post('/settings/mobile-api/regenerate');
       const key = r.data?.data?.key ?? null;
-      setFresh(key);
+      setShownKey(key);          // leave it visible; it can be re-read at any time now
       setConfirming(false);
       if (key) await navigator.clipboard.writeText(key).catch(() => {});
       toast.success('New key generated and copied to your clipboard');
@@ -2207,10 +2223,16 @@ function MobileApiTab() {
     finally { setBusy(false); }
   };
 
-  const copy = (v: string) => {
-    navigator.clipboard.writeText(v)
-      .then(() => toast.success('Copied'))
-      .catch(() => toast.error('Copy failed'));
+  /** Always copies the FULL key — never the masked placeholder shown in the field. */
+  const copyKey = async () => {
+    setRevealing(true);
+    try {
+      const key = shownKey ?? await fetchKey();
+      if (!key) return toast.error('No key to copy');
+      await navigator.clipboard.writeText(key);
+      toast.success('Full key copied');
+    } catch { toast.error('Copy failed'); }
+    finally { setRevealing(false); }
   };
 
   if (!info) return <div className="p-6 text-[13px] text-[var(--text-muted)]">Loading…</div>;
@@ -2265,33 +2287,44 @@ function MobileApiTab() {
         <div className="px-5 py-4 space-y-2">
           <p className="text-[12px] font-semibold text-[var(--text-primary)]">Current Key</p>
 
-          {freshKey ? (
-            // Only moment the full key is visible — it cannot be retrieved again afterwards.
-            <>
-              <div className="flex items-center gap-2">
-                <input className={`${inputClass} flex-1 font-mono text-[12px]`} readOnly value={freshKey} />
-                <button className="secondary-btn shrink-0" onClick={() => copy(freshKey)}>
-                  <Copy size={13} className="inline mr-1.5" />Copy
-                </button>
-              </div>
-              <p className="text-[11.5px] font-medium" style={{ color: 'var(--warning)' }}>
-                Copy this now — it will not be shown again. Leaving this tab hides it permanently.
-              </p>
-            </>
-          ) : (
-            <>
-              <input
-                className={`${inputClass} w-full font-mono text-[12px]`}
-                readOnly
-                value={info.masked ?? 'No key generated yet'}
-              />
-              <p className="text-[11.5px] text-[var(--text-muted)]">
-                {info.configured
-                  ? 'Keys are stored masked. Regenerate to issue a new one — the full value is shown only at that moment.'
-                  : 'A key is created automatically the first time the mobile app calls the API, or you can generate one now.'}
-              </p>
-            </>
-          )}
+          {/* The key is masked until revealed, but it IS retrievable — the eye fetches it from the
+              server on demand. Regenerating to read the value would break every mobile client, so
+              that must never be the only way to see it. */}
+          <div className="flex items-center gap-2">
+            <input
+              className={`${inputClass} flex-1 font-mono text-[12px]`}
+              readOnly
+              value={shownKey ?? info.masked ?? 'No key generated yet'}
+            />
+            {info.configured && (
+              <button
+                className="secondary-btn shrink-0"
+                title={shownKey ? 'Hide key' : 'Show key'}
+                aria-label={shownKey ? 'Hide key' : 'Show key'}
+                disabled={revealing}
+                onClick={toggleReveal}
+              >
+                {revealing
+                  ? <Loader2 size={13} className="inline animate-spin" />
+                  : shownKey ? <EyeOff size={13} className="inline" /> : <Eye size={13} className="inline" />}
+              </button>
+            )}
+            {info.configured && (
+              <button
+                className="secondary-btn shrink-0"
+                title="Copy key"
+                disabled={revealing}
+                onClick={copyKey}
+              >
+                <Copy size={13} className="inline mr-1.5" />Copy
+              </button>
+            )}
+          </div>
+          <p className="text-[11.5px] text-[var(--text-muted)]">
+            {info.configured
+              ? 'Hidden by default so the key is not exposed on a shared screen. Use the eye to reveal it, or Copy to put the full key on your clipboard — you do not need to regenerate it to read it again.'
+              : 'A key is created automatically the first time the mobile app calls the API, or you can generate one now.'}
+          </p>
         </div>
 
         <div className="px-5 py-4 border-t border-[var(--border)]">
@@ -2303,7 +2336,8 @@ function MobileApiTab() {
               <p className="text-[11.5px] text-[var(--text-muted)] leading-relaxed">
                 The current key stops working immediately. Every installed copy of the mobile app will
                 fail to connect until it is updated with the new key — staff will be locked out in the
-                meantime.
+                meantime. You do not need to regenerate just to read the current key: use the eye
+                icon above.
               </p>
               <div className="flex items-center gap-2">
                 <button className="primary-btn" disabled={busy} onClick={regenerate}>
