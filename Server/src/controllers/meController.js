@@ -152,15 +152,59 @@ exports.getTimesheet = (req, res, next) =>
 // The list endpoints branch on the `view_medical` permission; mobileAuth grants no permissions, so
 // they take the self-scoped branch. Do not add permissions to the synthetic user.
 
+/**
+ * Guard factory for editing a claim/nomination from the mobile app: allow it only while the record
+ * is still a Draft. Once submitted it is in an approval flow and must be approved/rejected by
+ * someone with the medical permissions on the Manage Medical page — never mutated from /me/*.
+ * Pair with requireOwnership(table), which has already proven the record belongs to the caller.
+ */
+const requireDraft = (table, label) => asyncHandler(async (req, res, next) => {
+  const rid = toBigInt(req.params.id);
+  const rows = await prisma.$queryRaw(
+    Prisma.sql`SELECT status FROM ${Prisma.raw(table)} WHERE id = ${rid} LIMIT 1`,
+  ).catch(() => []);
+  if (!rows?.[0]) return respond.notFound(res, 'Record not found');
+  if (String(rows[0].status ?? '') !== 'Draft') {
+    return respond.badReq(res, `Only ${label} in Draft can be edited or deleted`);
+  }
+  next();
+});
+
+/**
+ * Strip every approval-related field from the body before delegating.
+ *
+ * medicalController.updateStaffMedical acts on `status` — setting Approved/Rejected and stamping
+ * approved_by from req.user.id. Approval is not a self-service action: it belongs to users with the
+ * medical permissions on the Manage Medical page. Dropping these here means an employee editing
+ * their own draft can never approve, reject, or re-open it, whatever the app sends.
+ *
+ * Note this cannot rely on medicalController.assertCanMutateMedical for ownership: it compares
+ * `posted_by` to req.user.id, which mobileAuth leaves null for an employee with no linked user
+ * account — making `'' === ''` match any record whose posted_by is also null. requireOwnership
+ * (which checks the `employee` column against req.self.id) is the real guard on this path.
+ */
+const noApproval = (req) => {
+  delete req.body.status;
+  delete req.body.rejection_reason;
+  delete req.body.approved_by;
+  return req;
+};
+
 exports.getStaffMedical     = (req, res, next) => med.getStaffMedical(req, res, next);
 exports.createStaffMedical  = (req, res, next) => med.createStaffMedical(ownBody(req), res, next);
 exports.submitStaffMedical  = (req, res, next) => med.submitStaffMedical(req, res, next);
+exports.updateStaffMedical  = (req, res, next) => med.updateStaffMedical(noApproval(ownBody(req)), res, next);
+exports.deleteStaffMedical  = (req, res, next) => med.deleteStaffMedical(req, res, next);
 exports.staffMedicalOwnership = requireOwnership('staffmedical');
+exports.staffMedicalDraft     = requireDraft('staffmedical', 'medical claims');
 
 exports.getDependentMedical    = (req, res, next) => med.getDependentMedical(req, res, next);
 exports.createDependentMedical = (req, res, next) => med.createDependentMedical(ownBody(req), res, next);
 exports.submitDependentMedical = (req, res, next) => med.submitDependentMedical(req, res, next);
+exports.updateDependentMedical = (req, res, next) => med.updateDependentMedical(noApproval(ownBody(req)), res, next);
+exports.deleteDependentMedical = (req, res, next) => med.deleteDependentMedical(req, res, next);
 exports.dependentMedicalOwnership = requireOwnership('dependentmedical');
+exports.dependentMedicalDraft     = requireDraft('dependentmedical', 'medical claims');
 
 exports.getMedicalEnquiry = (req, res, next) => med.getMyMedicalEnquiry(req, res, next);
 
@@ -175,6 +219,11 @@ exports.getNominations = (req, res, next) =>
 
 exports.createNomination = (req, res, next) => training.createNomination(ownBody(req), res, next);
 exports.submitNomination = (req, res, next) => training.submitNomination(req, res, next);
+// updateNomination/deleteNomination already refuse anything that is not a Draft
+// (trainingController: "Only Draft nominations can be edited/deleted"), so the ownership guard on
+// the route is all this layer needs to add.
+exports.updateNomination = (req, res, next) => training.updateNomination(ownBody(req), res, next);
+exports.deleteNomination = (req, res, next) => training.deleteNomination(req, res, next);
 exports.nominationOwnership = requireOwnership('trainingnomination');
 
 // ── Performance ──────────────────────────────────────────────────────────────

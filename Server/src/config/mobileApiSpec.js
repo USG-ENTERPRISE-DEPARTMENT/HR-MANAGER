@@ -388,6 +388,14 @@ const spec = {
         multipart: true, body: { $ref: '#/components/schemas/StaffMedicalClaim' }, response: { type: 'object' },
       }),
     },
+    '/medical/staff/{id}': {
+      put: op({
+        tag: 'Medical', summary: 'Edit an own draft staff medical claim',
+        description: 'Multipart form. Only claims still in `Draft` may be edited — once submitted the claim belongs to the approval flow and returns `400`. Approval fields (`status`, `rejection_reason`) are ignored: approving or rejecting a claim is done by staff with the medical permissions on the Manage Medical page, never from self-service.',
+        multipart: true, params: [pathId], body: { $ref: '#/components/schemas/StaffMedicalClaim' }, response: { type: 'object' },
+      }),
+      delete: op({ tag: 'Medical', summary: 'Delete an own draft staff medical claim', description: 'Only claims still in `Draft` may be deleted.', params: [pathId], response: { type: 'object' } }),
+    },
     '/medical/staff/{id}/submit':      { post: op({ tag: 'Medical', summary: 'Submit a staff medical claim', params: [pathId], response: { type: 'object' } }) },
     '/medical/dependents': {
       get:  op({ tag: 'Medical', summary: 'List own dependent medical claims', response: { type: 'array', items: { type: 'object' } } }),
@@ -396,6 +404,14 @@ const spec = {
         description: 'Multipart form. Creates the claim as a Draft for one of the employee\'s registered dependants. Do not send `employee`. Attach up to 3 supporting files under `attachments`. Call `/medical/dependents/{id}/submit` afterwards to send it for approval.',
         multipart: true, body: { $ref: '#/components/schemas/DependentMedicalClaim' }, response: { type: 'object' },
       }),
+    },
+    '/medical/dependents/{id}': {
+      put: op({
+        tag: 'Medical', summary: 'Edit an own draft dependent medical claim',
+        description: 'Multipart form. Only claims still in `Draft` may be edited — once submitted the claim belongs to the approval flow and returns `400`. Approval fields (`status`, `rejection_reason`) are ignored: approving or rejecting a claim is done by staff with the medical permissions on the Manage Medical page, never from self-service.',
+        multipart: true, params: [pathId], body: { $ref: '#/components/schemas/DependentMedicalClaim' }, response: { type: 'object' },
+      }),
+      delete: op({ tag: 'Medical', summary: 'Delete an own draft dependent medical claim', description: 'Only claims still in `Draft` may be deleted.', params: [pathId], response: { type: 'object' } }),
     },
     '/medical/dependents/{id}/submit': { post: op({ tag: 'Medical', summary: 'Submit a dependent medical claim', params: [pathId], response: { type: 'object' } }) },
 
@@ -407,6 +423,14 @@ const spec = {
         description: 'Creates the nomination as a Draft for the authenticated employee. Do not send `employee` — it is set from the auth headers. Either link a catalog course with `training_catalog_id` or describe an external one; `training_name` and `start_date` are always required. Rejected with `400` if the employee already has a nomination for the same course and start date, or if the course has no seats left. Call `/training/nominations/{id}/submit` afterwards to send it for approval.',
         body: { $ref: '#/components/schemas/TrainingNomination' }, response: { type: 'object' },
       }),
+    },
+    '/training/nominations/{id}': {
+      put: op({
+        tag: 'Training', summary: 'Edit an own draft nomination',
+        description: 'Only nominations still in `Draft` may be edited — once submitted the nomination is in the approval flow and returns `400`. Rejected with `400` if the edit would duplicate another nomination for the same course and start date.',
+        params: [pathId], body: { $ref: '#/components/schemas/TrainingNomination' }, response: { type: 'object' },
+      }),
+      delete: op({ tag: 'Training', summary: 'Delete an own draft nomination', description: 'Only nominations still in `Draft` may be deleted.', params: [pathId], response: { type: 'object' } }),
     },
     '/training/nominations/{id}/submit': { post: op({ tag: 'Training', summary: 'Submit a nomination for approval', params: [pathId], response: { type: 'object' } }) },
 

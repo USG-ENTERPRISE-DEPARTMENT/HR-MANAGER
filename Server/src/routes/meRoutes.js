@@ -106,18 +106,29 @@ router.get ('/attendance/today',     me.getToday);
 router.get ('/attendance/timesheet', me.getTimesheet);
 
 // ── Medical ──────────────────────────────────────────────────────────────────
+// Draft claims stay editable/deletable from the app; once submitted they belong to the approval
+// flow and only the Manage Medical page (which requires the medical permissions) may act on them.
+// Order of guards matters: ownership first (404 for someone else's record, so the response never
+// confirms it exists), then the Draft check.
 router.get ('/medical/enquiry',   me.getMedicalEnquiry);
 router.get ('/medical/staff',     me.getStaffMedical);
 router.post('/medical/staff',     upload.array('attachments', 3), me.createStaffMedical);
+router.put   ('/medical/staff/:id', upload.array('attachments', 3), me.staffMedicalOwnership, me.staffMedicalDraft, me.updateStaffMedical);
+router.delete('/medical/staff/:id', me.staffMedicalOwnership, me.staffMedicalDraft, me.deleteStaffMedical);
 router.post('/medical/staff/:id/submit', me.staffMedicalOwnership, me.submitStaffMedical);
 router.get ('/medical/dependents', me.getDependentMedical);
 router.post('/medical/dependents', upload.array('attachments', 3), me.createDependentMedical);
+router.put   ('/medical/dependents/:id', upload.array('attachments', 3), me.dependentMedicalOwnership, me.dependentMedicalDraft, me.updateDependentMedical);
+router.delete('/medical/dependents/:id', me.dependentMedicalOwnership, me.dependentMedicalDraft, me.deleteDependentMedical);
 router.post('/medical/dependents/:id/submit', me.dependentMedicalOwnership, me.submitDependentMedical);
 
 // ── Training ─────────────────────────────────────────────────────────────────
 router.get ('/training/catalog',     me.getCatalog);
 router.get ('/training/nominations', me.getNominations);
 router.post('/training/nominations', me.createNomination);
+// trainingController enforces Draft-only on both of these itself.
+router.put   ('/training/nominations/:id', me.nominationOwnership, me.updateNomination);
+router.delete('/training/nominations/:id', me.nominationOwnership, me.deleteNomination);
 router.post('/training/nominations/:id/submit', me.nominationOwnership, me.submitNomination);
 
 // ── Performance ──────────────────────────────────────────────────────────────
