@@ -470,12 +470,12 @@ for (const [module, label] of [['leave', 'leave request'], ['medical', 'medical 
 }
 
 // ── Payroll lookup by GL reference ───────────────────────────────────────────
-// Uses this router's own auth (x-api-key + x-employee-id), so the spec-level `security` and base path
-// both apply and are NOT overridden here.
+// `security` is overridden to the API key alone: the caller is the core banking system, which has no
+// employee identity to send. The base path still applies.
 //
-// Still written longhand rather than via op(): that helper folds in COMMON_ERRORS, whose 403 and 404
-// text describes self-scoped record access ("not owned by this employee"), which would misdescribe
-// this endpoint's failure modes.
+// Written longhand rather than via op(): that helper folds in COMMON_ERRORS, whose 403 and 404 text
+// describes self-scoped record access ("not owned by this employee"), which would misdescribe this
+// endpoint's failure modes.
 spec.paths['/payroll/runs/by-reference/{reference}'] = {
   get: {
     tags: ['Payroll'],
@@ -483,7 +483,7 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
     description: [
       '⚠️ **Not self-scoped.** Every other endpoint in this API returns only the calling employee\'s own',
       'records. This one returns an **entire payroll run** — every employee in it, with their salary',
-      'figures and bank accounts. Any caller holding a valid API key and any active employee id can',
+      'figures and bank accounts. Any caller holding a valid API key and the run\'s GL reference can',
       'read it.',
       '',
       'Returns a single payroll run matched on `payrollruns.document_ref` — the reference returned by',
@@ -497,10 +497,10 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
       '',
       '### Authentication',
       '',
-      'The standard `x-api-key` + `x-employee-id` headers, and the same 120 req/min rate limit as the',
-      'rest of this API. **Every call is logged** — the caller\'s employee id, the reference requested,',
-      'the outcome and the source IP are written to `payroll_api_access_log`, including calls that are',
-      'refused.',
+      '`x-api-key` only — **no `x-employee-id` is required**, since the caller is a system rather than a',
+      'person. The same 120 req/min rate limit as the rest of this API applies. **Every call is logged**:',
+      'the reference requested, the outcome, the source IP and user agent are written to',
+      '`payroll_api_access_log`, including calls that are refused.',
       '',
       '### Reachability',
       '',
@@ -508,6 +508,7 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
       'Approved or GL Failed — and runs finalized while payroll GL posting was switched off — have no',
       'reference and return `404`.',
     ].join('\n'),
+    security: [{ ApiKeyAuth: [] }],
     parameters: [{
       name: 'reference', in: 'path', required: true,
       schema: { type: 'string', example: 'PR1263886414' },
@@ -573,9 +574,8 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
           },
         },
       },
-      400: errorEnvelope('400', 'Reference number is required, or the x-employee-id header is missing'),
+      400: errorEnvelope('400', 'Reference number is required'),
       401: errorEnvelope('401', 'Missing or invalid API key'),
-      403: errorEnvelope('403', 'The employee record identified by x-employee-id is not active'),
       404: errorEnvelope('404', 'No payroll run found for that reference number'),
       429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
     },

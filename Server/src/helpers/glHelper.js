@@ -72,30 +72,61 @@ function validateUrlFrom(cfg, extra) {
  * configured, unreachable, or an unexpected response). Null means "unknown", NOT "all valid" — the
  * caller decides what to do with that, and must never treat it as a pass.
  */
-async function invalidAccounts(accounts, cfg, extra, headers) {
+async function invalidAccounts(accounts, cfg, extra, headers, referenceNo = '') {
+  const tag  = referenceNo ? ` ${referenceNo}` : '';
   const list = [...new Set(accounts.filter(Boolean).map(String))];
   if (!list.length) return new Set();
 
   const url = validateUrlFrom(cfg, extra);
-  if (!url) return null;
+  if (!url) {
+    glLog(`VALIDATE SKIPPED${tag}`, 'No validator URL could be derived (gl_url unset and no GL_VALIDATE_URL / gl_extra.validate_url override).');
+    return null;
+  }
+
+  // Log the request before sending, matching the posting flow: when the call hangs or the process
+  // dies mid-flight there is still a record of exactly what was asked. Auth headers are not logged.
+  glLog(`VALIDATE REQUEST${tag} → POST ${url}`, { accountList: list });
 
   try {
     const res = await axios.post(url, { accountList: list }, {
       headers, timeout: Number(cfg.gl_timeout) || 30000,
     });
+
+    // The raw response, always — this is the record that shows whether the validator actually
+    // screened the accounts or answered with something the parsing below could not use.
+    glLog(`VALIDATE RESPONSE${tag} (HTTP ${res.status})`, res.data);
+
     const code = String(res.data?.responseCode ?? '');
     if (code && code !== '00' && code !== '000' && code !== '0') {
-      glLog('VALIDATE REJECTED', { url, responseCode: code, message: res.data?.message ?? null });
+      glLog(`VALIDATE REJECTED${tag}`, { url, responseCode: code, message: res.data?.message ?? null });
       return null;
     }
     const invalid = res.data?.data?.invalidAccounts;
     if (!Array.isArray(invalid)) {
-      glLog('VALIDATE UNEXPECTED SHAPE', { url, body: res.data });
+      glLog(`VALIDATE UNEXPECTED SHAPE${tag}`, {
+        url,
+        expected: 'data.invalidAccounts to be an array',
+        received: invalid === undefined ? 'undefined (key absent)' : typeof invalid,
+        body: res.data,
+      });
       return null;
     }
+
+    // Outcome in the validator's own terms: how many were asked about, which came back invalid.
+    // "all submitted accounts invalid" is the signature of a validator that is not really screening
+    // them, so it is called out rather than left for a reader to spot.
+    glLog(`VALIDATE RESULT${tag}`, {
+      submitted:     list.length,
+      invalidCount:  invalid.length,
+      invalidAccounts: invalid.map(String),
+      note: invalid.length === list.length && list.length > 0
+        ? 'Every submitted account was reported invalid — verify the validator is screening rather than rejecting the whole request.'
+        : undefined,
+    });
+
     return new Set(invalid.map(String));
   } catch (e) {
-    glLog('VALIDATE TRANSPORT FAILURE', {
+    glLog(`VALIDATE TRANSPORT FAILURE${tag}`, {
       url, message: e.message, status: e.response?.status ?? null, body: e.response?.data ?? null,
     });
     return null;
@@ -231,7 +262,7 @@ async function postToGL({
       ...(debitAccounts  || []).map(d => d.debitAccount),
       ...(creditAccounts || []).map(c => c.creditAccount),
     ];
-    const invalid = await invalidAccounts(accounts, cfg, extra, headers);
+    const invalid = await invalidAccounts(accounts, cfg, extra, headers, referenceNo);
 
     if (invalid === null) {
       glLog(`VALIDATE SKIPPED ${referenceNo}`, 'Account validation unavailable — posting proceeded unchecked.');

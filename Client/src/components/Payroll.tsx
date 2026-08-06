@@ -1847,9 +1847,11 @@ export function Payroll() {
     try {
       const res = await api.post(`/payroll/runs/${activeRunId}/finalize`);
       const updated: PayrollRun | null = res.data?.data ?? null;
-      toast.success('Payroll finalized and locked');
-      // Inform user whether GL posting succeeded
+      // The run always reaches a terminal state, but only a CLEAN one is a success. When the GL
+      // refused the journal the run is 'GL Failed', so "finalized and locked" would tell the user the
+      // opposite of what happened — the blocked-posting modal is the whole message in that case.
       if (updated?.document_ref) {
+        toast.success('Payroll finalized and locked');
         toast.success(`GL posted — Ref: ${updated.document_ref}`, { duration: 6000 });
       } else if ((updated as any)?.glInvalidAccounts?.length || (updated as any)?.glImbalance) {
         // A blocked posting gets the modal, not a toast: the detail is the actionable part and a
@@ -1858,6 +1860,10 @@ export function Payroll() {
           accounts:  (updated as any).glInvalidAccounts ?? null,
           imbalance: (updated as any).glImbalance ?? null,
         });
+      } else if (updated?.status === 'Completed') {
+        // Completed with no reference and no error: GL posting is switched off for payroll
+        // (Settings → Controls → Postings), so record-only finalization is the expected outcome.
+        toast.success('Payroll finalized and locked');
       } else {
         let glErr = '';
         try { const log = JSON.parse(updated?.payment_log ?? '{}'); glErr = log?.error?.message || log?.message || JSON.stringify(log); } catch {}

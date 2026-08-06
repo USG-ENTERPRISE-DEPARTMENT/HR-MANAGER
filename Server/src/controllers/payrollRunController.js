@@ -634,8 +634,10 @@ async function logPayrollApiAccess(req, { reference, runId, outcome, employeeCou
     const self = req.self || {};
     await prisma.payroll_api_access_log.create({
       data: {
-        // req.self is populated by mobileAuth from the x-employee-id header — this is the CALLER,
-        // not any employee inside the returned run.
+        // Only set when the caller authenticated with an employee identity (mobileAuth populates
+        // req.self from x-employee-id). The lookup is key-only, so these are normally null and the
+        // audit trail rests on reference + ip + user_agent + timestamp instead. Never any employee
+        // from inside the returned run.
         employee:       self.id ? BigInt(self.id) : null,
         employee_code:  self.code ?? null,
         employee_name:  self.name ?? null,
