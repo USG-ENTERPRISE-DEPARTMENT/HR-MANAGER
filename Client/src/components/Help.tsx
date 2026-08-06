@@ -246,21 +246,21 @@ const MODULES: HelpModule[] = [
               { label: 'After an intermediate approval, the next configured approver is notified. Final approval activates or confirms the employee and triggers external sync.' },
             ],
           },
-          { type: 'text', body: 'After approval, the system automatically attempts to sync the employee record to any configured external system (x100 for user creation). A second notification appears immediately after approval confirming whether the sync succeeded or failed.' },
+          { type: 'text', body: 'After approval, the system automatically creates the matching staff account in the core banking system. A second notification appears immediately after approval telling you whether that succeeded.' },
           {
             type: 'table',
-            headers: ['Sync outcome', 'What you see'],
+            headers: ['Outcome', 'What you see'],
             rows: [
-              ['Success', 'A green "External system synced" notification with the response from the external system'],
-              ['Failed',  'A red "External sync failed" notification with the error detail, and a "Sync Failed" badge on the employee row in the list'],
+              ['Created',     'A green "Staff account created" notification confirming the employee is set up in the core banking system'],
+              ['Not created', 'A red "Staff account not created" notification explaining why, and a "Not in core system" badge on the employee row in the list'],
             ],
           },
           {
-            type: 'steps', heading: 'How to retry a failed sync',
+            type: 'steps', heading: 'What to do when the staff account was not created',
             steps: [
-              { label: 'In the Employees list, find the employee — they will have a red "Sync Failed" badge on their row.' },
+              { label: 'In the Employees list, find the employee — they will have a red "Not in core system" badge on their row.' },
               { label: 'Open the three-dot actions menu and choose "Retry External Sync".' },
-              { label: 'The system re-attempts the sync. A success or error notification will confirm the result.' },
+              { label: 'A notification confirms whether the staff account was created this time. If it keeps failing, contact IT — the connection to the core banking system may be down.' },
             ],
           },
           { type: 'tip', body: 'If self-approval is disabled in Settings, the user who created the record cannot approve it — another authorised user must do so.' },

@@ -759,6 +759,63 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
     netPay:     round2(acc.netPay     + e.netPay),
   }), { earnings: 0, deductions: 0, netPay: 0 });
 
+  // ── Per-column summary ──────────────────────────────────────────────────────
+  // The per-employee `columns` above answer "what makes up this person's pay"; this answers "what
+  // does this run owe against each posting column", which is the view needed to reconcile the run
+  // against the GL journal. buildAndPostGL emits one line per column per employee grouped by GL
+  // account, so summing the same rows the same way reproduces the posted debit/credit totals.
+  //
+  // Keyed by column NAME alone: one row per payroll column, which is how the run is read and
+  // approved. Several columns legitimately share a GL account (Clothing, Overtime and Steward
+  // Allowance all post to 0099877 here), so the account is deliberately NOT part of the key —
+  // including it would split nothing useful and would make one column appear twice on the rare
+  // occasion its rows carried different accounts. `glAccounts` records every distinct account seen
+  // for the column, so that case stays visible instead of being silently collapsed.
+  const byColumn = new Map();
+  for (const emp of employees) {
+    for (const col of emp.columns) {
+      const key = col.name;
+      if (!byColumn.has(key)) {
+        byColumn.set(key, {
+          name:          col.name,
+          type:          col.type,               // 'Payment' | 'Deduction'
+          glAccount:     col.glAccount,          // null = posted against the env-level fallback GL
+          glAccounts:    new Set(),
+          currency:      col.currency,
+          employeeCount: 0,
+          amount:        0,
+        });
+      }
+      const agg = byColumn.get(key);
+      agg.glAccounts.add(col.glAccount ?? null);
+      agg.employeeCount += 1;
+      agg.amount        += col.amount;
+    }
+  }
+
+  // Payments before deductions, then largest first — the order a reconciler reads them in.
+  const columnSummary = Array.from(byColumn.values())
+    .map(c => ({
+      ...c,
+      amount: round2(c.amount),
+      // Normally a single account; more than one means the run posted this column to different
+      // accounts across employees, which a reconciler needs to see rather than have averaged away.
+      glAccounts: [...c.glAccounts],
+    }))
+    .sort((a, b) => (a.type === b.type ? b.amount - a.amount : a.type === 'Payment' ? -1 : 1));
+
+  // Net pay is synthesized by buildAndPostGL as the cash leg rather than read from a column, so it
+  // is reported separately: `columnSummary` sums to earnings + deductions, and the net-pay credit
+  // is what balances them. Employees whose net is zero or negative are skipped by the journal, so
+  // the count here is the number of employees who actually received a cash credit.
+  const netPayLine = {
+    name:          'Net Pay',
+    type:          'Credit',
+    glAccount:     null,                        // each line credits the employee's own bank account
+    employeeCount: employees.filter(e => e.netPay > 0).length,
+    amount:        round2(employees.reduce((s, e) => s + (e.netPay > 0 ? e.netPay : 0), 0)),
+  };
+
   await logPayrollApiAccess(req, {
     reference, runId: run.id, outcome: 'ok', employeeCount: employees.length,
   });
@@ -768,6 +825,8 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
     reference,
     employeeCount: employees.length,
     totals,
+    columnSummary,
+    netPay: netPayLine,
     employees,
   });
 });

@@ -176,10 +176,13 @@ export function Employees() {
     setSyncingId(emp.id);
     try {
       await api.post(`/employees/${emp.id}/sync`);
-      toast.success(`${emp.firstName} ${emp.lastName} synced successfully`);
+      toast.success(`Staff account created for ${emp.firstName} ${emp.lastName}`);
       await fetchEmployees();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Sync failed');
+      toast.error(
+        err?.response?.data?.message
+          ?? `Could not create a staff account for ${emp.firstName} ${emp.lastName}. Please try again later.`,
+      );
       await fetchEmployees();
     } finally {
       setSyncingId(null);
@@ -425,9 +428,11 @@ export function Employees() {
                           {row.sync_status === 'failed' && (
                             <span
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200"
-                              title={row.sync_error || 'External sync failed'}
+                              // sync_error is the raw response body from the core system, which is
+                              // usually JSON — not something to put in front of an HR officer.
+                              title="This employee is approved here, but no staff account was created in the core banking system. Choose Retry External Sync from the actions menu."
                             >
-                              <WifiOff size={9} /> Sync Failed
+                              <WifiOff size={9} /> Not in core system
                             </span>
                           )}
                         </div>

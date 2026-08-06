@@ -561,6 +561,45 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
                     netPay:     { type: 'number', example: 297408.63 },
                   },
                 },
+                columnSummary: {
+                  type: 'array',
+                  description:
+                    'Run-level total per posting column — the same rows as `employees[].columns`, '
+                    + 'aggregated. Use this to reconcile the run against the GL journal without walking '
+                    + 'every employee. **One row per column name.** Note that several columns may share '
+                    + 'one GL account (e.g. Clothing, Overtime and Steward Allowance), so `glAccount` is '
+                    + 'not unique across rows — sum by `glAccount` yourself if you need per-account '
+                    + 'totals. Payments are listed before deductions, largest first. Sums to '
+                    + '`totals.earnings` + `totals.deductions`; the balancing cash leg is `netPay`.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name:          { type: 'string', example: 'Salary Basic' },
+                      type:          { type: 'string', enum: ['Payment', 'Deduction'], example: 'Payment' },
+                      glAccount:     { type: 'string', nullable: true, example: '012098776665', description: 'Null when the column had no GL account and the posting fell back to the env-level default.' },
+                      glAccounts:    { type: 'array', items: { type: 'string', nullable: true }, example: ['012098776665'], description: 'Every distinct GL account this column posted to in the run. Normally one entry; more than one means the column posted to different accounts across employees.' },
+                      currency:      { type: 'string', example: 'Cedis' },
+                      employeeCount: { type: 'integer', example: 2, description: 'How many employees had a non-zero amount in this column.' },
+                      amount:        { type: 'number', example: 347940.30, description: 'Total across every employee for this column.' },
+                    },
+                  },
+                },
+                netPay: {
+                  type: 'object',
+                  description:
+                    'The cash leg of the journal, reported separately because it is derived '
+                    + '(earnings - deductions per employee) rather than read from a payroll column. '
+                    + 'Each line credits the employee\'s own bank account, so there is no single '
+                    + '`glAccount`. Employees whose net is zero or negative are excluded, matching the '
+                    + 'posting.',
+                  properties: {
+                    name:          { type: 'string', example: 'Net Pay' },
+                    type:          { type: 'string', example: 'Credit' },
+                    glAccount:     { type: 'string', nullable: true, example: null },
+                    employeeCount: { type: 'integer', example: 2 },
+                    amount:        { type: 'number', example: 297408.63 },
+                  },
+                },
                 employees: {
                   type: 'array',
                   items: {

@@ -41,6 +41,31 @@ const fmtDate = (v: string | null | undefined) => {
   catch { return v; }
 };
 
+/**
+ * Turn a failed sync result into a short phrase a non-technical user can act on.
+ *
+ * The raw result carries an HTTP status, an axios message ("connect ECONNREFUSED 10.203.14.33:8181")
+ * and whatever body the core system returned — none of which mean anything to an HR officer. Prefer
+ * the core system's own `message` when it sent one, otherwise translate the status code. Returns ''
+ * when nothing useful can be said, so the caller simply omits the clause.
+ */
+const syncReason = (sync: any): string => {
+  const fromBody = sync?.data?.message ?? sync?.data?.error;
+  if (typeof fromBody === 'string' && fromBody.trim()) return fromBody.trim().replace(/\.$/, '');
+
+  const status = Number(sync?.httpStatus);
+  if (status === 401 || status === 403) return 'the connection was refused (sign-in details rejected)';
+  if (status === 404) return 'the service address could not be found';
+  if (status === 409) return 'a staff account already exists there';
+  if (status === 408 || status === 504) return 'it did not respond in time';
+  if (status >= 500) return 'the service reported an error on its side';
+
+  const msg = String(sync?.message ?? '');
+  if (/ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ENETUNREACH/i.test(msg)) return 'the service could not be reached';
+  if (/timeout/i.test(msg)) return 'it did not respond in time';
+  return '';
+};
+
 const readFileAsBase64 = (file: File): Promise<string> =>
   new Promise((res, rej) => {
     const r = new FileReader();
@@ -1385,20 +1410,25 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
 
       const sync = res.data?.syncResult;
       if (sync) {
-        const body = sync.data != null ? JSON.stringify(sync.data, null, 2) : sync.message ?? '';
         if (sync.success) {
           toast.success(
             <div>
-              <p className="font-semibold text-[13px] mb-1">External system synced</p>
-              {body && <pre className="text-[11px] whitespace-pre-wrap opacity-80">{body}</pre>}
+              <p className="font-semibold text-[13px]">Staff account created</p>
+              <p className="text-[11px] opacity-80 mt-0.5">
+                {fullName}'s record is now set up in the core banking system.
+              </p>
             </div>,
-            { duration: 8000 }
+            { duration: 6000 }
           );
         } else {
           toast.error(
             <div>
-              <p className="font-semibold text-[13px] mb-1">External sync failed {sync.httpStatus ? `(${sync.httpStatus})` : ''}</p>
-              {body && <pre className="text-[11px] whitespace-pre-wrap opacity-80">{body}</pre>}
+              <p className="font-semibold text-[13px]">Staff account not created</p>
+              <p className="text-[11px] opacity-80 mt-0.5">
+                {fullName} was approved, but the core banking system could not be updated
+                {syncReason(sync) ? ` — ${syncReason(sync)}` : ''}. Choose “Retry External Sync”
+                from the employee’s actions menu once the connection is back.
+              </p>
             </div>,
             { duration: 10000 }
           );
