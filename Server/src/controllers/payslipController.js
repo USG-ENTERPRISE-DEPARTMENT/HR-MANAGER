@@ -105,7 +105,7 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   const [emp] = await query`
     SELECT e.id, e.employee_id, e.firstName, e.lastName, e.email,
            e.bankAccount,
-           COALESCE(jt.label, e.jobTitleId) AS designation,
+           COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS designation,
            COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department
     FROM employee e
     LEFT JOIN codelistvalue jt ON jt.id = e.jobTitleId
