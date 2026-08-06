@@ -55,7 +55,7 @@ export function Header({ onMenuToggle, onLogout, currentUser, onNavigate }: { on
             <span className="text-white font-bold text-[15px] tracking-tight syne">HR</span>
           </div>
           <span className="text-[17px] font-bold text-[var(--text-primary)] tracking-wide hidden sm:block syne">
-            SISL <span className="font-normal text-[var(--text-muted)]">Portal</span>
+            RCB <span className="font-normal text-[var(--text-muted)]">Portal</span>
           </span>
         </div>
       </div>

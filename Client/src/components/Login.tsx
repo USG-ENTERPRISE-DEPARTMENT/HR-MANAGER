@@ -83,7 +83,7 @@ export function Login({ onLogin }: LoginProps) {
             <span className="text-white font-bold text-[15px] tracking-tight">SI</span>
           </div>
           <span className="text-[19px] font-bold text-white tracking-wide">
-            SISL <span className="font-normal text-slate-400">Portal</span>
+            RCB <span className="font-normal text-slate-400">Portal</span>
           </span>
         </div>
         {/* <div className="hidden sm:flex items-center gap-8 text-sm font-semibold text-slate-300">
