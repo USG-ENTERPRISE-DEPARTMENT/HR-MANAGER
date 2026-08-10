@@ -25,6 +25,10 @@
   --warning-dim: #fffbeb;
   --purple: #7c3aed;
   --purple-dim: #f5f3ff;
+  /* Pairs with `color-scheme: dark` on .dark below. Without an explicit light value here, a browser
+     set to dark at OS level renders native controls (date pickers, selects, scrollbars) dark on our
+     light surfaces — dark text on a dark field. */
+  color-scheme: light;
 }
 
 .dark {
@@ -123,6 +127,101 @@ body {
     box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
   }
   input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+  /* ── Native date / time pickers ──────────────────────────────────────────────
+     Chrome renders these as a row of editable segments plus a calendar button, none of which
+     inherit the field styling above. Left alone they sit at the browser default font and size,
+     look shorter than the text inputs beside them, and show a low-contrast grey calendar icon
+     that all but disappears in dark mode.
+
+     The value stays in the browser's locale order (dd/mm/yyyy here) — that is set by the browser's
+     language, not by CSS, and overriding it would fight the user's own regional setting. */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="time"] {
+    /* Match the height of a text input: the segment row is shorter than a normal text line box. */
+    min-height: 38px;
+    /* Leave the calendar button room so a long value never collides with it. */
+    padding-right: 10px;
+    /* Safari ignores the padding above without this and centres the value vertically. */
+    -webkit-appearance: none;
+    appearance: none;
+    /* iOS Safari otherwise renders the field with the value pinned left and no fixed height. */
+    display: block;
+  }
+
+  /* The calendar button. Default is a faint grey glyph; tint it to the accent so it reads as
+     interactive, and darken on hover. `filter` is the only reliable handle Chrome exposes here. */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    padding: 2px;
+    border-radius: 4px;
+    transition: opacity 0.15s, background-color 0.15s;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+  input[type="month"]::-webkit-calendar-picker-indicator:hover,
+  input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background-color: var(--accent-dim);
+  }
+  /* The stock icon is a dark glyph, invisible against the dark surface. Inverting is the documented
+     workaround — there is no colour property for it. */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  .dark input[type="month"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator {
+    /* Single function on purpose: the CSS minifier rewrites `invert(1)` to `invert()` and, when a
+       second function follows, emits them with no separating space (`invert()brightness(1.6)`),
+       which is an invalid filter list. `invert(0.85)` keeps its argument and cannot be joined. */
+    filter: invert(0.85);
+  }
+
+  /* Segments (dd / mm / yyyy). Give the focused one a clear highlight — the default is a faint
+     grey selection that is easy to lose track of while tabbing between segments. */
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="datetime-local"]::-webkit-datetime-edit,
+  input[type="month"]::-webkit-datetime-edit,
+  input[type="time"]::-webkit-datetime-edit {
+    color: var(--text-primary);
+  }
+  ::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+  ::-webkit-datetime-edit-text {
+    color: var(--text-muted);
+    padding: 0 1px;
+  }
+  ::-webkit-datetime-edit-day-field:focus,
+  ::-webkit-datetime-edit-month-field:focus,
+  ::-webkit-datetime-edit-year-field:focus,
+  ::-webkit-datetime-edit-hour-field:focus,
+  ::-webkit-datetime-edit-minute-field:focus,
+  ::-webkit-datetime-edit-ampm-field:focus {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 3px;
+    outline: none;
+  }
+  /* An empty date shows its placeholder segments (dd/mm/yyyy) in full-strength text, which reads as
+     a real value. Mute them so an unfilled field looks unfilled. */
+  input[type="date"]:not(:focus):invalid::-webkit-datetime-edit,
+  input[type="datetime-local"]:not(:focus):invalid::-webkit-datetime-edit,
+  input[type="month"]:not(:focus):invalid::-webkit-datetime-edit,
+  input[type="time"]:not(:focus):invalid::-webkit-datetime-edit {
+    color: var(--text-muted);
+  }
+  /* Firefox has no ::-webkit-* pseudo-elements; it needs the field to opt into the dark palette
+     explicitly or the picker chrome stays light. Harmless in Chrome. */
+  .dark input[type="date"],
+  .dark input[type="datetime-local"],
+  .dark input[type="month"],
+  .dark input[type="time"] {
+    color-scheme: dark;
+  }
 }
 
 
