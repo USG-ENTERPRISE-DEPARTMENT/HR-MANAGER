@@ -16,6 +16,7 @@ import { TablePagination } from './ui/TablePagination';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { GlBlockedModal, type InvalidAccount, type GlImbalance } from './ui/GlBlockedModal';
+import { ConfirmAlert } from './ConfirmAlert';
 import { Combobox } from './EmployeeTabs';
 import api from '../../lib/api';
 import { getCurrentUser } from '../../lib/auth';
@@ -66,13 +67,42 @@ interface PayrollRun {
   date_start: string | null; date_end: string | null;
   deduction_group: string | null; group_name: string | null;
   payment_type_id: string | null; type_name: string | null;
-  status: 'Draft' | 'Processing' | 'Pending Approval' | 'Rejected' | 'Approved' | 'Completed' | 'GL Failed';
+  // 'Bank Pending' = the GL accepted the journal, but core banking still has to approve it before
+  // anyone is paid. 'Completed' means bank-confirmed (or finalized with GL posting switched off).
+  status: 'Draft' | 'Processing' | 'Pending Approval' | 'Rejected' | 'Approved' | 'Completed' | 'GL Failed' | 'Bank Pending';
   created_at: string;
   submitted_by: string | null; approved_by: string | null;
   approved_at: string | null; rejection_reason: string | null;
   document_ref: string | null; finalized_at: string | null;
   payment_log: string | null;
+  // Set on confirmation. `bank_confirmed_by` is null when core banking confirmed via its callback and
+  // holds a user id when someone used "Mark as Paid" — a human assertion rather than a bank signal.
+  bank_confirmed_at?: string | null;
+  bank_confirmed_by?: string | null;
 }
+
+// Single source of truth for status pills. Previously the run-header and the runs-table each kept
+// their own map and they had drifted: the header omitted 'GL Failed', so the one status that needs
+// operator action rendered as a neutral grey pill there while showing red in the table.
+const STATUS_PILL: Record<string, string> = {
+  Draft:              'pill',
+  Processing:         'pill pill-accent',
+  'Pending Approval': 'pill pill-warning',
+  Approved:           'pill pill-success',
+  'Bank Pending':     'pill pill-warning',
+  Completed:          'pill pill-success',
+  Rejected:           'pill pill-danger',
+  'GL Failed':        'pill pill-danger',
+};
+
+// A run whose journal has reached the general ledger is read-only: 'Bank Pending' is in the bank's
+// approval queue and 'Completed' is settled, so editing either would leave HR and the bank
+// disagreeing about what was paid. Mirrors isRunLocked() in Server payrollRunController.js, which is
+// the guard that actually enforces this — the UI only reflects it.
+//
+// 'GL Failed' is excluded on purpose: that journal was refused, so editing and regenerating is the
+// intended recovery path.
+const isRunLocked = (status: string) => status === 'Completed' || status === 'Bank Pending';
 // One stage of a run's snapshotted multi-stage approval flow.
 interface RunStage {
   id: string; stage_order: number; stage_name: string;
@@ -618,10 +648,10 @@ function PayslipSlideOver({
 }
 
 function PayrollGrid({
-  gridData, activeRun, editMode, generating, finalizing, retryingGL, submitting, approving, rejecting,
+  gridData, activeRun, editMode, generating, finalizing, retryingGL, confirmingPaid, submitting, approving, rejecting,
   staleColumnCount, hiddenColIds, netExcludedIds, approvalSettings, currentUserId, currentUserRoles, runStages,
   auditLog, auditLoading, payslipEnabled, colLabelMap, payslipSettings,
-  onBack, onGenerate, onFinalize, onRetryGL, onExport, onToggleEdit, onCellUpdate, onReorderCols,
+  onBack, onGenerate, onFinalize, onRetryGL, onConfirmPaid, onExport, onToggleEdit, onCellUpdate, onReorderCols,
   onSubmit, onApprove, onReject, onLoadAudit, onNewRun,
 }: {
   gridData: GridCell[];
@@ -630,6 +660,7 @@ function PayrollGrid({
   generating: boolean;
   finalizing: boolean;
   retryingGL: boolean;
+  confirmingPaid: boolean;
   submitting: boolean;
   approving: boolean;
   rejecting: boolean;
@@ -649,6 +680,7 @@ function PayrollGrid({
   onGenerate: () => void;
   onFinalize: () => void;
   onRetryGL: () => void;
+  onConfirmPaid: () => void;
   onExport: () => void;
   onToggleEdit: () => void;
   onCellUpdate: (itemId: string, amount: string) => void;
@@ -668,7 +700,11 @@ function PayrollGrid({
   const [dragOver,  setDragOver] = useState<string | null>(null);
   const [payslipId, setPayslipId] = useState<string | null>(null);
 
-  const isLocked          = activeRun.status === 'Completed' || activeRun.status === 'GL Failed';
+  // 'Bank Pending' is fully read-only: the journal is with the bank, so amounts must not change.
+  // canEdit derives from this, and the editable grid cell, "Edit Amounts" and Re-generate all gate on
+  // canEdit — so they lock as a consequence.
+  const isBankPending     = activeRun.status === 'Bank Pending';
+  const isLocked          = isRunLocked(activeRun.status) || activeRun.status === 'GL Failed';
   const isPendingApproval = activeRun.status === 'Pending Approval';
   const isApproved        = activeRun.status === 'Approved';
   const isRejected        = activeRun.status === 'Rejected';
@@ -782,19 +818,15 @@ function PayrollGrid({
     return () => el.removeEventListener('scroll', onScroll);
   }, [gridData]);
 
-  // Status pill
-  const statusCls: Record<string, string> = {
-    Draft:              'pill',
-    Processing:         'pill pill-accent',
-    'Pending Approval': 'pill',
-    Rejected:           'pill',
-    Approved:           'pill',
-    Completed:          'pill pill-success',
-  };
+  // Status pill — classes come from the shared STATUS_PILL map so the header and the runs table can
+  // never disagree again. These inline styles are header-only emphasis.
   const statusStyle: Record<string, Record<string, string>> = {
     'Pending Approval': { background: 'var(--warning-dim)', color: 'var(--warning)', border: '1px solid var(--warning)' },
     Rejected:           { background: 'var(--danger-dim)', color: 'var(--danger)', border: '1px solid var(--danger)' },
     Approved:           { background: 'rgba(16,185,129,0.10)', color: '#059669', border: '1px solid #10b981' },
+    // Amber: in flight — neither failed nor done.
+    'Bank Pending':     { background: 'var(--warning-dim)', color: 'var(--warning)', border: '1px solid var(--warning)' },
+    'GL Failed':        { background: 'var(--danger-dim)', color: 'var(--danger)', border: '1px solid var(--danger)' },
   };
 
   // Sticky cell base style
@@ -821,7 +853,7 @@ function PayrollGrid({
           <div>
             <h2 className="syne text-[18px] font-extrabold text-[var(--text-primary)] m-0 flex items-center gap-2.5">
               {activeRun.name}
-              <span className={statusCls[activeRun.status] ?? 'pill'} style={statusStyle[activeRun.status] ?? {}}>{activeRun.status}</span>
+              <span className={STATUS_PILL[activeRun.status] ?? 'pill'} style={statusStyle[activeRun.status] ?? {}}>{activeRun.status}</span>
             </h2>
             <p className="text-[12px] text-[var(--text-muted)] mt-0.5">
               {activeRun.freq_name ?? '—'}
@@ -1017,15 +1049,24 @@ function PayrollGrid({
           Also shown for a Rejected run that already posted: the money reached the bank, so the
           reference stays visible for reconciliation even though the run is being regenerated. */}
       {(isLocked || (isRejected && activeRun.document_ref)) && (
-        activeRun.document_ref ? (
-          <div className={`px-4 py-3 border rounded-[12px] flex items-center gap-3 text-[13px] ${
-            isRejected
+        activeRun.document_ref ? (() => {
+          // Three states share this banner. Only a bank-confirmed run earns the green tick: a
+          // 'Bank Pending' run has reached the GL but nobody has been paid yet, so it reads amber
+          // with a clock — showing green there is exactly the overstatement this change removes.
+          const amber = isRejected || isBankPending;
+          const tone  = amber ? 'var(--warning,#f59e0b)' : 'var(--success,#10b981)';
+          const label = isRejected ? 'Previously GL Posted'
+                      : isBankPending ? 'GL Posted — Awaiting Bank Confirmation'
+                      : 'GL Posted';
+          return (
+          <div className={`px-4 py-3 border rounded-[12px] flex items-center gap-3 text-[13px] flex-wrap ${
+            amber
               ? 'border-[var(--warning,#f59e0b)] bg-[color-mix(in_srgb,var(--warning,#f59e0b)_8%,transparent)]'
               : 'border-[var(--success,#10b981)] bg-[rgba(16,185,129,0.07)]'}`}>
-            <CheckCircle size={15} className={`shrink-0 ${isRejected ? 'text-[var(--warning,#f59e0b)]' : 'text-[var(--success,#10b981)]'}`} />
-            <span className={`font-semibold ${isRejected ? 'text-[var(--warning,#f59e0b)]' : 'text-[var(--success,#10b981)]'}`}>
-              {isRejected ? 'Previously GL Posted' : 'GL Posted'}
-            </span>
+            {isBankPending
+              ? <Clock size={15} className="shrink-0" style={{ color: tone }} />
+              : <CheckCircle size={15} className="shrink-0" style={{ color: tone }} />}
+            <span className="font-semibold" style={{ color: tone }}>{label}</span>
             <span className="text-[var(--text-muted)]">Document Ref:</span>
             <code className="font-mono text-[var(--text-primary)] bg-[var(--surface-hover,rgba(0,0,0,0.04))] px-2 py-0.5 rounded text-[12px]">{activeRun.document_ref}</code>
             {/* A re-posted run (rejected → regenerated → posted again) records the reference it
@@ -1045,8 +1086,30 @@ function PayrollGrid({
                 {new Date(activeRun.finalized_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false })}
               </span>
             )}
+            {/* Spell out what the state actually means. For a confirmed run, distinguish a signal
+                from the bank (bank_confirmed_by null) from a person's assertion via "Mark as Paid" —
+                they are not the same evidence and should not read the same. */}
+            <span className="basis-full text-[11px] text-[var(--text-muted)] mt-0.5">
+              {isBankPending
+                ? 'The core banking system accepted the journal. Staff are not paid until it completes its own approval.'
+                : activeRun.bank_confirmed_at
+                  ? `${activeRun.bank_confirmed_by ? 'Manually marked as paid' : 'Confirmed by core banking'} on ${new Date(activeRun.bank_confirmed_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false })}`
+                  : ''}
+            </span>
+            {/* Fallback for when the bank's confirmation callback never arrives. This asserts that
+                money moved without evidence from the bank, so it is gated on approve_payroll and
+                recorded distinctly server-side (bank_confirmed_by + a separate audit action). */}
+            {isBankPending && can('approve_payroll') && (
+              <div className="basis-full mt-1">
+                <button className="secondary-btn text-[12px]" onClick={onConfirmPaid} disabled={confirmingPaid}>
+                  <CheckCircle size={13} />
+                  {confirmingPaid ? 'Marking…' : 'Mark as Paid'}
+                </button>
+              </div>
+            )}
           </div>
-        ) : (() => {
+          );
+        })() : (() => {
           let glErrMsg = '';
           try {
             const log = JSON.parse(activeRun.payment_log ?? '{}');
@@ -1097,7 +1160,8 @@ function PayrollGrid({
             <p className="text-[var(--text-muted)] text-[13px]">
               {isPendingApproval && 'Payroll data is locked pending approval.'}
               {isApproved        && 'Payroll has been approved and is ready to finalize.'}
-              {isLocked          && 'This payroll run has been finalized.'}
+              {isBankPending     && 'Posted to the bank — awaiting confirmation. Amounts can no longer be changed.'}
+              {isLocked && !isBankPending && 'This payroll run has been finalized.'}
               {isRejected        && 'This run was rejected. Regenerate to restart.'}
             </p>
           )}
@@ -1483,6 +1547,9 @@ export function Payroll() {
   const [generating,        setGenerating]        = useState(false);
   const [finalizing,        setFinalizing]        = useState(false);
   const [retryingGL,        setRetryingGL]        = useState(false);
+  const [confirmingPaid,    setConfirmingPaid]    = useState(false);
+  // Manual "Mark as Paid" runs through a confirmation dialog: it asserts money moved.
+  const [confirmPaidOpen,   setConfirmPaidOpen]   = useState(false);
   // Why a GL posting was refused — unrecognised accounts and/or an unbalanced journal. Shown in a
   // modal rather than a toast: a run can have dozens of lines, and each needs to be read and acted on.
   const [glBlocked, setGlBlocked] = useState<
@@ -1847,12 +1914,13 @@ export function Payroll() {
     try {
       const res = await api.post(`/payroll/runs/${activeRunId}/finalize`);
       const updated: PayrollRun | null = res.data?.data ?? null;
-      // The run always reaches a terminal state, but only a CLEAN one is a success. When the GL
-      // refused the journal the run is 'GL Failed', so "finalized and locked" would tell the user the
-      // opposite of what happened — the blocked-posting modal is the whole message in that case.
-      if (updated?.document_ref) {
-        toast.success('Payroll finalized and locked');
-        toast.success(`GL posted — Ref: ${updated.document_ref}`, { duration: 6000 });
+      // Branch on the status the server actually returned, not on the presence of a reference: a
+      // reference now means the journal reached the GL and the run is 'Bank Pending', which is NOT
+      // the same as paid. When the GL refused, the run is 'GL Failed' and the blocked-posting modal
+      // is the whole message.
+      if (updated?.status === 'Bank Pending') {
+        toast.success('Payroll finalized — posted to the bank, awaiting confirmation', { duration: 6000 });
+        if (updated.document_ref) toast.success(`GL posted — Ref: ${updated.document_ref}`, { duration: 6000 });
       } else if ((updated as any)?.glInvalidAccounts?.length || (updated as any)?.glImbalance) {
         // A blocked posting gets the modal, not a toast: the detail is the actionable part and a
         // toast would truncate it and disappear.
@@ -1869,8 +1937,13 @@ export function Payroll() {
         try { const log = JSON.parse(updated?.payment_log ?? '{}'); glErr = log?.error?.message || log?.message || JSON.stringify(log); } catch {}
         toast.error(`GL posting failed${glErr ? ': ' + glErr : ' — check server logs'}`, { duration: 8000 });
       }
-      setRunRows(r => r.map(x => x.id === activeRunId ? (updated ? { ...x, ...updated } : { ...x, status: 'Completed' as const }) : x));
-      setActiveRun(r => r ? (updated ? { ...r, ...updated } : { ...r, status: 'Completed' as const }) : r);
+      // Only trust the server's status. The old fallback assumed 'Completed', which is now wrong in
+      // the common path (a finalized run is 'Bank Pending') — so when the response carries no run,
+      // leave the row alone and let the next load correct it rather than inventing a state.
+      if (updated) {
+        setRunRows(r => r.map(x => x.id === activeRunId ? { ...x, ...updated } : x));
+        setActiveRun(r => r ? { ...r, ...updated } : r);
+      }
     } catch (e: any) { toast.error(e.response?.data?.message || 'Finalize failed'); }
     finally { setFinalizing(false); }
   }
@@ -1899,6 +1972,24 @@ export function Payroll() {
       }
     } catch (e: any) { toast.error(e.response?.data?.message || 'Retry failed'); }
     finally { setRetryingGL(false); }
+  }
+
+  // Manual fallback for a 'Bank Pending' run when core banking's confirmation callback never
+  // arrives. The server records this distinctly (bank_confirmed_by + its own audit action) so it
+  // stays distinguishable from a real confirmation.
+  async function confirmPaid() {
+    if (!activeRunId) return;
+    setConfirmingPaid(true);
+    try {
+      const res = await api.post(`/payroll/runs/${activeRunId}/confirm-payment`);
+      const updated: PayrollRun | null = res.data?.data ?? null;
+      toast.success('Payroll marked as paid');
+      if (updated) {
+        setRunRows(r => r.map(x => x.id === activeRunId ? { ...x, ...updated } : x));
+        setActiveRun(r => r ? { ...r, ...updated } : r);
+      }
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Could not mark this payroll as paid'); }
+    finally { setConfirmingPaid(false); setConfirmPaidOpen(false); }
   }
 
   async function submitRun() {
@@ -3161,6 +3252,7 @@ export function Payroll() {
           generating={generating}
           finalizing={finalizing}
           retryingGL={retryingGL}
+          confirmingPaid={confirmingPaid}
           submitting={submitting}
           approving={approving}
           rejecting={rejecting}
@@ -3180,6 +3272,7 @@ export function Payroll() {
           onGenerate={generateRun}
           onFinalize={finalizeRun}
           onRetryGL={retryGL}
+          onConfirmPaid={() => setConfirmPaidOpen(true)}
           onSubmit={submitRun}
           onApprove={approveRun}
           onReject={() => setRejectOpen(true)}
@@ -3212,6 +3305,17 @@ export function Payroll() {
             </FormModal>
           )}
         </AnimatePresence>
+        {/* Marking a run paid without the bank saying so is an assertion, not evidence — confirm it
+            explicitly rather than acting on a single click. */}
+        <ConfirmAlert
+          isOpen={confirmPaidOpen}
+          variant="warning"
+          title="Mark this payroll as paid?"
+          message="Only do this if you have confirmed with the bank that the payment went through. The core banking system has not confirmed it. This is recorded against your user."
+          confirmText={confirmingPaid ? 'Marking…' : 'Yes, mark as paid'}
+          onConfirm={confirmPaid}
+          onCancel={() => setConfirmPaidOpen(false)}
+        />
         </>
       );
     }
@@ -3262,8 +3366,7 @@ export function Payroll() {
                     No payroll runs yet. Click <b>New Run</b> to get started.
                   </td></tr>
                 ) : pagedRuns.map((run, i) => {
-                  const statusCls: Record<string, string> = { Draft: 'pill', Processing: 'pill pill-accent', Completed: 'pill pill-success', 'Pending Approval': 'pill pill-warning', Approved: 'pill pill-success', Rejected: 'pill pill-danger', 'GL Failed': 'pill pill-danger' };
-                  const runStatusCls = statusCls[run.status] ?? 'pill';
+                  const runStatusCls = STATUS_PILL[run.status] ?? 'pill';
                   return (
                     <motion.tr key={run.id} className="tr cursor-pointer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                       onClick={() => openRun(run)}>
@@ -3301,7 +3404,9 @@ export function Payroll() {
                             { label: 'Duplicate Run', icon: Copy, onClick: () => openRunDuplicate(run), hidden: !can('process_payroll') },
                             {
                               label: 'Edit', icon: Edit,
-                              hidden: !(can('process_payroll') && run.status !== 'Completed' && run.status !== 'GL Failed'),
+                              // isRunLocked covers Completed and Bank Pending — deleting or editing a
+                              // run whose journal sits in the bank's queue is the worst outcome here.
+                              hidden: !(can('process_payroll') && !isRunLocked(run.status) && run.status !== 'GL Failed'),
                               onClick: () => {
                                 // Combobox matches value === option.id (a String), so coerce the run's
                                 // numeric ids to strings or the fields render empty.
@@ -3317,7 +3422,7 @@ export function Payroll() {
                                 setRunModalOpen(true);
                               },
                             },
-                            { label: 'Delete', icon: Trash2, danger: true, onClick: () => deleteRun(run.id), disabled: runDeleting === run.id, hidden: !(can('process_payroll') && run.status !== 'Completed' && run.status !== 'GL Failed') },
+                            { label: 'Delete', icon: Trash2, danger: true, onClick: () => deleteRun(run.id), disabled: runDeleting === run.id, hidden: !(can('process_payroll') && !isRunLocked(run.status) && run.status !== 'GL Failed') },
                           ]} />
                         </div>
                       </td>

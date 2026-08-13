@@ -531,6 +531,10 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
       'Only runs that actually posted to the GL have a `document_ref`. Runs still in Draft, Processing,',
       'Approved or GL Failed — and runs finalized while payroll GL posting was switched off — have no',
       'reference and return `404`.',
+      '',
+      'A freshly posted run is `Bank Pending` (journal accepted, awaiting the core banking approval',
+      'flow); it becomes `Completed` once confirmed via the confirmation callback, or `Rejected` via',
+      'the rejection callback. All three are reachable here and keep their reference.',
     ].join('\n'),
     security: [{ ApiKeyAuth: [] }],
     parameters: [{
@@ -548,7 +552,7 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
               properties: {
                 id:            id('126'),
                 name:          { type: 'string', example: 'PAYROLL FOR AUG 2026 - SNR MGT' },
-                status:        { type: 'string', example: 'Completed' },
+                status:        { type: 'string', enum: ['Bank Pending', 'Completed', 'Rejected'], example: 'Bank Pending', description: '`Bank Pending` = posted, awaiting core banking approval. `Completed` = confirmed paid. `Rejected` = the bank refused it.' },
                 document_ref:  { type: 'string', example: 'PR1263886414' },
                 reference:     { type: 'string', example: 'PR1263886414', description: 'Echo of the reference that was looked up.' },
                 employeeCount: { type: 'integer', example: 2 },
@@ -712,7 +716,91 @@ spec.paths['/payroll/runs/rejection'] = {
           },
         },
       },
-      400: errorEnvelope('400', 'reference or reason missing, or the run is not in a Completed state'),
+      400: errorEnvelope('400', 'reference or reason missing, or the run is not in a Bank Pending or Completed state'),
+      401: errorEnvelope('401', 'Missing or invalid API key'),
+      404: errorEnvelope('404', 'No payroll run found for that reference'),
+      429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
+    },
+  },
+};
+
+// ── Core banking: payroll confirmation callback ──────────────────────────────
+// The counterpart to the rejection callback above. Written longhand for the same reason: op() folds
+// in COMMON_ERRORS, whose 403/404 text describes self-scoped record access.
+spec.paths['/payroll/runs/confirmation'] = {
+  post: {
+    tags: ['Core Banking'],
+    summary: 'Confirm a payroll run was paid',
+    description: [
+      'Reports that the core banking system approved and paid a posted payroll batch.',
+      '',
+      'When HR finalizes a run its journal is posted to the general ledger and the run moves to',
+      '`Bank Pending` — **not** paid. The core banking system then runs its own approval flow. This',
+      'endpoint is how that flow reports success, moving the run to `Completed`.',
+      '',
+      'Without this call a successful payment produces no signal at all, and a run the bank never',
+      'approved is indistinguishable from one that was paid. Implementing it is what makes the',
+      'payroll status in HR trustworthy.',
+      '',
+      '### Authentication',
+      '',
+      'The `x-api-key` header **only** — do not send `x-employee-id`. The caller is a system, not an',
+      'employee. The same 120 requests/minute per IP rate limit applies.',
+      '',
+      '### Identifying the run',
+      '',
+      '`reference` is the GL document reference returned when the batch was posted (the value in',
+      '`documentRef` / `referenceNo`). It is the identifier both systems share.',
+      '',
+      '`note` is **optional and informational** — anything worth recording alongside the',
+      'confirmation. It is stored in the audit trail and never affects which run is confirmed.',
+      '',
+      '### Repeat delivery',
+      '',
+      'Safe to retry. A run that is already `Completed` returns `200` and is left unchanged, so a',
+      'duplicate callback does not read as a failure.',
+      '',
+      '### When it is refused',
+      '',
+      'Only a run in `Bank Pending` can be confirmed. A `Rejected` run returns `400` rather than',
+      'being flipped back: once a batch is rejected its reference leaves the approval queue, so a',
+      'later confirmation means the two systems disagree and that should surface, not be hidden.',
+    ].join('\n'),
+    security: [{ ApiKeyAuth: [] }],
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['reference'],
+            properties: {
+              reference: { type: 'string', example: 'PR1263886414', description: 'GL document reference of the posted payroll batch.' },
+              note:      { type: 'string', nullable: true, example: 'Settled in batch 4471', description: 'Optional. Recorded in the audit trail for context.' },
+            },
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Run confirmed (or was already confirmed)',
+        content: {
+          'application/json': {
+            schema: okEnvelope({
+              type: 'object',
+              properties: {
+                id:                id('126'),
+                name:              { type: 'string', example: 'PAYROLL FOR AUG 2026 - SNR MGT' },
+                reference:         { type: 'string', example: 'PR1263886414' },
+                status:            { type: 'string', example: 'Completed' },
+                bank_confirmed_at: { type: 'string', nullable: true, example: '2026-08-13T11:41:36.000Z', description: 'When the confirmation was recorded.' },
+              },
+            }, 'Payroll run confirmed'),
+          },
+        },
+      },
+      400: errorEnvelope('400', 'reference missing, or the run is not in a Bank Pending state'),
       401: errorEnvelope('401', 'Missing or invalid API key'),
       404: errorEnvelope('404', 'No payroll run found for that reference'),
       429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),

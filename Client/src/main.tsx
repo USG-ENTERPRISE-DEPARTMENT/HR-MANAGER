@@ -32,25 +32,17 @@ initAuth()
   })
   .finally(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    {/* Toast styling lives in index.css under `.app-toast` so it uses the same theme tokens
+        (--surface, --border, --text-primary, --font-sans) as the rest of the app and follows dark
+        mode. Hardcoding colours here made every toast render white-on-white in dark mode, and the
+        font stack was duplicated rather than taken from --font-sans. */}
     <Toaster
       position="top-right"
       offset={16}
       gap={8}
       toastOptions={{
         duration: 3500,
-        style: {
-          fontFamily: 'Poppins, ui-sans-serif, system-ui, sans-serif',
-          fontSize: '13px',
-          fontWeight: '500',
-          borderRadius: '12px',
-          padding: '14px 16px',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.09), 0 1px 6px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-          background: '#ffffff',
-          color: '#111827',
-          minWidth: '280px',
-          maxWidth: '360px',
-        },
+        className: 'app-toast',
       }}
     />
     <App />

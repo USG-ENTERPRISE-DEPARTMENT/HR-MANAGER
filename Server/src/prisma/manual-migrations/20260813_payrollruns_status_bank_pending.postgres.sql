@@ -1,0 +1,23 @@
+-- Add the 'Bank Pending' member to payrollruns_status.
+--
+-- finalizePayroll used to write 'Completed' the moment the GL journal was accepted by the core
+-- banking system. But that system then runs its OWN approval flow outside this application, so
+-- 'Completed' actually meant "journal accepted, and not (yet) rejected" — a run the bank silently
+-- never approved was indistinguishable from a settled one, and HR believed staff had been paid.
+--
+-- 'Bank Pending' names that gap: posted to the bank, awaiting its approval. 'Completed' now means
+-- bank-confirmed, or a record-only finalization made with GL posting switched off.
+--
+-- Note: ALTER TYPE ... ADD VALUE cannot run inside a transaction block on PostgreSQL < 12, and its
+-- effect is not visible to other statements in the same transaction. Run this statement on its own.
+--
+-- In practice this bites even on PG 16 when the statement is issued through a driver that wraps it
+-- implicitly: running it via prisma.$executeRawUnsafe alongside other DDL failed here with a
+-- misleading "make sure your database server is running" error, and left the connection unusable for
+-- the statement that followed. Issue it on its own connection (psql, or a dedicated client) —
+-- verified working against 10.203.14.50 on 2026-08-13.
+--
+-- Run this BEFORE deploying the code that writes the value, or finalizePayroll fails with
+--   ERROR 22P02, invalid input value for enum payrollruns_status: "Bank Pending"
+
+ALTER TYPE payrollruns_status ADD VALUE IF NOT EXISTS 'Bank Pending';

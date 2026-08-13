@@ -3131,6 +3131,13 @@ model payrollruns {
   document_ref     String?             @db.VarChar(100)
   payment_log      String?             @db.Text
   finalized_at     DateTime?           @db.Timestamp(0)
+  // When core banking confirmed the payment, and by whom. `bank_confirmed_by` is NULL when the
+  // confirmation arrived through the bank's API callback (the actor is the bank, not a user) and
+  // holds the user id when someone used "Mark as Paid" — that difference is how a bank-confirmed
+  // run is told apart from a human assertion. Distinct from finalized_at, which is when HR posted
+  // the journal.
+  bank_confirmed_at DateTime?          @db.Timestamp(0)
+  bank_confirmed_by BigInt?
 }
 
 // Per-run snapshot of the configured multi-stage approval flow + each stage's outcome. Written when a
@@ -3846,16 +3853,24 @@ enum salary_history_action {
   deleted
 }
 
+// MySQL stores ENUM as an ordinal, so new members MUST be appended at the end — inserting one
+// mid-list silently remaps every stored row. This list MUST stay byte-identical, in order, to the
+// ENUM(...) list in the MySQL MODIFY COLUMN migration under manual-migrations/.
 enum payrollruns_status {
   Draft
   Processing
   Pending_Approval @map("Pending Approval")
   Rejected
   Approved
+  // Bank-confirmed payment, or a record-only finalization made with GL posting switched off.
   Completed
   // Set by finalizePayroll when the GL journal could not be posted. The run keeps its generated
   // data so retryGLPosting can re-attempt the posting without regenerating it.
   GL_Failed        @map("GL Failed")
+  // Journal accepted by the core banking system, awaiting ITS separate approval flow. NOT a paid
+  // state: finalizePayroll used to write 'Completed' here, which made an unapproved run
+  // indistinguishable from a settled one.
+  Bank_Pending     @map("Bank Pending")
 }
 
 model performance_cycle {

@@ -107,6 +107,75 @@ body {
   .search-wrap input { padding-left: 36px !important; }
 
   .avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; font-family: var(--font-display); flex-shrink: 0; }
+
+  /* ── Toasts (sonner) ─────────────────────────────────────────────────────────
+     Applied via `toastOptions.className` in main.tsx. Everything here is a theme token so toasts
+     match the rest of the app and follow dark mode; previously these were inline literals in
+     main.tsx, which pinned every toast to a white background with near-black text — unreadable
+     once the app switched to dark.
+
+     `!important` is needed throughout: sonner sets its own values as inline styles on the toast
+     element, and an inline style beats a class rule at any specificity. */
+  .app-toast {
+    font-family: var(--font-sans) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    border-radius: 12px !important;
+    padding: 14px 16px !important;
+    background: var(--surface) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.09), 0 1px 6px rgba(0, 0, 0, 0.06) !important;
+    min-width: 280px;
+    max-width: 360px;
+    align-items: flex-start;
+  }
+  /* The shadow above is tuned for a light backdrop and disappears on the dark canvas; deepen it so
+     the toast still lifts off the page. */
+  .dark .app-toast {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 1px 6px rgba(0, 0, 0, 0.35) !important;
+  }
+  /* Titles use the display font, matching headings elsewhere (ConfirmAlert, PageHeader, .th). */
+  .app-toast [data-title] {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .app-toast [data-description] {
+    font-family: var(--font-sans);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  /* Status icons: sonner ships its own colours, which clash with the app palette. */
+  .app-toast[data-type="success"] [data-icon] { color: var(--success); }
+  .app-toast[data-type="error"]   [data-icon] { color: var(--danger); }
+  .app-toast[data-type="warning"] [data-icon] { color: var(--warning); }
+  .app-toast[data-type="info"]    [data-icon] { color: var(--accent); }
+  /* Action / cancel buttons inside a toast — reuse the app's button shapes. */
+  .app-toast [data-button] {
+    font-family: var(--font-sans) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    border-radius: 7px !important;
+    background: var(--accent) !important;
+    color: #fff !important;
+  }
+  .app-toast [data-button][data-cancel] {
+    background: var(--surface-hover) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+  }
+  /* The close button inherits sonner's light-mode palette and vanishes in dark mode. */
+  .app-toast [data-close-button] {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-muted) !important;
+  }
+  .app-toast [data-close-button]:hover {
+    background: var(--surface-hover) !important;
+    color: var(--text-primary) !important;
+  }
 }
 
 @layer base {

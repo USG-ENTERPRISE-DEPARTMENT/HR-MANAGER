@@ -279,6 +279,25 @@ async function logAudit(runId, action, req, details = null) {
   } catch (e) { console.error('[payroll audit]', e.message); }
 }
 
+// `status` is an @map'd enum whose values contain spaces ('Bank Pending', 'GL Failed'). A bound text
+// parameter will not cast to the enum on Postgres, so the value has to be inlined as a SQL literal —
+// chosen from this closed set. Never interpolate a status string into SQL directly: the safety here
+// comes from the value being one of these three literals, not from escaping.
+const STATUS_SQL = {
+  'Bank Pending': Prisma.sql`'Bank Pending'`,
+  'GL Failed':    Prisma.sql`'GL Failed'`,
+  'Completed':    Prisma.sql`'Completed'`,
+};
+
+// A run whose journal has reached the general ledger is read-only here: 'Bank Pending' is sitting in
+// the core banking system's approval queue and 'Completed' is settled, so editing either would leave
+// the two systems disagreeing about what was paid. Mirrors isRunLocked() in Client Payroll.tsx.
+//
+// Deliberately excludes 'GL Failed': that journal was refused, so editing and regenerating the run is
+// the intended recovery path.
+const LOCKED_STATUSES = new Set(['Completed', 'Bank Pending']);
+const isRunLocked = (status) => LOCKED_STATUSES.has(String(status ?? ''));
+
 // Reusable SELECT fragment. Built with Prisma.sql so it composes into tagged queries:
 //   query`${RUNS_SELECT} WHERE pr.id = ${id}`
 const RUNS_SELECT = Prisma.sql`
@@ -288,6 +307,9 @@ const RUNS_SELECT = Prisma.sql`
          pr.status, pr.created_at,
          pr.submitted_by, pr.approved_by, pr.approved_at, pr.rejection_reason,
          pr.document_ref, pr.payment_log, pr.finalized_at,
+         -- Lower-case with underscores, so these read back identically on MySQL and Postgres (which
+         -- folds unquoted identifiers) — no alias needed, unlike e.bankAccount elsewhere in this file.
+         pr.bank_confirmed_at, pr.bank_confirmed_by,
          cs.approver_type  AS cur_approver_type,
          cs.approver_id    AS cur_approver_id,
          cs.approver_label AS cur_approver_label,
@@ -333,7 +355,7 @@ const updatePayrollRun = asyncHandler(async (req, res) => {
   const { name, pay_frequency, date_start, date_end, deduction_group, payment_type } = req.body;
   const [run] = await query`SELECT status FROM payrollruns WHERE id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
-  if (run.status === 'Completed') return respond.badReq(res, 'Cannot edit a completed payroll run');
+  if (isRunLocked(run.status)) return respond.badReq(res, `Cannot edit a payroll run that is ${run.status} — its journal has already been posted to the general ledger`);
   await exec`
     UPDATE payrollruns SET
       name=${name?.trim() || run.name},
@@ -353,7 +375,7 @@ const deletePayrollRun = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [run] = await query`SELECT status FROM payrollruns WHERE id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
-  if (run.status === 'Completed') return respond.badReq(res, 'Cannot delete a completed payroll run');
+  if (isRunLocked(run.status)) return respond.badReq(res, `Cannot delete a payroll run that is ${run.status} — its journal has already been posted to the general ledger`);
   await exec`DELETE FROM payrolldata WHERE payroll = ${BigInt(id)}`;
   await exec`DELETE FROM payrollrun_stages WHERE run_id = ${BigInt(id)}`;
   await exec`DELETE FROM payrollruns WHERE id = ${BigInt(id)}`;
@@ -368,7 +390,7 @@ const generatePayroll = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [run] = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
-  if (run.status === 'Completed')        return respond.badReq(res, 'Cannot regenerate a completed payroll run');
+  if (isRunLocked(run.status))           return respond.badReq(res, `Cannot regenerate a payroll run that is ${run.status} — its journal has already been posted to the general ledger`);
   if (run.status === 'Pending Approval') return respond.badReq(res, 'Withdraw the approval request before regenerating');
   if (run.status === 'Approved')         return respond.badReq(res, 'Cannot regenerate an approved payroll run');
 
@@ -613,7 +635,7 @@ const updatePayrollDataItem = asyncHandler(async (req, res) => {
   const { amount } = req.body;
   const [run] = await query`SELECT status FROM payrollruns WHERE id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
-  if (run.status === 'Completed') return respond.badReq(res, 'Cannot edit a completed payroll run');
+  if (isRunLocked(run.status)) return respond.badReq(res, `Cannot edit amounts on a payroll run that is ${run.status} — its journal has already been posted to the general ledger`);
   await exec`UPDATE payrolldata SET amount = ${String(amount ?? '')} WHERE id = ${parseInt(itemId)} AND payroll = ${BigInt(id)}`;
   respond.ok(res, 'Updated');
 });
@@ -976,11 +998,16 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   if (!run) return respond.notFound(res, 'Run not found');
   if (run.status === 'Draft')            return respond.badReq(res, 'Generate the payroll before finalizing');
   if (run.status === 'Completed')        return respond.badReq(res, 'Already finalized');
+  // Without this a second finalize would post the journal AGAIN under a fresh reference — the run is
+  // already sitting in the bank's approval queue, so that is a duplicate payment, not a retry.
+  if (run.status === 'Bank Pending')     return respond.badReq(res, 'Already finalized and posted to the bank — awaiting core banking confirmation');
   if (run.status === 'Pending Approval') return respond.badReq(res, 'Approve the payroll before finalizing');
   if (run.status === 'Rejected')         return respond.badReq(res, 'Regenerate the payroll before finalizing');
 
   let documentRef = null;
   let paymentLog  = null;
+  // Record-only default: with GL posting switched off no bank is involved, so the run finalizes
+  // straight to 'Completed'. The GL-success path below moves it to 'Bank Pending' instead.
   let finalStatus = 'Completed';
   let glError     = null;   // surfaced to the caller so an imbalance is visible, not just logged
   let glInvalid   = null;   // unrecognised accounts, rendered as a table by the UI
@@ -996,6 +1023,10 @@ const finalizePayroll = asyncHandler(async (req, res) => {
       const result = await buildAndPostGL(id, req, run.name);
       documentRef = result.documentRef;
       paymentLog  = JSON.stringify(result.raw);
+      // The GL accepted the journal — but the core banking system still runs its own approval flow
+      // before anyone is paid. Marking this 'Completed' is what used to make an unapproved run
+      // indistinguishable from a settled one; it stays pending until the bank says otherwise.
+      finalStatus = 'Bank Pending';
       console.log('[finalize] GL posting success, ref:', documentRef);
     } catch (e) {
       const errData = e.glResponse || e.response?.data || e.message;
@@ -1010,27 +1041,35 @@ const finalizePayroll = asyncHandler(async (req, res) => {
     }
   }
 
-  // status is an @map'd enum ('GL Failed' has a space); a bound text param won't cast to the enum on
-  // Postgres, so inline it as a SQL literal chosen from the known 2-value set.
-  const statusSql = finalStatus === 'GL Failed' ? Prisma.sql`'GL Failed'` : Prisma.sql`'Completed'`;
+  // See STATUS_SQL: the enum value has to be inlined as a literal, chosen from a closed set.
+  // The ?? fallback should never fire; it keeps the expression total rather than able to splice
+  // `undefined` into the template.
+  const statusSql = STATUS_SQL[finalStatus] ?? STATUS_SQL.Completed;
   // Never overwrite a real reference with NULL — on a failed posting `documentRef` is null, and a
   // blind write would erase a reference the bank already holds.
   const refToStore = documentRef ?? run.document_ref ?? null;
   await exec`
     UPDATE payrollruns SET status=${statusSql}, document_ref=${refToStore}, payment_log=${paymentLog},
       finalized_at=NOW(), updated_at=NOW() WHERE id=${BigInt(id)}`;
-  await logAudit(id, 'finalize', req, { documentRef });
-  logActivity({ module: 'Payroll', action: 'finalize', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef } });
+  await logAudit(id, 'finalize', req, { documentRef, status: finalStatus });
+  logActivity({ module: 'Payroll', action: 'finalize', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef, status: finalStatus } });
   const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
+  // Do not say "finalized" flatly on the GL-success path: the money has not moved until the core
+  // banking system approves, and overstating that here is the whole problem being fixed.
+  const okMessage = finalStatus === 'Bank Pending'
+    ? 'Payroll finalized and posted to the bank — awaiting core banking confirmation'
+    : 'Payroll finalized';
   respond.ok(
     res,
-    glError ? `Payroll finalized, but GL posting failed. ${glError}` : 'Payroll finalized',
+    glError ? `Payroll finalized, but GL posting failed. ${glError}` : okMessage,
     rows[0] ? { ...rows[0], glError, glInvalidAccounts: glInvalid, glImbalance } : null,
   );
 });
 
 // ── Retry GL posting (for GL Failed runs) ────────────────────────────────────
-// POST /payroll/runs/:id/retry-gl — re-attempt GL posting for a 'GL Failed' run; transitions to Completed on success.
+// POST /payroll/runs/:id/retry-gl — re-attempt GL posting for a 'GL Failed' run. On success the run
+// moves to 'Bank Pending' (not 'Completed'): a successful retry is in exactly the same position as a
+// successful first finalize — the journal is with the bank, awaiting its approval.
 const retryGLPosting = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [run] = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
@@ -1048,11 +1087,11 @@ const retryGLPosting = asyncHandler(async (req, res) => {
   try {
     const result = await buildAndPostGL(id, req, run.name);
     await exec`
-      UPDATE payrollruns SET status='Completed', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)},
+      UPDATE payrollruns SET status='Bank Pending', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)},
         updated_at=NOW() WHERE id=${BigInt(id)}`;
     logActivity({ module: 'Payroll', action: 'gl_retry_success', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef: result.documentRef } });
     const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
-    respond.ok(res, 'GL posted successfully', rows[0] || null);
+    respond.ok(res, 'GL posted — awaiting core banking confirmation', rows[0] || null);
   } catch (e) {
     const errData = e.glResponse || e.response?.data || e.message;
     console.error('[gl retry] error:', errData);
@@ -1345,9 +1384,12 @@ const rejectPayrollFromBank = asyncHandler(async (req, res) => {
   // Only a run that actually reached the bank can be rejected by the bank. Anything else means the
   // reference is stale or the call is out of order, and silently rewriting a Draft would be worse
   // than refusing.
-  if (run.status !== 'Completed') {
+  //
+  // 'Bank Pending' is the normal case (posted, awaiting the bank's approval). 'Completed' is still
+  // accepted: the bank may report a reversal for a run it already confirmed.
+  if (run.status !== 'Bank Pending' && run.status !== 'Completed') {
     return respond.badReq(res,
-      `Payroll run "${run.name}" is ${run.status}, not Completed — only a run that has been posted to the core banking system can be rejected by it`);
+      `Payroll run "${run.name}" is ${run.status}, not Bank Pending or Completed — only a run that has been posted to the core banking system can be rejected by it`);
   }
 
   // Resolve the employee for the audit note only; an unknown code is not an error.
@@ -1364,8 +1406,13 @@ const rejectPayrollFromBank = asyncHandler(async (req, res) => {
     ? `Rejected by core banking for ${employeeNote}: ${reason}`
     : `Rejected by core banking: ${reason}`;
 
+  // Clear any confirmation stamp: the bank can reject a run it previously confirmed, and leaving
+  // bank_confirmed_at set would leave the row claiming both "paid on <date>" and "Rejected".
+  // document_ref and payment_log are deliberately kept — the money did reach the bank, and the UI
+  // shows the reference as "Previously GL Posted" for reconciliation.
   await exec`
-    UPDATE payrollruns SET status='Rejected', rejection_reason=${fullReason}, updated_at=NOW()
+    UPDATE payrollruns SET status='Rejected', rejection_reason=${fullReason},
+           bank_confirmed_at=NULL, bank_confirmed_by=NULL, updated_at=NOW()
      WHERE id=${BigInt(run.id)}`;
 
   await logAudit(run.id, 'bank_rejection', req, { reference, employeeId: employeeId || null, reason });
@@ -1387,10 +1434,128 @@ const rejectPayrollFromBank = asyncHandler(async (req, res) => {
   });
 });
 
+// ── Payment confirmation (shared by the bank callback and the manual action) ─
+/**
+ * Mark a 'Bank Pending' run as paid.
+ *
+ * Shared so the API callback and the manual "Mark as Paid" can never drift apart — they differ only
+ * in who is asserting the payment, which is exactly what `confirmedBy` records:
+ *   null    → the core banking system called the confirmation endpoint
+ *   user id → a person clicked "Mark as Paid"
+ * That difference is preserved in the data (bank_confirmed_by) and in the audit action, because a
+ * manual mark is a human assertion rather than a signal from the bank.
+ *
+ * `rejection_reason` is cleared: a run that was rejected, regenerated, re-posted and then confirmed
+ * must not keep showing the old reason.
+ */
+async function applyBankConfirmation(run, { confirmedBy, note, req, source }) {
+  const by = confirmedBy != null ? BigInt(confirmedBy) : null;
+  await exec`
+    UPDATE payrollruns
+       SET status='Completed', rejection_reason=NULL,
+           bank_confirmed_at=NOW(), bank_confirmed_by=${by}, updated_at=NOW()
+     WHERE id=${BigInt(run.id)}`;
+
+  const action = source === 'manual' ? 'bank_confirmation_manual' : 'bank_confirmation';
+  await logAudit(run.id, action, req, { reference: run.document_ref ?? null, note: note || null });
+  logActivity({
+    module: 'Payroll', action, entityId: String(run.id), entityName: run.name,
+    // The bank callback has no user to attribute to; the manual path uses the real actor.
+    ...(source === 'manual'
+      ? fromReq(req)
+      : {
+          userName: 'Core Banking',
+          ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? null,
+        }),
+    details: { reference: run.document_ref ?? null, note: note || null },
+  });
+
+  notifyUsersWithPermission('process_payroll', {
+    message: source === 'manual'
+      ? `"${run.name}" was manually marked as paid`
+      : `Core banking confirmed payment for "${run.name}"`,
+    action: 'Payroll', type: 'payroll',
+  }).catch(() => {});
+}
+
+// ── Core banking confirmation callback ───────────────────────────────────────
+// POST /payroll/runs/confirmation — the counterpart to rejectPayrollFromBank.
+//
+// finalizePayroll leaves a run at 'Bank Pending': the GL accepted the journal, but the core banking
+// system then runs its own approval flow outside this application. This callback is how that flow
+// reports success. Without it a disbursement produces no signal at all, and a run the bank silently
+// never approved looks identical to one that was paid.
+//
+// Authenticated with the shared API key only (no x-employee-id) — the caller is a server, not a
+// person. See middleware/mobileAuth.js `apiKeyOnly`.
+const confirmPayrollFromBank = asyncHandler(async (req, res) => {
+  const reference = String(req.body?.reference ?? '').trim();
+  const note      = req.body?.note != null ? String(req.body.note).trim() : '';
+
+  if (!reference) return respond.badReq(res, 'reference is required (the GL document reference for the payroll run)');
+
+  const [run] = await query`${RUNS_SELECT} WHERE pr.document_ref = ${reference} LIMIT 1`;
+  if (!run) return respond.notFound(res, `No payroll run found for reference "${reference}"`);
+
+  // Already confirmed → succeed without changing anything. A callback can be retried or delivered
+  // twice, and the second delivery must not look like a failure to the bank. Deliberately does not
+  // re-fire the audit/activity/notification side effects.
+  if (run.status === 'Completed') {
+    return respond.ok(res, 'Payroll run was already confirmed', {
+      id: String(run.id), name: run.name, reference, status: run.status,
+      bank_confirmed_at: run.bank_confirmed_at ?? null,
+    });
+  }
+
+  // A confirmation for a run that is not awaiting the bank means the two systems disagree. Once a run
+  // is rejected the reference leaves the bank's approval tray, so a later confirmation cannot
+  // legitimately arrive — surface that rather than silently overwriting the rejection.
+  if (run.status !== 'Bank Pending') {
+    return respond.badReq(res,
+      `Payroll run "${run.name}" is ${run.status}, not Bank Pending — only a run awaiting core banking confirmation can be confirmed`);
+  }
+
+  await applyBankConfirmation(run, { confirmedBy: null, note, req, source: 'bank' });
+
+  const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(run.id)}`;
+  respond.ok(res, 'Payroll run confirmed', {
+    id: String(run.id), name: run.name, reference, status: 'Completed',
+    bank_confirmed_at: rows[0]?.bank_confirmed_at ?? null,
+  });
+});
+
+// ── Manual payment confirmation ──────────────────────────────────────────────
+// POST /payroll/runs/:id/confirm-payment
+//
+// The escape hatch for when the bank's callback never arrives (their system does not implement it
+// yet, or a delivery was lost). Without this a run would sit at 'Bank Pending' forever.
+//
+// This is an assertion by a person, not evidence from the bank — so it is gated on approve_payroll,
+// recorded under a distinct audit action, and stamped with bank_confirmed_by so it stays
+// distinguishable from a real confirmation for ever after.
+const confirmPayrollManually = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const note   = req.body?.note != null ? String(req.body.note).trim() : '';
+
+  const [run] = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
+  if (!run) return respond.notFound(res, 'Run not found');
+
+  if (run.status === 'Completed') return respond.badReq(res, 'This payroll run is already confirmed as paid');
+  if (run.status !== 'Bank Pending') {
+    return respond.badReq(res,
+      `Payroll run "${run.name}" is ${run.status}, not Bank Pending — only a run that has been posted to the bank can be marked as paid`);
+  }
+
+  await applyBankConfirmation(run, { confirmedBy: req.user?.id ?? null, note, req, source: 'manual' });
+
+  const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
+  respond.ok(res, 'Payroll run marked as paid', rows[0] || null);
+});
+
 module.exports = {
   getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
-  getPayrollByReference, rejectPayrollFromBank,
+  getPayrollByReference, rejectPayrollFromBank, confirmPayrollFromBank, confirmPayrollManually,
   submitPayroll, approvePayroll, rejectPayroll, getPayrollAudit, duplicatePayrollRun,
   debugPayrollRun,
   getApprovalFlow, saveApprovalFlow, getRunStages,

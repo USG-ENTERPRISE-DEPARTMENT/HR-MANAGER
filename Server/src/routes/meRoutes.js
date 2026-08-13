@@ -56,7 +56,12 @@ router.use(rateLimit);
 // Mounted BEFORE `mobileAuth` because the caller is the bank's server, which has an API key but no
 // x-employee-id. These routes act on a payroll run identified by its GL reference and never read or
 // return an individual's data, so no employee context is needed or wanted.
-router.post('/payroll/runs/rejection', apiKeyOnly, payrollRun.rejectPayrollFromBank);
+//
+// The two are a pair: after finalize a run sits at 'Bank Pending' until the core banking system
+// reports the outcome of its own approval flow — confirmation moves it to 'Completed', rejection to
+// 'Rejected'. Without the confirmation callback a successful payment produces no signal at all.
+router.post('/payroll/runs/rejection',    apiKeyOnly, payrollRun.rejectPayrollFromBank);
+router.post('/payroll/runs/confirmation', apiKeyOnly, payrollRun.confirmPayrollFromBank);
 
 // ── Payroll lookup by GL reference (API key only) ────────────────────────────
 // Same caller as the rejection callback above: the core banking system, which holds the API key but

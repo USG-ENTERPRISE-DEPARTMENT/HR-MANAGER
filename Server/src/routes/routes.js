@@ -373,6 +373,9 @@ router.delete('/payroll/runs/:id',                permissionGuard('process_payro
 router.post  ('/payroll/runs/:id/generate',       permissionGuard('process_payroll'), run.generatePayroll);
 router.post  ('/payroll/runs/:id/finalize',       permissionGuard('approve_payroll'), run.finalizePayroll);
 router.post  ('/payroll/runs/:id/retry-gl',       permissionGuard('approve_payroll'), run.retryGLPosting);
+// Manual fallback for when the core banking system's confirmation callback never arrives. Same
+// permission as finalize: it asserts that money actually moved.
+router.post  ('/payroll/runs/:id/confirm-payment', permissionGuard('approve_payroll'), run.confirmPayrollManually);
 router.post  ('/payroll/runs/:id/submit',         permissionGuard('process_payroll'), run.submitPayroll);
 // approve/reject are authorised inside the controller: a blanket `approve_payroll` holder OR the run's
 // current-stage assigned approver may act (stage assignment grants authority for that run).
