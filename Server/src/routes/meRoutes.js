@@ -104,6 +104,9 @@ router.post  ('/leave/:id/cancel', me.leaveOwnership, me.cancelLeave);
 router.get('/payslips',              me.getMyPayslips);
 router.get('/payslips/:id/pdf',      me.downloadPayslip);
 router.get('/tax-summary',           me.getMyTaxSummary);
+// The calculation group this employee's deductions are worked out from. Self-scoped like everything
+// else here: the employee comes from x-employee-id, never from the request.
+router.get('/deduction-group',       me.getMyDeductionGroup);
 
 // ── Attendance ───────────────────────────────────────────────────────────────
 router.post('/attendance/punch',     me.punch);

@@ -139,6 +139,53 @@ exports.downloadPayslip = (req, res, next) => {
   return payslip.downloadPayslip(req, res, next);
 };
 
+// ── Deduction group ──────────────────────────────────────────────────────────
+/**
+ * GET /me/deduction-group — the calculation group the caller's deductions are worked out from.
+ *
+ * Implemented here rather than delegated: calculationController's equivalent lists EVERY employee's
+ * payroll setup behind a screen permission, so forwarding to it would mean stripping the listing
+ * down to one row anyway. This is a single self-scoped read.
+ *
+ * The employee comes from req.self (mobileAuth), never from the request — the caller cannot ask
+ * about anyone else. mobileAuth already accepts either the numeric id or the staff code in
+ * x-employee-id, so both work without anything extra here.
+ *
+ * An employee with no payrollemployees row, or one whose deduction_group is unset, is NOT an error:
+ * "not enrolled in payroll" and "enrolled with no group" are real answers. Both return 200 with
+ * deductionGroup null, which the app can tell apart from a 404 for an unknown employee.
+ */
+exports.getMyDeductionGroup = asyncHandler(async (req, res) => {
+  const rows = await prisma.$queryRaw(
+    Prisma.sql`
+      SELECT pe.deduction_group, cg.name AS group_name, cg.details AS group_details,
+             pe.currency, pe.pay_frequency, pf.name AS freq_name,
+             pe.deduction_exemptions
+      FROM payrollemployees pe
+      LEFT JOIN calculationgroups cg ON cg.id = pe.deduction_group
+      LEFT JOIN payfrequencies    pf ON pf.id = pe.pay_frequency
+      WHERE pe.employee = ${toBigInt(req.self.id)} LIMIT 1`,
+  ).catch(() => []);
+
+  const row = rows?.[0] ?? null;
+  respond.ok(res, 'Deduction group retrieved', {
+    employeeId:   String(req.self.id),
+    employeeCode: req.self.code ?? null,
+    // null when the employee has no payroll setup row at all, or has one with no group assigned.
+    deductionGroup: row?.deduction_group != null
+      ? { id: String(row.deduction_group), name: row.group_name ?? null, details: row.group_details ?? null }
+      : null,
+    // Context from the same payroll setup row — the app would otherwise need a second call for it.
+    payFrequency: row?.pay_frequency != null
+      ? { id: String(row.pay_frequency), name: row.freq_name ?? null }
+      : null,
+    currency:   row?.currency ?? null,
+    exemptions: row?.deduction_exemptions ?? null,
+    // Distinguishes "no payroll setup at all" from "set up, but no group chosen".
+    enrolled:   !!row,
+  });
+});
+
 // ── Attendance ───────────────────────────────────────────────────────────────
 // attendanceController resolves the employee via req.user.employeeId, already set by mobileAuth.
 

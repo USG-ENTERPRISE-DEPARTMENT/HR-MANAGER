@@ -169,6 +169,34 @@ const spec = {
           },
         },
       },
+      // Response for GET /deduction-group. Every nested object is nullable: an employee may have no
+      // payroll setup at all (`enrolled: false`), or be set up without a group or frequency.
+      DeductionGroup: {
+        type: 'object',
+        properties: {
+          employeeId:   id('45'),
+          employeeCode: { type: 'string', nullable: true, example: 'P1991001', description: 'Staff-facing code (employee.employee_id).' },
+          deductionGroup: {
+            type: 'object', nullable: true,
+            description: 'Null when the employee has no payroll setup row, or has one with no group assigned.',
+            properties: {
+              id:      id('7'),
+              name:    { type: 'string', nullable: true, example: 'Senior Management' },
+              details: { type: 'string', nullable: true, example: 'PAYE + NASSIT, no lunch deduction' },
+            },
+          },
+          payFrequency: {
+            type: 'object', nullable: true,
+            properties: {
+              id:   id('2'),
+              name: { type: 'string', nullable: true, example: 'Monthly' },
+            },
+          },
+          currency:   { type: 'string', nullable: true, example: 'GHS' },
+          exemptions: { type: 'string', nullable: true, example: '3,7', description: 'Comma-separated payroll column ids this employee is exempt from.' },
+          enrolled:   { type: 'boolean', example: true, description: 'False when the employee has no payrollemployees record at all — distinguishes "not set up" from "set up with no group".' },
+        },
+      },
       AttendanceRecord: {
         type: 'object',
         properties: {
@@ -356,6 +384,25 @@ const spec = {
         tag: 'Payslips', summary: 'Annual earnings and tax summary',
         params: [{ name: 'year', in: 'query', schema: { type: 'string', example: '2026' }, description: 'Defaults to the most recent year with data' }],
         response: { type: 'object' },
+      }),
+    },
+
+    '/deduction-group': {
+      get: op({
+        tag: 'Payslips', summary: 'Own deduction (calculation) group',
+        description: [
+          'The calculation group this employee\'s payroll deductions are worked out from, plus the',
+          'rest of their payroll setup (pay frequency, currency, exemptions).',
+          '',
+          'Self-scoped: the employee is taken from the `x-employee-id` header, so there is no way to',
+          'ask about anyone else. The header accepts either the numeric id or the staff code.',
+          '',
+          '**Not an error when unset.** An employee with no payroll setup row, or one enrolled with',
+          'no group chosen, returns `200` with `deductionGroup: null` — that is a real answer, and',
+          'distinct from a `404` for an unknown employee. Use `enrolled` to tell the two apart:',
+          '`false` means there is no payroll setup record at all.',
+        ].join('\n'),
+        response: { $ref: '#/components/schemas/DeductionGroup' },
       }),
     },
 
