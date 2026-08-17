@@ -115,24 +115,46 @@ const registerUser = asyncHandler(async (req, res) => {
     return res.status(409).json({ status: '409', message: 'A user account already exists for this employee' });
   }
 
-  // Validate role IDs
-  const rolePlaceholders = roles.map(() => '?').join(',');
+  // Validate role IDs. Same bigint-vs-string trap as the employee lookup above: roles arrive from
+  // JSON as strings, `roles.id` is bigint, and Postgres refuses `bigint = text` (42883). The error
+  // was swallowed into an empty result, so every role looked invalid — hence "One or more role IDs
+  // are invalid" for roles that plainly existed. sanitizeIds drops anything non-numeric, so a
+  // shorter list here genuinely means a bad id was sent.
+  const roleIdsBig = helper.sanitizeIds(roles);
+  if (roleIdsBig.length !== roles.length) {
+    return res.status(400).json({ status: '400', message: 'One or more role IDs are invalid' });
+  }
+  const rolePlaceholders = roleIdsBig.map(() => '?').join(',');
   const rolesCheck = await helper.selectRecordsWithQuery(
     `SELECT id FROM roles WHERE id IN (${rolePlaceholders})`,
-    roles
+    roleIdsBig
   );
-  if (!rolesCheck.data || rolesCheck.data.length !== roles.length) {
+  if (rolesCheck.status === 'error') {
+    // Distinguish a failed lookup from genuinely bad ids — reporting the latter for the former is
+    // exactly what made this bug hard to place.
+    console.error('[registerUser] role lookup failed:', rolesCheck.error);
+    return res.status(500).json({ status: '500', message: 'Could not verify the selected roles' });
+  }
+  if (!rolesCheck.data || rolesCheck.data.length !== roleIdsBig.length) {
     return res.status(400).json({ status: '400', message: 'One or more role IDs are invalid' });
   }
 
-  // Validate permission IDs (if any)
+  // Validate permission IDs (if any) — identical treatment.
   if (permissions.length > 0) {
-    const permPlaceholders = permissions.map(() => '?').join(',');
+    const permIdsBig = helper.sanitizeIds(permissions);
+    if (permIdsBig.length !== permissions.length) {
+      return res.status(400).json({ status: '400', message: 'One or more permission IDs are invalid' });
+    }
+    const permPlaceholders = permIdsBig.map(() => '?').join(',');
     const permsCheck = await helper.selectRecordsWithQuery(
       `SELECT id FROM permissions WHERE id IN (${permPlaceholders})`,
-      permissions
+      permIdsBig
     );
-    if (!permsCheck.data || permsCheck.data.length !== permissions.length) {
+    if (permsCheck.status === 'error') {
+      console.error('[registerUser] permission lookup failed:', permsCheck.error);
+      return res.status(500).json({ status: '500', message: 'Could not verify the selected permissions' });
+    }
+    if (!permsCheck.data || permsCheck.data.length !== permIdsBig.length) {
       return res.status(400).json({ status: '400', message: 'One or more permission IDs are invalid' });
     }
   }
@@ -177,20 +199,39 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const newUserId = result.data.id;
 
-  // Assign roles
-  for (const roleId of roles) {
-    await helper.selectRecordsWithQuery(
+  // Assign roles.
+  //
+  // Note the deliberately MIXED binding: `role_id` is a bigint column but `model_id` is text, so the
+  // ids must be bound as BigInt and the user id as a string. Passing the role id as a string fails
+  // with 42804 ("column role_id is of type bigint but expression is of type text") — and because
+  // these results were never inspected, the insert failed silently and the account was created with
+  // no roles at all. Failures are now collected and reported.
+  const assignFailures = [];
+  for (const roleId of roleIdsBig) {
+    const r = await helper.selectRecordsWithQuery(
       `INSERT INTO model_has_roles (role_id, model_id, model_type) VALUES (?, ?, 'users')`,
       [roleId, String(newUserId)]
     );
+    if (r.status === 'error') assignFailures.push(`role ${roleId}: ${r.error}`);
   }
 
-  // Assign direct permissions
-  for (const permissionId of permissions) {
-    await helper.selectRecordsWithQuery(
+  // Assign direct permissions — same mixed binding.
+  for (const permissionId of helper.sanitizeIds(permissions)) {
+    const r = await helper.selectRecordsWithQuery(
       `INSERT INTO model_has_permissions (permission_id, model_id, model_type) VALUES (?, ?, 'users')`,
       [permissionId, String(newUserId)]
     );
+    if (r.status === 'error') assignFailures.push(`permission ${permissionId}: ${r.error}`);
+  }
+
+  if (assignFailures.length) {
+    // The account exists but is unusable without its roles. Report it rather than returning a
+    // success that hides a half-created user.
+    console.error('[registerUser] role/permission assignment failed:', assignFailures.join(' | '));
+    return res.status(500).json({
+      status: '500',
+      message: 'User was created but roles could not be assigned. Edit the user to set their roles.',
+    });
   }
 
   // Send welcome email (non-blocking — don't fail registration if email fails)
