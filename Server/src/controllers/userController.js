@@ -76,11 +76,26 @@ const registerUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ status: '400', message: 'At least one role is required' });
   }
 
+  // employee.id and users.employeeId are bigint columns, but employeeId arrives from JSON as a
+  // STRING. Postgres will not compare the two — it raises 42883 "operator does not exist:
+  // bigint = text", which selectRecordsWithQuery catches and reports as an empty result. That made
+  // a valid employee look missing and produced a misleading "Employee not found". MySQL coerces
+  // silently, so this only ever showed up on Postgres. Bind a real bigint instead.
+  const employeeIdBig = helper.safeBigInt(employeeId);
+  if (employeeIdBig === null) {
+    return res.status(400).json({ status: '400', message: 'Employee is not a valid id' });
+  }
+
   // Verify the employee exists
   const empCheck = await helper.selectRecordsWithQuery(
     `SELECT id FROM employee WHERE id = ? LIMIT 1`,
-    [employeeId]
+    [employeeIdBig]
   );
+  if (empCheck.status === 'error') {
+    // A failed lookup is not the same as "no such employee" — say so rather than blaming the data.
+    console.error('[registerUser] employee lookup failed:', empCheck.error);
+    return res.status(500).json({ status: '500', message: 'Could not verify the employee record' });
+  }
   if (!empCheck.data?.length) {
     return res.status(404).json({ status: '404', message: 'Employee not found' });
   }
@@ -88,8 +103,14 @@ const registerUser = asyncHandler(async (req, res) => {
   // Ensure no account already exists for this employee
   const dupCheck = await helper.selectRecordsWithQuery(
     `SELECT id FROM users WHERE employeeId = ? LIMIT 1`,
-    [employeeId]
+    [employeeIdBig]
   );
+  if (dupCheck.status === 'error') {
+    // Never fall through to the insert here: an errored duplicate check reads as "no duplicate",
+    // which would create a second account for an employee that already has one.
+    console.error('[registerUser] duplicate-account lookup failed:', dupCheck.error);
+    return res.status(500).json({ status: '500', message: 'Could not verify existing user accounts' });
+  }
   if (dupCheck.data?.length) {
     return res.status(409).json({ status: '409', message: 'A user account already exists for this employee' });
   }
@@ -125,13 +146,14 @@ const registerUser = asyncHandler(async (req, res) => {
   if (email)         empUpdate.email          = email;
 
   if (Object.keys(empUpdate).length > 0) {
-    await helper.dynamicUpdateWithId('employee', empUpdate, employeeId);
+    await helper.dynamicUpdateWithId('employee', empUpdate, employeeIdBig);
   }
 
-  // Fetch employee email for welcome email
+  // Fetch employee email for welcome email. Same bigint bind as above — with a string here the
+  // query errors, `emp` comes back empty and the welcome email is silently sent nowhere.
   const empData = await helper.selectRecordsWithQuery(
     `SELECT CONCAT_WS(' ', firstName, lastName) AS name, work_email, email FROM employee WHERE id = ? LIMIT 1`,
-    [employeeId]
+    [employeeIdBig]
   );
   const emp = empData.data?.[0] ?? {};
   const recipientEmail = emp.work_email || emp.email;
