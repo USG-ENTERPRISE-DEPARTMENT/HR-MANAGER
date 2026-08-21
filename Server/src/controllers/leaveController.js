@@ -1475,7 +1475,16 @@ exports.getLeaves = asyncHandler(async (req, res) => {
       const storedTax = parseFloat(row.leave_tax) || 0;
       return {
         ...row,
-        allowance_gross:         String(Math.round((stored + storedTax) * 100) / 100),
+        // Gross is recomputed from basic × 12 × factor, NOT reconstructed as net + tax. `amount`
+        // and `leave_tax` are each stored already rounded to the cent, so adding them double-rounds:
+        // for a basic of 2,938.71 the true gross is 10,579.356, but 8,287.16 + 2,292.19 displays as
+        // 10,579.35 — a cent short. Recomputing from the same inputs the breakdown already shows
+        // keeps the displayed gross consistent with the '× 12 months × factor' line beside it.
+        // Falls back to the sum when the notch amount is missing, which is the only case where the
+        // inputs are unavailable.
+        allowance_gross:         String(basic
+          ? Math.round(basic * 12 * annualFactor * 100) / 100
+          : Math.round((stored + storedTax) * 100) / 100),
         allowance_tax:           String(storedTax),
         allowance_basic:         String(Math.round(basic * 100) / 100),
         allowance_annual_factor: String(annualFactor),
@@ -1488,8 +1497,13 @@ exports.getLeaves = asyncHandler(async (req, res) => {
     const sgla       = basic * 12 * annualFactor;
     const deductible = basic;
     const taxable    = Math.max(0, sgla - deductible);
-    const tax        = Math.round(taxable * taxRate * 100) / 100;
-    const net        = Math.round((deductible + (taxable - tax)) * 100) / 100;
+    // Round ONCE, at the end. Subtracting an already-rounded tax from the net makes this estimate
+    // disagree with calcLeaveAllowance — which stores the paid amount and subtracts the unrounded
+    // tax — by a cent (8,287.17 shown here vs 8,287.16 actually paid, for a 2,938.71 basic). The
+    // estimate must match what the employee is paid, so the stored path is the one to follow.
+    const taxRaw     = taxable * taxRate;
+    const tax        = Math.round(taxRaw * 100) / 100;
+    const net        = Math.round((deductible + (taxable - taxRaw)) * 100) / 100;
     return {
       ...row,
       amount:                  String(net),
@@ -1547,7 +1561,16 @@ exports.getAllEmployeeLeaves = asyncHandler(async (req, res) => {
       const storedTax = parseFloat(row.leave_tax) || 0;
       return {
         ...row,
-        allowance_gross:         String(Math.round((stored + storedTax) * 100) / 100),
+        // Gross is recomputed from basic × 12 × factor, NOT reconstructed as net + tax. `amount`
+        // and `leave_tax` are each stored already rounded to the cent, so adding them double-rounds:
+        // for a basic of 2,938.71 the true gross is 10,579.356, but 8,287.16 + 2,292.19 displays as
+        // 10,579.35 — a cent short. Recomputing from the same inputs the breakdown already shows
+        // keeps the displayed gross consistent with the '× 12 months × factor' line beside it.
+        // Falls back to the sum when the notch amount is missing, which is the only case where the
+        // inputs are unavailable.
+        allowance_gross:         String(basic
+          ? Math.round(basic * 12 * annualFactor * 100) / 100
+          : Math.round((stored + storedTax) * 100) / 100),
         allowance_tax:           String(storedTax),
         allowance_basic:         String(Math.round(basic * 100) / 100),
         allowance_annual_factor: String(annualFactor),
@@ -1558,8 +1581,13 @@ exports.getAllEmployeeLeaves = asyncHandler(async (req, res) => {
     const sgla       = basic * 12 * annualFactor;
     const deductible = basic;
     const taxable    = Math.max(0, sgla - deductible);
-    const tax        = Math.round(taxable * taxRate * 100) / 100;
-    const net        = Math.round((deductible + (taxable - tax)) * 100) / 100;
+    // Round ONCE, at the end. Subtracting an already-rounded tax from the net makes this estimate
+    // disagree with calcLeaveAllowance — which stores the paid amount and subtracts the unrounded
+    // tax — by a cent (8,287.17 shown here vs 8,287.16 actually paid, for a 2,938.71 basic). The
+    // estimate must match what the employee is paid, so the stored path is the one to follow.
+    const taxRaw     = taxable * taxRate;
+    const tax        = Math.round(taxRaw * 100) / 100;
+    const net        = Math.round((deductible + (taxable - taxRaw)) * 100) / 100;
     return {
       ...row,
       amount:                  String(net),
