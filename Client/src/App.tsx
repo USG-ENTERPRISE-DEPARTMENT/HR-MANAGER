@@ -1,46 +1,46 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import ProtectedRoute from './components/ProtectedRoute';
-import { LeaveManagement } from './components/LeaveManagement';
-import { LeaveSetup } from './components/LeaveSetup';
-import { LeaveCalendar } from './components/LeaveCalendar';
+
+
+
 import { Dashboard } from './components/Dashboard';
-import { Employees } from './components/Employees';
-import { EmployeeTransfers } from './components/EmployeeTransfers';
-import { SelfOnboarding } from './components/SelfOnboarding';
-import { OnboardingPortal } from './components/OnboardingPortal';
-import { Company } from './components/Company';
-import { Documents } from './components/Document';
-import { Users } from './components/Users';
-import { Salary } from './components/Salary';
-import { Payroll } from './components/Payroll';
-import { System } from './components/System';
-import { AdminReports } from './components/AdminReports';
-import { UserReports } from './components/UserReports';
-import { Modules } from './components/Modules';
+
+
+
+
+
+
+
+
+
+
+
+
+
 import { Login } from './components/Login';
-import { Settings } from './components/Settings';
-import { LeaveSettings } from './components/LeaveSettings';
-import { NotificationSettings } from './components/NotificationSettings';
-import { AuditLogs } from './components/AuditLogs';
-import { CentralApproval } from './components/CentralApproval';
-import { PersonalMedical, AdminMedical } from './components/Medical';
-import { AdminTraining, PersonalTraining } from './components/Training';
-import { PersonalDocuments } from './components/PersonalDocuments';
-import { PersonalInfo } from './components/PersonalInfo';
-import { StaffOrganogram } from './components/StaffOrganogram';
-import { PcCodes } from './components/PcCodes';
-import { PcCodeOrganogram } from './components/PcCodeOrganogram';
-import { Help } from './components/Help';
-import { Recruitment } from './components/Recruitment';
-import { ManagePerformance } from './components/ManagePerformance';
-import { AiInsights } from './components/AiInsights';
-import { PersonalPerformance } from './components/PersonalPerformance';
-import { CareersPortal } from './components/CareersPortal';
-import { SchedulingPortal } from './components/SchedulingPortal';
-import { AdminAttendance, MyAttendance } from './components/Attendance';
-import { AttendanceKiosk } from './components/AttendanceKiosk';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { AppUser } from '../types/permissions';
 import { logout as authLogout, getCurrentUser, onUserChange } from '@/lib/auth';
@@ -50,6 +50,57 @@ import { initControlSettings } from '@/lib/settings';
 import { applyTheme } from '@/lib/theme';
 import api from '@/lib/api';
 import { appPath } from '@/lib/basePath';
+import { useIdleTimeout } from './hooks/useIdleTimeout';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Route components are code-split: each becomes its own chunk, fetched the first time the user opens
+// that screen. Previously all ~40 shipped in one 3 MB bundle that every user downloaded and
+// re-parsed on every load — including the hard reload on logout — just to view a single page.
+//
+// The app shell (Sidebar, Header, ProtectedRoute), Login and Dashboard stay eager: they are needed
+// for the first paint, so deferring them would only add a spinner to the critical path.
+// ─────────────────────────────────────────────────────────────────────────────
+const AdminAttendance = lazy(() => import('./components/Attendance').then(m => ({ default: m.AdminAttendance })));
+const AdminMedical = lazy(() => import('./components/Medical').then(m => ({ default: m.AdminMedical })));
+const AdminReports = lazy(() => import('./components/AdminReports').then(m => ({ default: m.AdminReports })));
+const AdminTraining = lazy(() => import('./components/Training').then(m => ({ default: m.AdminTraining })));
+const AiInsights = lazy(() => import('./components/AiInsights').then(m => ({ default: m.AiInsights })));
+const AttendanceKiosk = lazy(() => import('./components/AttendanceKiosk').then(m => ({ default: m.AttendanceKiosk })));
+const AuditLogs = lazy(() => import('./components/AuditLogs').then(m => ({ default: m.AuditLogs })));
+const CareersPortal = lazy(() => import('./components/CareersPortal').then(m => ({ default: m.CareersPortal })));
+const CentralApproval = lazy(() => import('./components/CentralApproval').then(m => ({ default: m.CentralApproval })));
+const Company = lazy(() => import('./components/Company').then(m => ({ default: m.Company })));
+const Documents = lazy(() => import('./components/Document').then(m => ({ default: m.Documents })));
+const EmployeeTransfers = lazy(() => import('./components/EmployeeTransfers').then(m => ({ default: m.EmployeeTransfers })));
+const Employees = lazy(() => import('./components/Employees').then(m => ({ default: m.Employees })));
+const Help = lazy(() => import('./components/Help').then(m => ({ default: m.Help })));
+const LeaveCalendar = lazy(() => import('./components/LeaveCalendar').then(m => ({ default: m.LeaveCalendar })));
+const LeaveManagement = lazy(() => import('./components/LeaveManagement').then(m => ({ default: m.LeaveManagement })));
+const LeaveSettings = lazy(() => import('./components/LeaveSettings').then(m => ({ default: m.LeaveSettings })));
+const LeaveSetup = lazy(() => import('./components/LeaveSetup').then(m => ({ default: m.LeaveSetup })));
+const ManagePerformance = lazy(() => import('./components/ManagePerformance').then(m => ({ default: m.ManagePerformance })));
+const Modules = lazy(() => import('./components/Modules').then(m => ({ default: m.Modules })));
+const MyAttendance = lazy(() => import('./components/Attendance').then(m => ({ default: m.MyAttendance })));
+const NotificationSettings = lazy(() => import('./components/NotificationSettings').then(m => ({ default: m.NotificationSettings })));
+const OnboardingPortal = lazy(() => import('./components/OnboardingPortal').then(m => ({ default: m.OnboardingPortal })));
+const Payroll = lazy(() => import('./components/Payroll').then(m => ({ default: m.Payroll })));
+const PcCodeOrganogram = lazy(() => import('./components/PcCodeOrganogram').then(m => ({ default: m.PcCodeOrganogram })));
+const PcCodes = lazy(() => import('./components/PcCodes').then(m => ({ default: m.PcCodes })));
+const PersonalDocuments = lazy(() => import('./components/PersonalDocuments').then(m => ({ default: m.PersonalDocuments })));
+const PersonalInfo = lazy(() => import('./components/PersonalInfo').then(m => ({ default: m.PersonalInfo })));
+const PersonalMedical = lazy(() => import('./components/Medical').then(m => ({ default: m.PersonalMedical })));
+const PersonalPerformance = lazy(() => import('./components/PersonalPerformance').then(m => ({ default: m.PersonalPerformance })));
+const PersonalTraining = lazy(() => import('./components/Training').then(m => ({ default: m.PersonalTraining })));
+const Recruitment = lazy(() => import('./components/Recruitment').then(m => ({ default: m.Recruitment })));
+const Salary = lazy(() => import('./components/Salary').then(m => ({ default: m.Salary })));
+const SchedulingPortal = lazy(() => import('./components/SchedulingPortal').then(m => ({ default: m.SchedulingPortal })));
+const SelfOnboarding = lazy(() => import('./components/SelfOnboarding').then(m => ({ default: m.SelfOnboarding })));
+const Settings = lazy(() => import('./components/Settings').then(m => ({ default: m.Settings })));
+const StaffOrganogram = lazy(() => import('./components/StaffOrganogram').then(m => ({ default: m.StaffOrganogram })));
+const System = lazy(() => import('./components/System').then(m => ({ default: m.System })));
+const UserReports = lazy(() => import('./components/UserReports').then(m => ({ default: m.UserReports })));
+const Users = lazy(() => import('./components/Users').then(m => ({ default: m.Users })));
+
 
 function loadCurrentUser(): AppUser | null {
   try {
@@ -81,12 +132,32 @@ function loadActiveView(user: AppUser | null): string {
   return landingView(user);
 }
 
+// Inactivity policy. 30 minutes matches the usual expectation for an internal HR tool: long enough
+// not to interrupt someone reading a long report, short enough that a walked-away-from desk does
+// not stay logged in all afternoon. The last 60s are a warning the user can cancel.
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const IDLE_WARN_MS    = 60 * 1000;
+
+/** Shown while a route's chunk downloads. Deliberately minimal — most chunks load in well under a
+ *  second on a warm cache, so anything heavier flashes and draws attention to itself. */
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center h-full w-full py-20" role="status" aria-label="Loading">
+      <div className="w-6 h-6 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
+    </div>
+  );
+}
+
 export default function App() {
   // All hooks must run unconditionally on every render (Rules of Hooks). The public-portal early
   // returns therefore come AFTER the hooks below — never before them.
   const [currentUser, setCurrentUser] = useState<AppUser | null>(loadCurrentUser);
   const [activeView, setActiveView] = useState<string>(() => loadActiveView(currentUser));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // logout() revokes the refresh token server-side and then hard-reloads to '/'. That is a
+  // deliberate full teardown (see lib/auth.ts), but it leaves a gap with nothing on screen — so
+  // cover it rather than letting the app look frozen.
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const navigate = (view: string) => {
     sessionStorage.setItem('activeView', view);
@@ -132,11 +203,23 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
-    authLogout();
+    // Paint the overlay before authLogout() so the wait is explained. authLogout is async — it
+    // awaits the server-side revoke before replacing the location — and is deliberately not awaited
+    // here: the reload ends this page either way, and blocking would only delay the overlay.
+    setIsSigningOut(true);
     applyTheme('light');   // reset to light so the login screen isn't themed for the next user
     sessionStorage.removeItem('activeView');
-    setCurrentUser(null);
+    void authLogout();
   }, []);
+
+  // Auto sign-out on inactivity. Armed only while someone is logged in and not already signing
+  // out, so it never fires on the login screen or races the logout reload.
+  const { secondsLeft, dismissWarning } = useIdleTimeout({
+    timeoutMs: IDLE_TIMEOUT_MS,
+    warnMs:    IDLE_WARN_MS,
+    enabled:   !!currentUser && !isSigningOut,
+    onIdle:    handleLogout,
+  });
 
   // Public portals are matched on the base-stripped path, so they work under any VITE_BASE_PATH
   // (e.g. "/xhrm/careers" resolves the same as "/careers"). Checked AFTER all hooks so the Rules of
@@ -197,6 +280,18 @@ export default function App() {
     }
   };
 
+  // Rendered ahead of the login guard: the reload is what actually ends this page, so the overlay
+  // must stay up until the browser navigates rather than flashing the login screen underneath.
+  if (isSigningOut) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center gap-4 bg-[var(--bg)] text-[var(--text-primary)]"
+           role="status" aria-live="polite">
+        <div className="w-8 h-8 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
+        <p className="text-[13px] font-medium text-[var(--text-secondary)]">Signing out…</p>
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -227,9 +322,25 @@ export default function App() {
           onClose={() => setIsMobileMenuOpen(false)}
         />
         <main className="flex-1 overflow-y-auto w-full relative">
-          {renderView()}
+          <Suspense fallback={<RouteFallback />}>{renderView()}</Suspense>
         </main>
       </div>
+
+      {/* Inactivity warning. Any interaction resets the timer via the hook's own listeners, so the
+          button only needs to dismiss the banner — the click itself is the activity. */}
+      {secondsLeft !== null && (
+        <div className="fixed inset-x-0 bottom-0 z-[200] flex justify-center p-4" role="alertdialog" aria-live="assertive">
+          <div className="flex items-center gap-4 rounded-[12px] border border-[var(--warning)] bg-[var(--surface)] px-5 py-3.5 shadow-lg">
+            <div>
+              <p className="text-[13px] font-semibold text-[var(--text-primary)]">Still there?</p>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+                You&apos;ll be signed out in {secondsLeft}s to protect your data.
+              </p>
+            </div>
+            <button className="primary-btn" onClick={dismissWarning}>Stay signed in</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

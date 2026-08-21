@@ -7,6 +7,9 @@ const API_CAT = 'api';
 const ALL_KEYS = [
   'gl_url', 'gl_api_key', 'gl_api_secret', 'gl_bearer_token',
   'gl_basic_user', 'gl_basic_pass', 'gl_timeout', 'gl_forwarded_for', 'gl_extra',
+  // Account status validator — a SEPARATE service from the GL posting API (different host, port and
+  // credentials), so it gets its own URL and key/secret rather than reusing the posting ones.
+  'gl_validate_url', 'gl_validate_key', 'gl_validate_secret',
   'employee_sync_url', 'employee_sync_timeout',
   'employee_sync_api_key', 'employee_sync_api_secret',
   'employee_sync_bearer_token', 'employee_sync_basic_user', 'employee_sync_basic_pass',
@@ -60,6 +63,9 @@ async function getApiConfig() {
     gl_timeout:            db.gl_timeout            || '30000',
     gl_forwarded_for:      db.gl_forwarded_for      || process.env.POSTING_X_FORWARDED_FOR || '',
     gl_extra:              db.gl_extra              || '{}',
+    gl_validate_url:       db.gl_validate_url       || process.env.GL_VALIDATE_URL    || '',
+    gl_validate_key:       db.gl_validate_key       || process.env.GL_VALIDATE_KEY    || '',
+    gl_validate_secret:    db.gl_validate_secret    || process.env.GL_VALIDATE_SECRET || '',
     employee_sync_url:          db.employee_sync_url          || process.env.EMPLOYEE_SYNC_URL || '',
     employee_sync_timeout:      db.employee_sync_timeout      || '10000',
     employee_sync_api_key:      db.employee_sync_api_key      || '',
@@ -92,6 +98,9 @@ async function getApiConfig() {
       terminal:     process.env.POSTING_TERMINAL         || '',
       posted_by:    process.env.POSTING_POSTED_BY        || '',
     })],
+    ['gl_validate_url',       process.env.GL_VALIDATE_URL    || ''],
+    ['gl_validate_key',       process.env.GL_VALIDATE_KEY    || ''],
+    ['gl_validate_secret',    process.env.GL_VALIDATE_SECRET || ''],
     ['employee_sync_url',          process.env.EMPLOYEE_SYNC_URL || ''],
     ['employee_sync_timeout',      '10000'],
     ['employee_sync_api_key',      ''],

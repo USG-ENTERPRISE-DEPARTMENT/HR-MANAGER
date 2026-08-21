@@ -49,88 +49,144 @@ function glLog(section, body) {
 
 // ── Account validation ───────────────────────────────────────────────────────
 // The GL accepts a payload without checking that the accounts in it exist, so a posting to a bad
-// account number is accepted and then has to be traced and unwound at the bank. The core system
-// exposes a validator; every posting is screened through it first.
+// account number is accepted and then has to be traced and unwound at the bank. Every posting is
+// screened through the core system's bulk-account-status-validator first.
 //
-// Endpoint defaults to the GL URL's own host (they are the same service) so a deployment that moves
-// the core API does not need a second setting. Override with GL_VALIDATE_URL or gl_extra.validate_url.
+// That service returns a STATUS per account rather than a simple valid/invalid list:
+//   N  NORMAL             — the only status a payroll credit may be posted to
+//   DO DORMANT            — the account exists but cannot receive a credit
+//   NF ACCOUNT NOT FOUND  — no such account
+// Anything else is treated as blocking too: an unrecognised status must never be assumed postable.
+//
+// It is a SEPARATE service from the GL posting API — different host, port and credentials — so it is
+// configured independently (Settings → API, or GL_VALIDATE_URL / _KEY / _SECRET).
+
+// Statuses that may be posted to. Deliberately an allowlist: a status the bank adds later blocks
+// until someone decides it is safe, rather than silently passing.
+const POSTABLE_STATUSES = new Set(['N']);
+
 function validateUrlFrom(cfg, extra) {
-  const explicit = process.env.GL_VALIDATE_URL || extra.validate_url;
-  if (explicit) return explicit;
-  if (!cfg.gl_url) return null;
-  try {
-    const u = new URL(cfg.gl_url);
-    // …/account/performBulkPayment → …/account/validateNormalAccounts
-    return `${u.origin}${u.pathname.replace(/\/[^/]*$/, '/validateNormalAccounts')}`;
-  } catch { return null; }
+  return cfg.gl_validate_url || process.env.GL_VALIDATE_URL || extra.validate_url || null;
 }
 
 /**
- * Ask the core system which of `accounts` do not exist.
+ * Normalise the validator's `data` into a Map of account → { status, description }.
  *
- * Returns a Set of invalid account numbers, or null when the check could not be performed (not
- * configured, unreachable, or an unexpected response). Null means "unknown", NOT "all valid" — the
- * caller decides what to do with that, and must never treat it as a pass.
+ * Two shapes come back from the same endpoint:
+ *   • many accounts → keyed by account number: { "008220...": { status, description }, ... }
+ *   • ONE account   → the status object itself: { status, description }
+ * The single-account form has no account number in it at all, so it is matched positionally against
+ * the one account that was asked about. Missing this collapses a one-account journal into "shape not
+ * understood" and skips the check entirely — and a journal touching a single distinct account is
+ * completely ordinary (one employee, or several sharing a component account).
  */
-async function invalidAccounts(accounts, cfg, extra, headers, referenceNo = '') {
-  const tag  = referenceNo ? ` ${referenceNo}` : '';
-  const list = [...new Set(accounts.filter(Boolean).map(String))];
-  if (!list.length) return new Set();
+function parseStatuses(data, list) {
+  const out = new Map();
+  if (!data || typeof data !== 'object') return out;
+
+  if (typeof data.status === 'string') {
+    // Single-account form. Only meaningful when exactly one account was submitted.
+    if (list.length === 1) out.set(String(list[0]), { status: data.status, description: data.description ?? null });
+    return out;
+  }
+
+  for (const [acct, v] of Object.entries(data)) {
+    // `{ o_result: null }` comes back for an empty request — not an account entry.
+    if (!v || typeof v !== 'object' || typeof v.status !== 'string') continue;
+    out.set(String(acct), { status: v.status, description: v.description ?? null });
+  }
+  return out;
+}
+
+/**
+ * Ask the core system which of `accounts` cannot be posted to.
+ *
+ * Returns a Map of account → { status, description } for every account that is NOT postable, or null
+ * when the check could not be performed (not configured, unreachable, or an unexpected response).
+ * Null means "unknown", NOT "all valid" — the caller decides what to do with that, and must never
+ * treat it as a pass.
+ */
+async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '') {
+  const tag = referenceNo ? ` ${referenceNo}` : '';
+  // Blank entries are dropped before sending: an empty string makes the validator answer HTTP 500
+  // for the whole batch, which would block a posting over a field that was simply not filled in.
+  const list = [...new Set(accounts.map(a => String(a ?? '').trim()).filter(Boolean))];
+  if (!list.length) return new Map();
 
   const url = validateUrlFrom(cfg, extra);
   if (!url) {
-    glLog(`VALIDATE SKIPPED${tag}`, 'No validator URL could be derived (gl_url unset and no GL_VALIDATE_URL / gl_extra.validate_url override).');
+    glLog(`VALIDATE SKIPPED${tag}`, 'No validator URL configured (set gl_validate_url in Settings → API, or GL_VALIDATE_URL).');
     return null;
   }
 
+  // This service has its own credentials — it does NOT accept the GL posting key. Omitting the
+  // secret returns 401.
+  const headers = { 'Content-Type': 'application/json' };
+  const key    = cfg.gl_validate_key    || process.env.GL_VALIDATE_KEY    || '';
+  const secret = cfg.gl_validate_secret || process.env.GL_VALIDATE_SECRET || '';
+  if (key)    headers['x-api-key']    = key;
+  if (secret) headers['x-api-secret'] = secret;
+
   // Log the request before sending, matching the posting flow: when the call hangs or the process
   // dies mid-flight there is still a record of exactly what was asked. Auth headers are not logged.
-  glLog(`VALIDATE REQUEST${tag} → POST ${url}`, { accountList: list });
+  glLog(`VALIDATE REQUEST${tag} → POST ${url}`, { accounts: list });
 
+  let res;
   try {
-    const res = await axios.post(url, { accountList: list }, {
+    res = await axios.post(url, { accounts: list }, {
       headers, timeout: Number(cfg.gl_timeout) || 30000,
     });
-
-    // The raw response, always — this is the record that shows whether the validator actually
-    // screened the accounts or answered with something the parsing below could not use.
-    glLog(`VALIDATE RESPONSE${tag} (HTTP ${res.status})`, res.data);
-
-    const code = String(res.data?.responseCode ?? '');
-    if (code && code !== '00' && code !== '000' && code !== '0') {
-      glLog(`VALIDATE REJECTED${tag}`, { url, responseCode: code, message: res.data?.message ?? null });
-      return null;
-    }
-    const invalid = res.data?.data?.invalidAccounts;
-    if (!Array.isArray(invalid)) {
-      glLog(`VALIDATE UNEXPECTED SHAPE${tag}`, {
-        url,
-        expected: 'data.invalidAccounts to be an array',
-        received: invalid === undefined ? 'undefined (key absent)' : typeof invalid,
-        body: res.data,
-      });
-      return null;
-    }
-
-    // Outcome in the validator's own terms: how many were asked about, which came back invalid.
-    // "all submitted accounts invalid" is the signature of a validator that is not really screening
-    // them, so it is called out rather than left for a reader to spot.
-    glLog(`VALIDATE RESULT${tag}`, {
-      submitted:     list.length,
-      invalidCount:  invalid.length,
-      invalidAccounts: invalid.map(String),
-      note: invalid.length === list.length && list.length > 0
-        ? 'Every submitted account was reported invalid — verify the validator is screening rather than rejecting the whole request.'
-        : undefined,
-    });
-
-    return new Set(invalid.map(String));
   } catch (e) {
     glLog(`VALIDATE TRANSPORT FAILURE${tag}`, {
       url, message: e.message, status: e.response?.status ?? null, body: e.response?.data ?? null,
     });
     return null;
   }
+
+  // The raw response, always — this is the record that shows whether the validator actually screened
+  // the accounts or answered with something the parsing below could not use.
+  glLog(`VALIDATE RESPONSE${tag} (HTTP ${res.status})`, res.data);
+
+  // This service reports success as `success: true` with responseCode 200 (a NUMBER, not the '000'
+  // string the posting API uses), so both are accepted.
+  const code = String(res.data?.responseCode ?? '');
+  const ok   = res.data?.success === true || ['200', '00', '000', '0'].includes(code);
+  if (!ok) {
+    glLog(`VALIDATE REJECTED${tag}`, { url, responseCode: code, message: res.data?.message ?? null });
+    return null;
+  }
+
+  const statuses = parseStatuses(res.data?.data, list);
+  if (!statuses.size) {
+    glLog(`VALIDATE UNEXPECTED SHAPE${tag}`, {
+      url,
+      expected: 'data keyed by account number, or a single {status, description}',
+      submitted: list.length,
+      body: res.data,
+    });
+    return null;
+  }
+
+  const bad = new Map();
+  const unanswered = [];
+  for (const acct of list) {
+    const s = statuses.get(acct);
+    // An account the validator did not answer for is not evidence that it is good.
+    if (!s) { unanswered.push(acct); bad.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' }); continue; }
+    if (!POSTABLE_STATUSES.has(String(s.status).toUpperCase())) bad.set(acct, s);
+  }
+
+  glLog(`VALIDATE RESULT${tag}`, {
+    submitted:    list.length,
+    blockedCount: bad.size,
+    blocked:      [...bad.entries()].map(([a, s]) => ({ account: a, status: s.status, description: s.description })),
+    unanswered:   unanswered.length ? unanswered : undefined,
+    note: bad.size === list.length && list.length > 0
+      ? 'Every submitted account was blocked — verify the validator is screening rather than rejecting the whole request.'
+      : undefined,
+  });
+
+  return bad;
 }
 
 /**
@@ -140,11 +196,15 @@ async function invalidAccounts(accounts, cfg, extra, headers, referenceNo = '') 
  * component, "Net Pay - Jane Doe" for the cash leg, "Medical - Jane Doe - Malaria" for a claim. That
  * narration is the only place the GL component name or employee name survives into this helper, so
  * it is what gets reported back. `employeeCode` is included when the line carries one.
+ *
+ * `blocked` is a Map of account → { status, description } from the validator. The status is carried
+ * into each entry because the fix differs by reason: a DORMANT account has to be reactivated at the
+ * bank, an ACCOUNT NOT FOUND is a wrong number to correct here.
  */
-function describeAccounts(invalidSet, debitAccounts, creditAccounts) {
+function describeAccounts(blocked, debitAccounts, creditAccounts) {
   const byAccount = new Map();
   const add = (acct, narration, empCode, side) => {
-    if (!acct || !invalidSet.has(String(acct))) return;
+    if (!acct || !blocked.has(String(acct))) return;
     const key = String(acct);
     if (!byAccount.has(key)) {
       byAccount.set(key, { account: key, labels: new Set(), employeeCodes: new Set(), sides: new Set() });
@@ -166,10 +226,15 @@ function describeAccounts(invalidSet, debitAccounts, creditAccounts) {
     const isNetPay = labels.some(l => /^net pay\b/i.test(l));
     const sources  = [...new Set(labels.map(l => String(l).split(' - ')[0].trim()).filter(Boolean))];
     const people   = [...new Set(labels.map(l => String(l).split(' - ').slice(1).join(' - ').trim()).filter(Boolean))];
+    const s = blocked.get(e.account) ?? {};
     return {
       account:       e.account,
       // 'employee' → an employee bank account; 'component' → a payroll/medical GL account.
       kind:          isNetPay ? 'employee' : 'component',
+      // Why the bank refused this account — 'NF' (not found), 'DO' (dormant), or whatever new code
+      // the core system introduces. The UI renders `description` as the reason column.
+      status:        s.status ?? null,
+      description:   s.description ?? null,
       sourceNames:   sources,           // GL component names, e.g. ["Salary Basic", "Lunch"]
       employeeNames: people,            // employee names taken from the narration
       employeeCodes: [...e.employeeCodes],
@@ -204,6 +269,58 @@ async function postToGL({
   const cfg = await getApiConfig();
   const url = cfg.gl_url;
   if (!url) throw new Error('GL API URL not configured');
+
+  // ── Empty-account gate (last line of defence, all callers) ───────────────────
+  // Every line must carry an account number. The GL does not check, so a line with a blank account
+  // posts as-is and has to be traced and unwound by hand at the bank.
+  //
+  // This gate is NOT redundant with the account validator below. The validator drops blanks from the
+  // list it submits — it has to, because a single empty string makes that service answer HTTP 500
+  // for the whole batch and would block an entire payroll over one unfilled field. Dropping them
+  // there means a blank account is never *screened*, so without this check it would sail through
+  // validation and straight into the posting. Refuse it here instead.
+  //
+  // Callers that build journals (payroll, medical) already skip accountless lines where they can
+  // name the employee or component responsible; this catches anything they miss.
+  const blankLines = [];
+  (debitAccounts || []).forEach((d, i) => {
+    if (!String(d?.debitAccount ?? '').trim()) {
+      blankLines.push({ side: 'debit', line: i + 1, narration: d?.debitNarration ?? null, employeeCode: d?.employeeCode ?? null, amount: d?.debitAmount ?? null });
+    }
+  });
+  (creditAccounts || []).forEach((c, i) => {
+    if (!String(c?.creditAccount ?? '').trim()) {
+      blankLines.push({ side: 'credit', line: i + 1, narration: c?.creditNarration ?? null, employeeCode: c?.employeeCode ?? null, amount: c?.creditAmount ?? null });
+    }
+  });
+  if (blankLines.length) {
+    glLog(`BLOCKED ${referenceNo} — blank account numbers`, { count: blankLines.length, lines: blankLines });
+    console.error(`[gl] ${referenceNo}: blocked — ${blankLines.length} line(s) have no account number`);
+    // Reuse the invalid-accounts channel so the UI renders these in the same table it already has,
+    // with an empty `account` and a reason that says what is wrong.
+    const err = new Error(
+      `GL posting blocked — ${blankLines.length} journal line(s) have no account number. `
+      + `Nothing was sent to the GL.`,
+    );
+    err.glInvalidAccounts = blankLines.map(l => {
+      const labels  = l.narration ? [String(l.narration)] : [];
+      const isNetPay = labels.some(x => /^net pay\b/i.test(x));
+      return {
+        account:       '',
+        kind:          isNetPay ? 'employee' : 'component',
+        status:        'MISSING',
+        description:   isNetPay
+          ? 'No bank account on this employee record'
+          : 'No GL account configured for this payroll component',
+        sourceNames:   labels.map(x => x.split(' - ')[0].trim()).filter(Boolean),
+        employeeNames: labels.map(x => x.split(' - ').slice(1).join(' - ').trim()).filter(Boolean),
+        employeeCodes: l.employeeCode ? [String(l.employeeCode)] : [],
+        sides:         [l.side],
+        labels,
+      };
+    });
+    throw err;
+  }
 
   // ── Balance gate (last line of defence, all callers) ─────────────────────────
   // The GL accepts whatever it is sent without verifying that debits equal credits, so an unbalanced
@@ -243,16 +360,16 @@ async function postToGL({
   }
 
   // ── Account validation gate ─────────────────────────────────────────────────
-  // Screen every account in the journal against the core system before sending. Runs after the
-  // headers are built so it reuses the same credentials as the posting itself.
+  // Screen every account in the journal against the core system's account-status validator before
+  // sending. Only accounts reported NORMAL may be posted to: a DORMANT or missing account produces
+  // entries that have to be traced and unwound by hand at the bank, so a refusal the user can act on
+  // is always the better outcome.
   //
-  // Any unrecognised account stops the posting outright — the bulk-payment API is never called.
-  // Posting to an account the core system does not know produces entries that have to be traced and
-  // unwound by hand at the bank, so a refusal the user can act on is always the better outcome.
+  // Any non-NORMAL account stops the posting outright — the bulk-payment API is never called.
   //
   // Turn it off in Settings → App Controls ("Validate GL accounts before posting"), or with
-  // GL_VALIDATE_ACCOUNTS=off in the environment. Off means accounts the core system does not
-  // recognise are posted anyway — intended for environments still being set up.
+  // GL_VALIDATE_ACCOUNTS=off in the environment. Off means unpostable accounts are sent anyway —
+  // intended for environments still being set up.
   //
   // A check that could not be COMPLETED (endpoint down, unexpected response) does not block: an
   // unreachable validator must not stop payroll, and the posting's own error handling still applies.
@@ -262,18 +379,31 @@ async function postToGL({
       ...(debitAccounts  || []).map(d => d.debitAccount),
       ...(creditAccounts || []).map(c => c.creditAccount),
     ];
-    const invalid = await invalidAccounts(accounts, cfg, extra, headers, referenceNo);
+    const blocked = await invalidAccounts(accounts, cfg, extra, headers, referenceNo);
 
-    if (invalid === null) {
+    if (blocked === null) {
       glLog(`VALIDATE SKIPPED ${referenceNo}`, 'Account validation unavailable — posting proceeded unchecked.');
       console.warn(`[gl validate] ${referenceNo}: validator unavailable, posting unchecked`);
-    } else if (invalid.size) {
-      const details = describeAccounts(invalid, debitAccounts, creditAccounts);
-      glLog(`BLOCKED ${referenceNo} — invalid accounts`, { invalid: [...invalid], details });
-      console.error(`[gl validate] ${referenceNo}: blocked — ${invalid.size} invalid account(s)`);
+    } else if (blocked.size) {
+      const details = describeAccounts(blocked, debitAccounts, creditAccounts);
+      glLog(`BLOCKED ${referenceNo} — unpostable accounts`, {
+        blocked: [...blocked.entries()].map(([a, s]) => ({ account: a, status: s.status, description: s.description })),
+        details,
+      });
+      console.error(`[gl validate] ${referenceNo}: blocked — ${blocked.size} unpostable account(s)`);
+
+      // Summarise by reason so the headline says WHY, not just how many. The per-account table in
+      // `details` carries the specifics.
+      const byReason = {};
+      for (const s of blocked.values()) {
+        const label = s.description || s.status || 'unknown status';
+        byReason[label] = (byReason[label] ?? 0) + 1;
+      }
+      const reasonSummary = Object.entries(byReason)
+        .map(([label, n]) => `${n} ${String(label).toLowerCase()}`).join(', ');
 
       const err = new Error(
-        `GL posting blocked — ${invalid.size} account(s) are not recognised by the core system. `
+        `GL posting blocked — ${blocked.size} account(s) cannot be posted to (${reasonSummary}). `
         + `Nothing was sent to the GL.`,
       );
       // The UI renders these as a table; the message above is the summary line only, so it stays
