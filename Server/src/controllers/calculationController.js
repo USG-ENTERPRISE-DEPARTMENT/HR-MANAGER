@@ -1,6 +1,7 @@
 const { prisma } = require('../helpers/dbQueryHelper');
 const asyncHandler = require('../middleware/asyncHandler');
 const respond = require('../helpers/respondHelper');
+const { getSystemCurrency } = require('../helpers/settingsHelper');
 
 const { serialize, toBigInt, enumSql } = require('../helpers/controllerHelpers');
 const { tokenizeFormula, detokenizeFormula } = require('../helpers/payrollFormula');
@@ -533,7 +534,9 @@ const createPayrollEmployee = asyncHandler(async (req, res) => {
   const { employee, pay_frequency, currency, deduction_group, deduction_exemptions } = req.body;
   if (!employee)      return respond.badReq(res, 'Employee is required');
   if (!pay_frequency) return respond.badReq(res, 'Pay frequency is required');
-  if (!currency)      return respond.badReq(res, 'Currency is required');
+  // Currency is no longer taken from the request: every employee is paid in the system currency
+  // (Settings -> General). Accepting it per employee is what let "Cedis" and "GHS" be stored while
+  // the system ran on Leones, and those values were posted to the bank. Any value sent is ignored.
 
   const empId = toBigInt(employee);
   const dup = await query`SELECT id FROM payrollemployees WHERE employee = ${empId} LIMIT 1`;
@@ -542,7 +545,7 @@ const createPayrollEmployee = asyncHandler(async (req, res) => {
   const nextId = Number((await query`SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM payrollemployees`)[0].nextId);
   await exec`
     INSERT INTO payrollemployees (id, employee, pay_frequency, currency, deduction_group, deduction_exemptions)
-     VALUES (${nextId}, ${empId}, ${toBigInt(pay_frequency)}, ${currency?.trim() || null},
+     VALUES (${nextId}, ${empId}, ${toBigInt(pay_frequency)}, ${await getSystemCurrency()},
              ${deduction_group ? toBigInt(deduction_group) : null}, ${deduction_exemptions?.trim() || null})`;
   const [created] = await query`${PE_SELECT} WHERE pe.id = ${nextId}`;
   respond.created(res, 'Payroll employee created', created);
@@ -555,7 +558,9 @@ const updatePayrollEmployee = asyncHandler(async (req, res) => {
   const { employee, pay_frequency, currency, deduction_group, deduction_exemptions } = req.body;
   if (!employee)      return respond.badReq(res, 'Employee is required');
   if (!pay_frequency) return respond.badReq(res, 'Pay frequency is required');
-  if (!currency)      return respond.badReq(res, 'Currency is required');
+  // Currency is no longer taken from the request: every employee is paid in the system currency
+  // (Settings -> General). Accepting it per employee is what let "Cedis" and "GHS" be stored while
+  // the system ran on Leones, and those values were posted to the bank. Any value sent is ignored.
 
   const existing = await query`SELECT id FROM payrollemployees WHERE id = ${id} LIMIT 1`;
   if (!existing.length) return respond.notFound(res, 'Payroll employee not found');
@@ -565,7 +570,7 @@ const updatePayrollEmployee = asyncHandler(async (req, res) => {
   if (dup.length) return respond.conflict(res, 'This employee already has a payroll record');
 
   await exec`
-    UPDATE payrollemployees SET employee=${empId}, pay_frequency=${toBigInt(pay_frequency)}, currency=${currency?.trim() || null},
+    UPDATE payrollemployees SET employee=${empId}, pay_frequency=${toBigInt(pay_frequency)}, currency=${await getSystemCurrency()},
       deduction_group=${deduction_group ? toBigInt(deduction_group) : null}, deduction_exemptions=${deduction_exemptions?.trim() || null}
      WHERE id=${id}`;
   const [updated] = await query`${PE_SELECT} WHERE pe.id = ${id}`;

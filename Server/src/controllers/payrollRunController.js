@@ -9,7 +9,7 @@ const { getApiConfig } = require('./apiIntegrationController');
 const _parser = new Parser({ operators: { logical: false, comparison: false, conditional: false } });
 
 const { serialize, toDate } = require('../helpers/controllerHelpers');
-const { upsertSetting } = require('../helpers/settingsHelper');
+const { upsertSetting, getSystemCurrency } = require('../helpers/settingsHelper');
 const { Prisma } = require('@prisma/client'); // Prisma.sql / Prisma.join for portable dynamic SQL
 
 // Tagged-template query helpers — portable (Prisma emits the right placeholders per provider).
@@ -707,7 +707,11 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
   const apiCfg = await getApiConfig();
   let glExtra = {};
   try { glExtra = JSON.parse(apiCfg.gl_extra || '{}'); } catch {}
-  const defaultCurrency = glExtra.currency || 'SLL';
+  // Every employee is paid in the same currency, so this is the ONE source of truth: the
+  // general_currency control setting, falling back to the GL config. Deliberately not read from
+  // payrollemployees.currency -- that per-employee free text held "Cedis"/"GHS" while the system
+  // ran on Leones, and those values were posted to the bank as the journal currency.
+  const systemCurrency = await getSystemCurrency(glExtra.currency);
   const defaultBranch   = glExtra.branch   || '000';
 
   // bankAccount is aliased to the single-case `bank_account` deliberately. Postgres folds unquoted
@@ -720,7 +724,7 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
            TRIM(CONCAT(COALESCE(e.firstName,''), ' ', COALESCE(e.lastName,''))) AS emp_name,
            e.employee_id AS emp_code,
            e.bankAccount AS bank_account,
-           COALESCE(pe.currency, ${defaultCurrency}) AS currency
+           ${systemCurrency} AS currency
     FROM   payrolldata pd
     JOIN   payrollcolumns    pc ON pc.id       = pd.payroll_item
     JOIN   employee           e  ON e.id        = pd.employee
@@ -743,7 +747,7 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
         employeeCode: row.emp_code || '',
         name:        row.emp_name,
         bankAccount: row.bank_account || null,
-        currency:    row.currency || defaultCurrency,
+        currency:    systemCurrency,
         branch:      row.posting_branch || defaultBranch,
         columns:     [],
         earnings:    0,
@@ -759,7 +763,7 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
       type:      row.payment_deduction,          // 'Payment' | 'Deduction'
       glAccount: row.salarycomponent_gl || null, // null → the run fell back to the env-level GL
       branch:    row.posting_branch || defaultBranch,
-      currency:  row.currency || defaultCurrency,
+      currency:  systemCurrency,
     });
 
     if (row.payment_deduction === 'Deduction') emp.deductions += amount;
@@ -860,7 +864,11 @@ async function buildAndPostGL(id, req, runName) {
   const apiCfg = await getApiConfig();
   let glExtra  = {};
   try { glExtra = JSON.parse(apiCfg.gl_extra || '{}'); } catch {}
-  const defaultCurrency = glExtra.currency || 'SLL';
+  // Every employee is paid in the same currency, so this is the ONE source of truth: the
+  // general_currency control setting, falling back to the GL config. Deliberately not read from
+  // payrollemployees.currency -- that per-employee free text held "Cedis"/"GHS" while the system
+  // ran on Leones, and those values were posted to the bank as the journal currency.
+  const systemCurrency = await getSystemCurrency(glExtra.currency);
   const defaultBranch   = glExtra.branch   || '000';
 
   const postingRows = await query`
@@ -869,7 +877,7 @@ async function buildAndPostGL(id, req, runName) {
            TRIM(CONCAT(COALESCE(e.firstName,''), ' ', COALESCE(e.lastName,''))) AS emp_name,
            e.employee_id AS emp_code,
            e.bankAccount,
-           COALESCE(pe.currency, ${defaultCurrency}) AS currency
+           ${systemCurrency} AS currency
     FROM   payrolldata pd
     JOIN   payrollcolumns    pc ON pc.id       = pd.payroll_item
     JOIN   employee           e  ON e.id        = pd.employee
@@ -899,7 +907,7 @@ async function buildAndPostGL(id, req, runName) {
     const amount   = parseFloat(row.amount || '0');
     if (!amount || amount <= 0) continue;
     const branch   = row.posting_branch || defaultBranch;
-    const currency = row.currency       || defaultCurrency;
+    const currency = systemCurrency;
     // prodRef prefix encodes the side of the journal: BS_ for debits, NS_ for credits.
     // Applies across all GL postings (payroll + medical) so the bank sees one convention.
     const drProdRef = `BS_${id}_${row.employee}`;
