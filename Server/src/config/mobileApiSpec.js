@@ -540,6 +540,179 @@ for (const [module, label] of [['leave', 'leave request'], ['medical', 'medical 
   }
 }
 
+// ── Employee directory ───────────────────────────────────────────────────────
+// Same key-only caller as the payroll endpoints below. Written longhand for the same reason: op()
+// folds in COMMON_ERRORS, whose 403/404 text describes self-scoped record access.
+spec.paths['/employees'] = {
+  get: {
+    tags: ['Core Banking'],
+    summary: 'List employees, optionally filtered by status',
+    description: "⚠️ **Not self-scoped.** Returns **every employee in the system**, not only the record of\none caller — including names, bank accounts and contact details. Any caller holding a valid API\nkey can read it.\n\nAuthenticated with the `x-api-key` header **alone** — no `x-employee-id`, because the caller is a\nsystem rather than a person.\n\n`status` filters on the employment **lifecycle**: `ACTIVE` (current staff), `RESIGNED` (leavers)\nor `PENDING` (not yet activated). Matching is case-insensitive, and omitting it returns everyone.\nAn unrecognised value simply matches nothing rather than erroring — the `status` field in the\nresponse echoes what was applied, so a typo is visible.\n\nPaginated: `limit` defaults to 100 and is capped at 500, so a single call cannot pull the whole\nworkforce. Use `page` with the returned `pages` count to walk the full list.",
+    security: [{ ApiKeyAuth: [] }],
+    parameters: [
+    {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+        "type": "string",
+        "enum": [
+          "ACTIVE",
+          "RESIGNED",
+          "PENDING"
+        ],
+        "example": "ACTIVE"
+      },
+      "description": "Lifecycle status to filter by. Omit for all employees."
+    },
+    {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "example": 1
+      },
+      "description": "Page number, 1-based."
+    },
+    {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100,
+        "example": 100
+      },
+      "description": "Rows per page. Values above 500 are capped at 500."
+    }
+  ],
+    responses: {
+      200: {
+        description: 'Success',
+        content: { 'application/json': { schema: okEnvelope({
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "nullable": true,
+        "example": "ACTIVE",
+        "description": "The filter that was applied, or null when unfiltered."
+      },
+      "page": {
+        "type": "integer",
+        "example": 1
+      },
+      "limit": {
+        "type": "integer",
+        "example": 100
+      },
+      "total": {
+        "type": "integer",
+        "example": 645,
+        "description": "Employees matching the filter, across all pages."
+      },
+      "pages": {
+        "type": "integer",
+        "example": 7
+      },
+      "employees": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": id('45'),
+            "employeeCode": {
+              "type": "string",
+              "nullable": true,
+              "example": "P1991001"
+            },
+            "firstName": {
+              "type": "string",
+              "nullable": true,
+              "example": "EMMANUEL"
+            },
+            "middleName": {
+              "type": "string",
+              "nullable": true,
+              "example": null
+            },
+            "lastName": {
+              "type": "string",
+              "nullable": true,
+              "example": "BORBOR"
+            },
+            "email": {
+              "type": "string",
+              "nullable": true,
+              "example": "e.borbor@example.com"
+            },
+            "workEmail": {
+              "type": "string",
+              "nullable": true,
+              "example": "eborbor@company.com"
+            },
+            "phone": {
+              "type": "string",
+              "nullable": true,
+              "example": "+232 76 000000"
+            },
+            "bankAccount": {
+              "type": "string",
+              "nullable": true,
+              "example": "0212300317101"
+            },
+            "lifecycleStatus": {
+              "type": "string",
+              "nullable": true,
+              "example": "ACTIVE"
+            },
+            "approvalStatus": {
+              "type": "string",
+              "nullable": true,
+              "example": "APPROVED",
+              "description": "Whether the employee record itself passed the HR approval workflow."
+            },
+            "active": {
+              "type": "boolean",
+              "example": true,
+              "description": "The enabled flag (employee.status 1/0), surfaced as a boolean."
+            },
+            "jobTitle": {
+              "type": "string",
+              "nullable": true,
+              "example": "Finance Director"
+            },
+            "department": {
+              "type": "string",
+              "nullable": true,
+              "example": "Finance"
+            },
+            "branch": {
+              "type": "string",
+              "nullable": true,
+              "example": "Head Office"
+            },
+            "hireDate": {
+              "type": "string",
+              "nullable": true,
+              "format": "date"
+            }
+          }
+        }
+      }
+    }
+  }, 'Employees retrieved') } },
+      },
+      401: errorEnvelope('401', 'Missing or invalid API key'),
+      429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
+    },
+  },
+};
 // ── Payroll lookup by GL reference ───────────────────────────────────────────
 // `security` is overridden to the API key alone: the caller is the core banking system, which has no
 // employee identity to send. The base path still applies.

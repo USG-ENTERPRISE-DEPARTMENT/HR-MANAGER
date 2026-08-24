@@ -17,6 +17,8 @@ const { upload } = require('../middleware/upload');
 const me = require('../controllers/meController');
 // Payroll lookup shares this router's auth model; the handler itself lives with the other payroll code.
 const payrollRun = require('../controllers/payrollRunController');
+// Employee directory for the same key-only caller; the handler lives with the other employee code.
+const employeeCtrl = require('../controllers/employeeController');
 const mobileApiSpec = require('../config/mobileApiSpec');
 
 // Express routes the bare path `/me` into this sub-router as '/'. That is the web app's
@@ -73,6 +75,15 @@ router.post('/payroll/runs/confirmation', apiKeyOnly, payrollRun.confirmPayrollF
 // payroll_api_access_log by the controller (with the employee columns null for key-only callers),
 // and the rate limit above still applies.
 router.get('/payroll/runs/by-reference/:reference', apiKeyOnly, payrollRun.getPayrollByReference);
+
+// ── Employee directory (API key only) ────────────────────────────────────────
+// Same key-only caller as the payroll endpoints above. Returns every employee, optionally filtered
+// by lifecycle status (?status=ACTIVE), paginated so one call cannot pull the whole workforce.
+//
+// Mounted BEFORE `mobileAuth`: the core banking system has no employee identity to send. This is
+// NOT self-scoped — it deliberately returns other people's records, which is why it sits with the
+// server-to-server endpoints rather than under /me/profile and friends.
+router.get('/employees', apiKeyOnly, employeeCtrl.getEmployeeDirectory);
 
 router.use(mobileAuth);
 

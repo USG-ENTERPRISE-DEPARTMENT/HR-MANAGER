@@ -1658,8 +1658,91 @@ const syncEmployee = asyncHandler(async (req, res) => {
   respond.ok(res, 'Employee synced successfully');
 });
 
+// ── Employee directory for the core banking system (API key only) ────────────
+// GET /me/employees?status=ACTIVE&page=1&limit=100
+//
+// Same caller and auth model as the payroll callbacks: the core banking system holds the shared API
+// key but has no employee identity, so this is mounted before mobileAuth and takes no x-employee-id.
+//
+// `status` filters on lifecycleStatus — the employment lifecycle (ACTIVE / RESIGNED / PENDING), which
+// is what distinguishes current staff from leavers. The employee table also carries `status` (a 1/0
+// enabled flag) and `approvalStatus` (the HR approval workflow); neither is exposed as the filter
+// here, because 'employee status' in the bank's terms means the lifecycle. Both are still returned on
+// each row so the caller can see them.
+//
+// Deliberately NOT a full dump: paginated with a hard cap, so one request cannot pull the entire
+// workforce and no caller accidentally holds 758 records in memory.
+const MAX_EMPLOYEE_PAGE = 500;
+const DEFAULT_EMPLOYEE_PAGE = 100;
+
+const getEmployeeDirectory = asyncHandler(async (req, res) => {
+  // Compare case-insensitively so ?status=active and ?status=ACTIVE behave the same; the column
+  // stores upper case.
+  const status = String(req.query.status ?? '').trim().toUpperCase();
+
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const rawLimit = parseInt(req.query.limit, 10) || DEFAULT_EMPLOYEE_PAGE;
+  const limit = Math.min(Math.max(1, rawLimit), MAX_EMPLOYEE_PAGE);
+  const offset = (page - 1) * limit;
+
+  // Built as a Prisma.sql fragment so the same code emits the right placeholder per provider, and
+  // reused verbatim by the count query — the total must describe the same filter as the rows.
+  const where = status
+    ? Prisma.sql`WHERE UPPER(e.lifecycleStatus) = ${status}`
+    : Prisma.sql``;
+
+  const [{ total }] = await prisma.$queryRaw(
+    Prisma.sql`SELECT COUNT(*)::int AS total FROM employee e ${where}`);
+
+  const rows = await prisma.$queryRaw(Prisma.sql`
+    SELECT e.id, e.employee_id, e.firstName, e.lastName, e.middleName,
+           e.email, e.work_email, e.phone, e.mobilePhone, e.bankAccount,
+           e.lifecycleStatus, e.approvalStatus, e.status,
+           e.hireDate, e.confirmationDate,
+           COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS job_title,
+           COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department,
+           COALESCE(br.title, CONCAT(e.branchId, ''))     AS branch
+    FROM employee e
+    LEFT JOIN codelistvalue      jt   ON jt.id   = e.jobTitleId
+    LEFT JOIN companystructures  dept ON dept.id = e.departmentId
+    LEFT JOIN companystructures  br   ON br.id   = e.branchId
+    ${where}
+    ORDER BY e.employee_id ASC
+    LIMIT ${limit} OFFSET ${offset}`);
+
+  respond.ok(res, 'Employees retrieved', {
+    // Echo the filter that was applied, so a caller that mistyped a status sees it was ignored
+    // rather than silently receiving everyone.
+    status: status || null,
+    page,
+    limit,
+    total,
+    pages: Math.max(1, Math.ceil(total / limit)),
+    employees: rows.map(r => ({
+      id:              String(r.id),
+      employeeCode:    r.employee_id ?? null,
+      firstName:       r.firstname ?? r.firstName ?? null,
+      middleName:      r.middlename ?? r.middleName ?? null,
+      lastName:        r.lastname ?? r.lastName ?? null,
+      email:           r.email ?? null,
+      workEmail:       r.work_email ?? null,
+      phone:           r.phone ?? r.mobilephone ?? r.mobilePhone ?? null,
+      bankAccount:     r.bankaccount ?? r.bankAccount ?? null,
+      lifecycleStatus: r.lifecyclestatus ?? r.lifecycleStatus ?? null,
+      approvalStatus:  r.approvalstatus ?? r.approvalStatus ?? null,
+      // The 1/0 enabled flag, surfaced as a boolean so the caller does not have to know the encoding.
+      active:          String(r.status ?? '') === '1',
+      jobTitle:        r.job_title ?? null,
+      department:      r.department ?? null,
+      branch:          r.branch ?? null,
+      hireDate:        r.hiredate ?? r.hireDate ?? null,
+    })),
+  });
+});
+
 module.exports = {
   roSupervisorBlock,
+  getEmployeeDirectory,
   getAllEmployees,
   getEmployeeApprovals,
   getEmployeeApprovalFlow,
