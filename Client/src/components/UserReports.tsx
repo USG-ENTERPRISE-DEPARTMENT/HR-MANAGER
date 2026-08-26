@@ -525,7 +525,7 @@ export function UserReports() {
           <FormModal
             title="My Payslips"
             subtitle="Download your payslips for completed payroll runs"
-            maxWidth="3xl"
+            maxWidth="5xl"
             onClose={() => setPayslipOpen(false)}
             onSave={() => setPayslipOpen(false)}
             saveLabel="Close"
@@ -564,7 +564,7 @@ export function UserReports() {
                       <th className="th text-left">Period</th>
                       <th className="th text-left">Frequency</th>
                       <th className="th text-left">Status</th>
-                      <th className="th text-right">Download</th>
+                      <th className="th text-right w-px">Download</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -576,10 +576,14 @@ export function UserReports() {
                         animate={{ opacity: 1 }}
                         transition={{ delay: ri * 0.04 }}
                       >
-                        <td className="td font-medium text-[var(--text-primary)]">
-                          <div className="flex items-center gap-2">
-                            <FileText size={14} className="text-[var(--accent)] shrink-0" />
-                            {run.name}
+                        {/* Run names are long ("PAYROLL FOR AUG 2026 - SNR MGT (37)"). `.td` sets
+                            white-space: nowrap globally, which forced the table wider than the modal
+                            and pushed the Download button behind a horizontal scrollbar. Allow this
+                            one cell to wrap so the action column is always reachable. */}
+                        <td className="td font-medium text-[var(--text-primary)] !whitespace-normal">
+                          <div className="flex items-start gap-2">
+                            <FileText size={14} className="text-[var(--accent)] shrink-0 mt-0.5" />
+                            <span className="break-words">{run.name}</span>
                           </div>
                         </td>
                         <td className="td text-[var(--text-muted)] text-[12px]">
