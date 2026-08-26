@@ -50,4 +50,43 @@ async function getSystemCurrency(glExtraCurrency) {
       || CURRENCY_FALLBACK;
 }
 
-module.exports = { genSettingsId, upsertSetting, getSystemCurrency, currencyCodeFrom };
+// ── Company branding ─────────────────────────────────────────────────────────
+// One logo for the whole application, held in Settings -> System -> App Setup.
+//
+// It used to be per payslip template (payslip_settings.company_logo_url), which meant the logo you
+// saw while editing one template was not necessarily the one printed on a payslip -- template
+// selection depends on payment type and deduction group, so a different row supplied the logo. The
+// careers portal, onboarding portal and outgoing emails read it too, and they took whichever row
+// `payslip_settings LIMIT 1` happened to return. Reading it from App Setup removes both problems.
+async function getAppSetup() {
+  const rows = await prisma.settings
+    .findMany({ where: { category: "app_setup" }, select: { name: true, value: true } })
+    .catch(() => []);
+  const out = {};
+  rows.forEach(r => { out[r.name] = r.value; });
+  return out;
+}
+
+/**
+ * The company logo, as stored (an uploaded filename, an absolute URL, or a data URI).
+ * Callers resolve it to bytes or to a browser URL themselves.
+ */
+async function getCompanyLogo() {
+  return (await getAppSetup()).company_logo || "";
+}
+
+/** Company branding for emails and public portals: name, address, logo and accent colour. */
+async function getCompanyBranding() {
+  const setup = await getAppSetup();
+  return {
+    name:    setup.company_name    || "",
+    address: setup.company_address || "",
+    logo:    setup.company_logo    || "",
+    accent:  setup.accent_color    || "",
+  };
+}
+
+module.exports = {
+  genSettingsId, upsertSetting, getSystemCurrency, currencyCodeFrom,
+  getAppSetup, getCompanyLogo, getCompanyBranding,
+};

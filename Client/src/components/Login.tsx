@@ -80,7 +80,7 @@ export function Login({ onLogin }: LoginProps) {
       <div className="relative z-10 flex items-center justify-between px-8 sm:px-12 pt-8">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded bg-gradient-to-br from-[#0066b3] to-[#0099ff] flex items-center justify-center shadow-lg border border-white/20">
-            <span className="text-white font-bold text-[15px] tracking-tight">SI</span>
+            <span className="text-white font-bold text-[15px] tracking-tight">HR</span>
           </div>
           <span className="text-[19px] font-bold text-white tracking-wide">
             RCB <span className="font-normal text-slate-400">Portal</span>

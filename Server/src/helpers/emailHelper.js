@@ -29,15 +29,18 @@ async function resolveMailConfig() {
   }
 }
 
+// Branding for outgoing email comes from App Setup, the single place it is configured.
+// Previously this read `payslip_settings LIMIT 1` -- whichever payslip TEMPLATE happened to be
+// first, so adding or reordering templates could silently change the branding on every email.
 async function resolveBranding() {
   try {
-    const { prisma } = require('./dbQueryHelper');
-    const [row] = await prisma.$queryRaw`SELECT company_name, company_address, company_logo_url, accent_color FROM payslip_settings LIMIT 1`;
+    const { getCompanyBranding } = require('./settingsHelper');
+    const b = await getCompanyBranding();
     return {
-      name:    row?.company_name    || 'HR System',
-      address: row?.company_address || '',
-      logoUrl: row?.company_logo_url || '',
-      accent:  row?.accent_color    || '#2563eb',
+      name:    b.name    || 'HR System',
+      address: b.address || '',
+      logoUrl: b.logo    || '',
+      accent:  b.accent  || '#2563eb',
     };
   } catch {
     return { name: 'HR System', address: '', logoUrl: '', accent: '#2563eb' };

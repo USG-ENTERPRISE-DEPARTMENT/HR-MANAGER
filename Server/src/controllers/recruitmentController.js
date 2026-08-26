@@ -588,10 +588,16 @@ const hireCandidate = asyncHandler(async (req, res) => {
 // GET /public/recruitment/settings — return branding info (company name, logo, address, accent colour)
 // for the public career portal, sourced from payslip_settings.
 const getPublicSettings = asyncHandler(async (req, res) => {
-  const row = await prisma.payslip_settings.findFirst({
-    select: { company_name: true, company_logo_url: true, company_address: true, accent_color: true },
+  // From App Setup, not from a payslip template. `company_logo_url` is kept as the response key so
+  // the public portals do not need changing; only where the value comes from has moved.
+  const { getCompanyBranding } = require('../helpers/settingsHelper');
+  const b = await getCompanyBranding();
+  return respond.ok(res, 'Settings', {
+    company_name:     b.name,
+    company_logo_url: b.logo,
+    company_address:  b.address,
+    accent_color:     b.accent,
   });
-  return respond.ok(res, 'Settings', s(row ?? {}));
 });
 
 // GET /public/recruitment/jobs — list Active job postings for the public career portal, with optional

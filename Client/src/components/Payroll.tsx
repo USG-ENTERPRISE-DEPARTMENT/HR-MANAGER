@@ -150,8 +150,10 @@ const limit2dp = (v: any): string => {
 
 // Visual payslip mockup for a report template — shared by the designer's live preview
 // and the read-only View slide-over. `template.visible_columns` must be an array of column ids.
-function PayslipTemplatePreview({ template, paymentCols, deductionCols }: {
-  template: any; paymentCols: PayrollCol[]; deductionCols: PayrollCol[];
+// `logoUrl` is passed in rather than read from `template`: the logo is one app-wide value from
+// App Setup, so the preview must show the same image the PDF will print.
+function PayslipTemplatePreview({ template, paymentCols, deductionCols, logoUrl }: {
+  template: any; paymentCols: PayrollCol[]; deductionCols: PayrollCol[]; logoUrl?: string;
 }) {
   const accent = template.accent_color || '#3B82F6';
   const vis = Array.isArray(template.visible_columns) ? template.visible_columns.map(String) : [];
@@ -160,7 +162,7 @@ function PayslipTemplatePreview({ template, paymentCols, deductionCols }: {
   return (
     <div className="bg-white rounded-[14px] shadow-xl border border-gray-200 overflow-hidden font-sans">
       <div className="px-5 py-3 flex items-center gap-3" style={{ background: accent }}>
-        {template.company_logo_url && <img src={template.company_logo_url.startsWith('http') ? template.company_logo_url : `${api.defaults.baseURL}/documents/${template.company_logo_url}`} alt="" className="h-8 w-8 rounded object-contain bg-white/20 shrink-0" />}
+        {logoUrl && <img src={logoUrl} alt="" className="h-8 w-8 rounded object-contain bg-white/20 shrink-0" />}
         <div className="flex-1 min-w-0">
           <p className="font-bold text-white text-[13px] truncate">{template.company_name || 'Company Name'}</p>
           {template.company_address && <p className="text-white/75 text-[10px] mt-0.5 truncate">{template.company_address}</p>}
@@ -509,7 +511,10 @@ function PayslipSlideOver({
   const accent  = settings?.accent_color || '#3B82F6';
   const company = settings?.company_name || appSetup?.company_name || '';
   const address = settings?.company_address || '';
-  const rawLogo = settings?.company_logo_url || appSetup?.company_logo || '';
+  // One logo app-wide, from Settings > System > App Setup. Templates no longer carry their own:
+  // which template renders a payslip depends on payment type and deduction group, so a per-template
+  // logo meant the preview and the printed PDF could disagree.
+  const rawLogo = appSetup?.company_logo || '';
   const logo    = rawLogo
     ? (/^(https?:|data:|blob:)/.test(rawLogo) ? rawLogo : `${api.defaults.baseURL}/documents/${rawLogo}`)
     : '';
@@ -1455,6 +1460,16 @@ function PayrollGrid({
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function Payroll() {
+  // The one company logo, used by every payslip template (Settings > System > App Setup).
+  const [appSetup, setAppSetup] = useState<{ company_name?: string; company_logo?: string } | null>(null);
+  useEffect(() => {
+    api.get('/settings/app-setup').then(r => setAppSetup(r.data?.data ?? r.data)).catch(() => {});
+  }, []);
+  const appLogoUrl = appSetup?.company_logo
+    ? (/^(https?:|data:|blob:)/.test(appSetup.company_logo)
+        ? appSetup.company_logo
+        : `${api.defaults.baseURL}/documents/${appSetup.company_logo}`)
+    : '';
   const { can } = useCan();
   const [activeTab,   setActiveTab]   = useState('Payroll Runs');
   const [viewRow,     setViewRow]     = useState<{ type: string; data: any } | null>(null);  // read-only detail slide-over
@@ -1606,7 +1621,7 @@ export function Payroll() {
   const [pePage,      setPePage]      = useState(1); const [pePageSize,   setPePageSize]   = useState(10);
   const [psPage,      setPsPage]      = useState(1); const [psPageSize,   setPsPageSize]   = useState(10);
 
-  const BLANK_PS = { template_name: '', deduction_group_id: '', payment_type_id: '', company_name: '', company_address: '', company_logo_url: '', header_note: '', footer_note: '', accent_color: '#3B82F6', show_emp_id: true, show_department: true, show_position: true, show_bank_account: false, visible_columns: [] as string[], net_columns: [] as string[] };
+  const BLANK_PS = { template_name: '', deduction_group_id: '', payment_type_id: '', company_name: '', company_address: '', header_note: '', footer_note: '', accent_color: '#3B82F6', show_emp_id: true, show_department: true, show_position: true, show_bank_account: false, visible_columns: [] as string[], net_columns: [] as string[] };
   const [psTemplates,  setPsTemplates]  = useState<any[]>([]);
   const [psSelected,   setPsSelected]   = useState<any | null>(null);
   const [psForm,       setPsForm]       = useState<any>(BLANK_PS);
@@ -1614,21 +1629,6 @@ export function Payroll() {
   const [psLoading,       setPsLoading]       = useState(false);
   const [psModalOpen,     setPsModalOpen]     = useState(false);
   const [psDeleting,      setPsDeleting]      = useState<string | null>(null);
-  const [psLogoUploading, setPsLogoUploading] = useState(false);
-  const psLogoInputRef = useRef<HTMLInputElement>(null);
-
-  async function uploadPsLogo(file: File) {
-    const fd = new FormData();
-    fd.append('file', file);
-    setPsLogoUploading(true);
-    try {
-      const res = await api.post('/employees/documents/upload', fd, { headers: { 'Content-Type': undefined } });
-      const filename = res.data?.data?.filename ?? res.data?.filename;
-      if (filename) setPsForm((f: any) => ({ ...f, company_logo_url: filename }));
-      else toast.error('Upload succeeded but no file reference returned');
-    } catch { toast.error('Logo upload failed'); }
-    finally { setPsLogoUploading(false); }
-  }
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => { if (activeTab === 'Payroll Runs')      loadRuns();          }, [activeTab]);
@@ -1693,7 +1693,7 @@ export function Payroll() {
       payment_type_id:   t.payment_type_id ? String(t.payment_type_id) : '',
       company_name:     t.company_name     ?? '',
       company_address:  t.company_address  ?? '',
-      company_logo_url: t.company_logo_url ?? '',
+
       header_note:      t.header_note      ?? '',
       footer_note:      t.footer_note      ?? '',
       accent_color:     t.accent_color     ?? '#3B82F6',
@@ -3054,40 +3054,29 @@ export function Payroll() {
                     <FormField label="Company Address">
                       <CountedTextarea className={inputClass} rows={2} maxChars={500} value={ps.company_address} onChange={e => setPsForm((f: any) => ({ ...f, company_address: e.target.value }))} placeholder="Full address..." />
                     </FormField>
+                    {/* The logo is configured once in Settings > System > App Setup and used by every
+                        template, the careers portal and outgoing email. Showing an upload here would let
+                        someone set a value that has no effect on the printed payslip. */}
                     <div>
                       <p className="text-[11.5px] font-semibold text-[var(--text-muted)] mb-1.5">Company Logo</p>
-                      <div className="flex items-center gap-3">
-                        {ps.company_logo_url && (
+                      <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5">
+                        {appSetup?.company_logo ? (
                           <img
-                            src={ps.company_logo_url.startsWith('http') ? ps.company_logo_url : `${api.defaults.baseURL}/documents/${ps.company_logo_url}`}
-                            alt="Logo preview"
-                            className="h-10 w-10 rounded-lg object-contain border border-[var(--border)] bg-[var(--bg)] shrink-0"
+                            src={/^(https?:|data:|blob:)/.test(appSetup.company_logo)
+                              ? appSetup.company_logo
+                              : `${api.defaults.baseURL}/documents/${appSetup.company_logo}`}
+                            alt="Company logo"
+                            className="h-10 w-10 rounded-lg object-contain border border-[var(--border)] bg-[var(--surface)] shrink-0"
                           />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg border border-dashed border-[var(--border)] shrink-0" />
                         )}
-                        <input
-                          ref={psLogoInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadPsLogo(f); e.target.value = ''; }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => psLogoInputRef.current?.click()}
-                          disabled={psLogoUploading}
-                          className="secondary-btn text-[12px] disabled:opacity-60"
-                        >
-                          {psLogoUploading ? 'Uploading…' : ps.company_logo_url ? 'Replace Logo' : 'Upload Logo'}
-                        </button>
-                        {ps.company_logo_url && (
-                          <button
-                            type="button"
-                            onClick={() => setPsForm((f: any) => ({ ...f, company_logo_url: '' }))}
-                            className="text-[12px] text-red-500 hover:text-red-700"
-                          >
-                            Remove
-                          </button>
-                        )}
+                        <p className="text-[11.5px] text-[var(--text-muted)] leading-relaxed">
+                          {appSetup?.company_logo
+                            ? 'Used on every payslip, the careers portal and outgoing email.'
+                            : 'No company logo set yet.'}
+                          {' '}Change it in <span className="font-semibold text-[var(--text-primary)]">Settings &rarr; System &rarr; App Setup</span>.
+                        </p>
                       </div>
                     </div>
                     <FormField label="Accent Colour">
@@ -3222,7 +3211,7 @@ export function Payroll() {
                 <div className="w-72 shrink-0">
                   <div className="sticky top-4">
                     <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Live Preview</p>
-                    <PayslipTemplatePreview template={ps} paymentCols={paymentCols} deductionCols={deductionCols} />
+                    <PayslipTemplatePreview template={ps} paymentCols={paymentCols} deductionCols={deductionCols} logoUrl={appLogoUrl} />
                   </div>
                 </div>
               </div>
@@ -3820,6 +3809,7 @@ export function Payroll() {
                     template={d}
                     paymentCols={pcRows.filter((c: PayrollCol) => c.payment_deduction === 'Payment')}
                     deductionCols={pcRows.filter((c: PayrollCol) => c.payment_deduction === 'Deduction')}
+                    logoUrl={appLogoUrl}
                   />
                 </div>
               );

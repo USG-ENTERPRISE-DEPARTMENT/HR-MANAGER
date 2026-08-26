@@ -35,8 +35,20 @@ function fmtDate(value) {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-async function loadLogoBuffer(src) {
+/**
+ * Resolve a configured logo to an image buffer, or null when it cannot be loaded.
+ *
+ * Every failure is logged rather than swallowed. A payslip that silently prints without the
+ * company logo looks like a rendering bug, when the cause is almost always configuration: the
+ * stored filename no longer exists under UPLOAD_DIR (uploads are not in version control, so a
+ * value saved on one machine is dangling on another), or a URL is unreachable. Without a log
+ * line there is nothing to point at.
+ */
+async function loadLogoBuffer(src, label = 'logo') {
   if (!src || !String(src).trim()) return null;
+  const short = String(src).trim().length > 60
+    ? String(src).trim().slice(0, 57) + '...'
+    : String(src).trim();
   const value = String(src).trim();
 
   try {
@@ -53,11 +65,13 @@ async function loadLogoBuffer(src) {
     // Stored value is usually just an uploaded filename — resolve it under the documents dir.
     const docPath = path.join(UPLOAD_DIR, path.basename(value));
     if (fs.existsSync(docPath)) return fs.readFileSync(docPath);
-  } catch {
+    console.warn(`[payslip] ${label} not found: "${short}" - looked under ${UPLOAD_DIR}.`
+      + ' The payslip renders without it; re-upload the logo in Settings.');
+    return null;
+  } catch (e) {
+    console.warn(`[payslip] ${label} could not be loaded from "${short}": ${e.message}`);
     return null;
   }
-
-  return null;
 }
 
 // ── Download payslip PDF ──────────────────────────────────────────────────────
@@ -167,7 +181,10 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   const setup = {};
   setupRows.forEach(r => { setup[r.name] = r.value; });
   const companyName = s.company_name || setup.company_name || 'Payslip';
-  const logoBuf = await loadLogoBuffer(s.company_logo_url || setup.company_logo || '');
+  // The logo always comes from App Setup, never from the template. Per-template logos were
+  // confusing rather than useful: which template renders a payslip depends on payment type and
+  // deduction group, so the logo shown while editing one template was often not the one printed.
+  const logoBuf = await loadLogoBuffer(setup.company_logo, 'company logo (Settings > System > App Setup)');
 
   const [acR, acG, acB] = hexToRgb(s.accent_color);
   const empName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();

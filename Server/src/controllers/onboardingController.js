@@ -87,11 +87,13 @@ async function getOrCreateToken() {
   return token;
 }
 
+// From App Setup, not from a payslip template. `company_logo_url` is kept as the key so the
+// onboarding portal does not need changing; only the source of the value has moved.
 async function readBranding() {
-  const row = await prisma.payslip_settings
-    .findFirst({ select: { company_name: true, company_logo_url: true, accent_color: true } })
-    .catch(() => null);
-  return row ?? {};
+  const { getCompanyBranding } = require('../helpers/settingsHelper');
+  const b = await getCompanyBranding().catch(() => null);
+  if (!b) return {};
+  return { company_name: b.name, company_logo_url: b.logo, accent_color: b.accent };
 }
 
 async function readCodeLists() {

@@ -605,18 +605,19 @@ const getPayslipTemplates = asyncHandler(async (_req, res) => {
 
 // POST /calculation/payslip-templates — create a payslip template with branding, visible column list, and display flags.
 const createPayslipTemplate = asyncHandler(async (req, res) => {
-  const { template_name, deduction_group_id, payment_type_id, company_name, company_address, company_logo_url,
+  // company_logo_url is deliberately NOT read: the logo comes from App Setup for every template.
+  const { template_name, deduction_group_id, payment_type_id, company_name, company_address,
           header_note, footer_note, accent_color, show_emp_id, show_department,
           show_position, show_bank_account, visible_columns, net_columns } = req.body;
   if (!template_name?.trim()) return respond.badReq(res, 'Template name is required');
   // show_* are Boolean columns — pass real booleans for PG portability.
   await exec`
     INSERT INTO payslip_settings
-       (template_name, deduction_group_id, payment_type_id, company_name, company_address, company_logo_url,
+       (template_name, deduction_group_id, payment_type_id, company_name, company_address,
         header_note, footer_note, accent_color, show_emp_id, show_department,
         show_position, show_bank_account, visible_columns, net_columns)
      VALUES (${template_name.trim()}, ${deduction_group_id ? BigInt(deduction_group_id) : null}, ${payment_type_id ? BigInt(payment_type_id) : null},
-             ${company_name || null}, ${company_address || null}, ${company_logo_url || null},
+             ${company_name || null}, ${company_address || null},
              ${header_note || null}, ${footer_note || null}, ${accent_color || '#3B82F6'},
              ${!!show_emp_id}, ${!!show_department}, ${!!show_position}, ${!!show_bank_account},
              ${visible_columns?.length ? JSON.stringify(visible_columns) : null},
@@ -629,7 +630,8 @@ const createPayslipTemplate = asyncHandler(async (req, res) => {
 const updatePayslipTemplate = asyncHandler(async (req, res) => {
   const id = toBigInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
-  const { template_name, deduction_group_id, payment_type_id, company_name, company_address, company_logo_url,
+  // company_logo_url is deliberately NOT read: the logo comes from App Setup for every template.
+  const { template_name, deduction_group_id, payment_type_id, company_name, company_address,
           header_note, footer_note, accent_color, show_emp_id, show_department,
           show_position, show_bank_account, visible_columns, net_columns } = req.body;
   if (!template_name?.trim()) return respond.badReq(res, 'Template name is required');
@@ -638,7 +640,7 @@ const updatePayslipTemplate = asyncHandler(async (req, res) => {
     UPDATE payslip_settings SET
        template_name=${template_name.trim()}, deduction_group_id=${deduction_group_id ? BigInt(deduction_group_id) : null},
        payment_type_id=${payment_type_id ? BigInt(payment_type_id) : null}, company_name=${company_name || null},
-       company_address=${company_address || null}, company_logo_url=${company_logo_url || null},
+       company_address=${company_address || null},
        header_note=${header_note || null}, footer_note=${footer_note || null}, accent_color=${accent_color || '#3B82F6'},
        show_emp_id=${!!show_emp_id}, show_department=${!!show_department}, show_position=${!!show_position}, show_bank_account=${!!show_bank_account},
        visible_columns=${visible_columns?.length ? JSON.stringify(visible_columns) : null},
