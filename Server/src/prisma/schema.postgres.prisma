@@ -1689,6 +1689,13 @@ model payrollcolumns {
   visible              Boolean                       @default(true)
   include_in_net       Boolean                       @default(true)
   payslip_label        String?                       @db.VarChar(100)
+  // Which side of the PAYSLIP this column prints on, overriding payment_deduction. Display only —
+  // never affects the calculation or the GL. null = use payment_deduction; 'earnings'/'deductions'
+  // force a side; 'info' prints outside both subtotals.
+  payslip_section      String?                       @db.VarChar(20)
+  // Only consulted when payslip_section moves a column off its natural side. False (the default)
+  // shows the amount without counting it, which keeps the printed net equal to actual pay.
+  payslip_in_total     Boolean                       @default(false)
 }
 
 // A payroll column's linked salary components (replaces the old salary_components CSV-of-names).
@@ -3209,8 +3216,13 @@ model payslip_settings {
   updated_at         DateTime? @default(now()) @db.Timestamp(0)
   template_name      String    @default("Default") @db.VarChar(100)
   deduction_group_id BigInt?
+  // Columns shown in the payroll GRID and the Excel export.
   visible_columns    String?   @db.Text
   net_columns        String?   @db.Text
+  // Columns printed on the PAYSLIP PDF. Deliberately separate from visible_columns: one field used
+  // to drive both, so hiding a column from the payslip also deleted it from the payroll report.
+  // null falls back to visible_columns, so untouched templates render exactly as before.
+  payslip_columns    String?   @db.Text
   payment_type_id    BigInt?
 }
 

@@ -123,7 +123,8 @@ async function buildColumnResponse(id) {
            salarycomponent_gl, posting_column, posting_branch,
            calculation_function, calculation_rule,
            COALESCE(visible, TRUE) AS visible, COALESCE(include_in_net, TRUE) AS include_in_net,
-           payslip_label
+           payslip_label,
+           payslip_section, COALESCE(payslip_in_total, FALSE) AS payslip_in_total
     FROM payrollcolumns WHERE id = ${id}`;
   if (!row) return null;
   const { compById, colById } = await nameMaps();
@@ -149,7 +150,8 @@ const getPayrollColumns = asyncHandler(async (_req, res) => {
            salarycomponent_gl, posting_column, posting_branch,
            calculation_function, calculation_rule,
            COALESCE(visible, TRUE) AS visible, COALESCE(include_in_net, TRUE) AS include_in_net,
-           payslip_label
+           payslip_label,
+           payslip_section, COALESCE(payslip_in_total, FALSE) AS payslip_in_total
     FROM payrollcolumns
     ORDER BY COALESCE(colorder, 9999) ASC, name ASC`;
   const [groupMap, compMap, linkMap, { compById, colById }] = await Promise.all([
@@ -174,6 +176,8 @@ const createPayrollColumn = asyncHandler(async (req, res) => {
     salarycomponent_gl, posting_column, posting_branch, deduction_groups,
     component_ids, add_column_ids, sub_column_ids, calculation_function,
     calculation_rule, visible = 1, include_in_net = 1, payslip_label,
+    // Payslip presentation only — neither affects the calculation or the GL posting.
+    payslip_section, payslip_in_total = 0,
   } = req.body;
   if (!name?.trim()) return respond.badReq(res, 'Name is required');
 
@@ -189,16 +193,22 @@ const createPayrollColumn = asyncHandler(async (req, res) => {
   // visible / include_in_net are Boolean columns — pass real booleans for PG portability.
   const visibleBool      = visible        !== undefined && visible        !== '' ? !!parseInt(visible)        : true;
   const includeInNetBool = include_in_net !== undefined && include_in_net !== '' ? !!parseInt(include_in_net) : true;
+  // Only 'earnings' | 'deductions' | 'info' override the natural side; anything else means "use
+  // payment_deduction", stored as NULL so the payslip renderer has a single unambiguous default.
+  const sectionVal = ['earnings', 'deductions', 'info'].includes(String(payslip_section || '').toLowerCase())
+    ? String(payslip_section).toLowerCase()
+    : null;
+  const inTotalBool = payslip_in_total !== undefined && payslip_in_total !== '' ? !!parseInt(payslip_in_total) : false;
   await exec`
     INSERT INTO payrollcolumns (
       id, name, function_type, enabled, editable, colorder, default_value, payment_deduction,
       salarycomponent_gl, posting_column, posting_branch, calculation_function,
-      calculation_rule, visible, include_in_net, payslip_label
+      calculation_rule, visible, include_in_net, payslip_label, payslip_section, payslip_in_total
     ) VALUES (${nextId}, ${name.trim()}, ${enumSql(function_type, ['Simple','Advanced'], 'Simple')}, ${enumSql(enabled, ['Yes','No'], 'Yes')}, ${enumSql(editable, ['Yes','No'], 'Yes')}, ${colorderVal},
              ${default_value?.trim() || null}, ${payment_deduction?.trim() || null}, ${salarycomponent_gl?.trim() || null},
              ${posting_column?.trim() || 'Yes'}, ${posting_branch?.trim() || null}, ${formula?.trim() || null},
              ${calculation_rule ? parseInt(calculation_rule) : null}, ${visibleBool}, ${includeInNetBool},
-             ${payslip_label?.trim() || null})`;
+             ${payslip_label?.trim() || null}, ${sectionVal}, ${inTotalBool})`;
   await syncColumnGroups(nextId, deduction_groups);
   await syncColumnComponents(nextId, component_ids);
   await syncColumnLinks(nextId, add_column_ids, sub_column_ids);
@@ -228,6 +238,12 @@ const updatePayrollColumn = asyncHandler(async (req, res) => {
   // visible / include_in_net are Boolean columns — pass real booleans for PG portability.
   const visibleBool      = visible        !== undefined && visible        !== '' ? !!parseInt(visible)        : true;
   const includeInNetBool = include_in_net !== undefined && include_in_net !== '' ? !!parseInt(include_in_net) : true;
+  // Only 'earnings' | 'deductions' | 'info' override the natural side; anything else means "use
+  // payment_deduction", stored as NULL so the payslip renderer has a single unambiguous default.
+  const sectionVal = ['earnings', 'deductions', 'info'].includes(String(payslip_section || '').toLowerCase())
+    ? String(payslip_section).toLowerCase()
+    : null;
+  const inTotalBool = payslip_in_total !== undefined && payslip_in_total !== '' ? !!parseInt(payslip_in_total) : false;
   await exec`
     UPDATE payrollcolumns SET
       name=${name.trim()}, function_type=${enumSql(function_type, ['Simple','Advanced'], 'Simple')}, enabled=${enumSql(enabled, ['Yes','No'], 'Yes')}, editable=${enumSql(editable, ['Yes','No'], 'Yes')},
@@ -236,7 +252,8 @@ const updatePayrollColumn = asyncHandler(async (req, res) => {
       salarycomponent_gl=${salarycomponent_gl?.trim() || null}, posting_column=${posting_column?.trim() || 'Yes'},
       posting_branch=${posting_branch?.trim() || null}, calculation_function=${formula?.trim() || null},
       calculation_rule=${calculation_rule ? parseInt(calculation_rule) : null},
-      visible=${visibleBool}, include_in_net=${includeInNetBool}, payslip_label=${payslip_label?.trim() || null}
+      visible=${visibleBool}, include_in_net=${includeInNetBool}, payslip_label=${payslip_label?.trim() || null},
+      payslip_section=${sectionVal}, payslip_in_total=${inTotalBool}
     WHERE id=${id}`;
   await syncColumnGroups(id, deduction_groups);
   await syncColumnComponents(id, component_ids);
@@ -608,20 +625,24 @@ const createPayslipTemplate = asyncHandler(async (req, res) => {
   // company_logo_url is deliberately NOT read: the logo comes from App Setup for every template.
   const { template_name, deduction_group_id, payment_type_id, company_name, company_address,
           header_note, footer_note, accent_color, show_emp_id, show_department,
-          show_position, show_bank_account, visible_columns, net_columns } = req.body;
+          show_position, show_bank_account, visible_columns, net_columns,
+          // What the PAYSLIP prints. Separate from visible_columns, which is the payroll grid and
+          // the Excel export — one field used to drive both.
+          payslip_columns } = req.body;
   if (!template_name?.trim()) return respond.badReq(res, 'Template name is required');
   // show_* are Boolean columns — pass real booleans for PG portability.
   await exec`
     INSERT INTO payslip_settings
        (template_name, deduction_group_id, payment_type_id, company_name, company_address,
         header_note, footer_note, accent_color, show_emp_id, show_department,
-        show_position, show_bank_account, visible_columns, net_columns)
+        show_position, show_bank_account, visible_columns, net_columns, payslip_columns)
      VALUES (${template_name.trim()}, ${deduction_group_id ? BigInt(deduction_group_id) : null}, ${payment_type_id ? BigInt(payment_type_id) : null},
              ${company_name || null}, ${company_address || null},
              ${header_note || null}, ${footer_note || null}, ${accent_color || '#3B82F6'},
              ${!!show_emp_id}, ${!!show_department}, ${!!show_position}, ${!!show_bank_account},
              ${visible_columns?.length ? JSON.stringify(visible_columns) : null},
-             ${net_columns?.length ? JSON.stringify(net_columns) : null})`;
+             ${net_columns?.length ? JSON.stringify(net_columns) : null},
+             ${payslip_columns?.length ? JSON.stringify(payslip_columns) : null})`;
   const rows = await query`${PAYSLIP_SELECT} ORDER BY ps.id ASC`;
   respond.created(res, 'Template created', rows[rows.length - 1] ?? null);
 });
@@ -633,7 +654,10 @@ const updatePayslipTemplate = asyncHandler(async (req, res) => {
   // company_logo_url is deliberately NOT read: the logo comes from App Setup for every template.
   const { template_name, deduction_group_id, payment_type_id, company_name, company_address,
           header_note, footer_note, accent_color, show_emp_id, show_department,
-          show_position, show_bank_account, visible_columns, net_columns } = req.body;
+          show_position, show_bank_account, visible_columns, net_columns,
+          // What the PAYSLIP prints. Separate from visible_columns, which is the payroll grid and
+          // the Excel export — one field used to drive both.
+          payslip_columns } = req.body;
   if (!template_name?.trim()) return respond.badReq(res, 'Template name is required');
   // show_* are Boolean columns — pass real booleans for PG portability.
   await exec`
@@ -644,7 +668,8 @@ const updatePayslipTemplate = asyncHandler(async (req, res) => {
        header_note=${header_note || null}, footer_note=${footer_note || null}, accent_color=${accent_color || '#3B82F6'},
        show_emp_id=${!!show_emp_id}, show_department=${!!show_department}, show_position=${!!show_position}, show_bank_account=${!!show_bank_account},
        visible_columns=${visible_columns?.length ? JSON.stringify(visible_columns) : null},
-       net_columns=${net_columns?.length ? JSON.stringify(net_columns) : null}
+       net_columns=${net_columns?.length ? JSON.stringify(net_columns) : null},
+       payslip_columns=${payslip_columns?.length ? JSON.stringify(payslip_columns) : null}
      WHERE id=${id}`;
   const [row] = await query`${PAYSLIP_SELECT} WHERE ps.id = ${id}`;
   respond.ok(res, 'Template updated', row ?? null);

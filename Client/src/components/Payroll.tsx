@@ -156,9 +156,22 @@ function PayslipTemplatePreview({ template, paymentCols, deductionCols, logoUrl 
   template: any; paymentCols: PayrollCol[]; deductionCols: PayrollCol[]; logoUrl?: string;
 }) {
   const accent = template.accent_color || '#3B82F6';
-  const vis = Array.isArray(template.visible_columns) ? template.visible_columns.map(String) : [];
-  const visE = vis.length ? paymentCols.filter(c => vis.includes(String(c.id)))   : paymentCols;
-  const visD = vis.length ? deductionCols.filter(c => vis.includes(String(c.id))) : deductionCols;
+  // Mirror the PDF: prefer the payslip's own column list, fall back to the report list. Reading
+  // visible_columns alone would show the payroll grid's columns, not what actually prints.
+  const slip = Array.isArray(template.payslip_columns) ? template.payslip_columns.map(String) : [];
+  const rep  = Array.isArray(template.visible_columns) ? template.visible_columns.map(String) : [];
+  const vis  = slip.length ? slip : rep;
+  // A column whose payslip_section moves it to the other side must preview on that side too.
+  const sideOf = (c: PayrollCol) => {
+    const forced = String((c as any).payslip_section || '').toLowerCase();
+    if (forced === 'earnings' || forced === 'deductions' || forced === 'info') return forced;
+    return c.payment_deduction === 'Deduction' ? 'deductions' : 'earnings';
+  };
+  const shown = vis.length
+    ? [...paymentCols, ...deductionCols].filter(c => vis.includes(String(c.id)))
+    : [...paymentCols, ...deductionCols];
+  const visE = shown.filter(c => sideOf(c) === 'earnings');
+  const visD = shown.filter(c => sideOf(c) === 'deductions');
   return (
     <div className="bg-white rounded-[14px] shadow-xl border border-gray-200 overflow-hidden font-sans">
       <div className="px-5 py-3 flex items-center gap-3" style={{ background: accent }}>
@@ -223,6 +236,7 @@ const BLANK_PC = {
   deduction_groups: [] as string[], component_ids: [] as string[],
   add_column_ids: [] as string[], sub_column_ids: [] as string[],
   calculation_function: '', calculation_rule: '', visible: '1', include_in_net: '1',
+  payslip_section: '', payslip_in_total: '0',
   payslip_label: '',
 };
 
@@ -482,11 +496,14 @@ function FormulaInput({
 // ─── Payroll Grid ─────────────────────────────────────────────────────────────
 
 function PayslipSlideOver({
-  empId, empName, empIndex, gridData, hiddenColIds, netExcludedIds,
+  empId, empName, empIndex, gridData, hiddenColIds, netExcludedIds, aggregateColIds,
   runName, runPeriod, colLabelMap, settings, onClose,
 }: {
   empId: string; empName: string; empIndex: number;
+  // `hiddenColIds` here is the PAYSLIP's hidden set, not the grid's — the caller passes
+  // payslipHiddenColIds so this preview matches the printed PDF.
   gridData: GridCell[]; hiddenColIds: Set<string>; netExcludedIds: Set<string>;
+  aggregateColIds: Set<string>;
   runName: string; runPeriod: string; colLabelMap: Map<string, string>;
   settings: any | null; onClose: () => void;
 }) {
@@ -502,8 +519,13 @@ function PayslipSlideOver({
     .sort((a, b) => (a.colorder ?? 99999) - (b.colorder ?? 99999));
   const earnings   = visible.filter(c => c.payment_deduction !== 'Deduction');
   const deductions = visible.filter(c => c.payment_deduction === 'Deduction');
-  const grossPay   = earnings.reduce((s, c) => s + (parseFloat(c.amount ?? '0') || 0), 0);
-  const totalDed   = deductions.reduce((s, c) => s + (parseFloat(c.amount ?? '0') || 0), 0);
+  // Aggregates (Gross, Total Allowance, Total Deduction) are subtotals of the rows beside them.
+  // Adding them to a total counts the same money twice — the payslip PDF excludes them too.
+  const sumReal = (rows: GridCell[]) => rows
+    .filter(c => !aggregateColIds.has(String(c.payroll_item)))
+    .reduce((s, c) => s + (parseFloat(c.amount ?? '0') || 0), 0);
+  const grossPay   = sumReal(earnings);
+  const totalDed   = sumReal(deductions);
   const netPay     = cells
     .filter(c => !netExcludedIds.has(String(c.payroll_item)))
     .reduce((s, c) => s + (c.payment_deduction === 'Deduction' ? -1 : 1) * (parseFloat(c.amount ?? '0') || 0), 0);
@@ -654,7 +676,7 @@ function PayslipSlideOver({
 
 function PayrollGrid({
   gridData, activeRun, editMode, generating, finalizing, retryingGL, confirmingPaid, submitting, approving, rejecting,
-  staleColumnCount, hiddenColIds, netExcludedIds, approvalSettings, currentUserId, currentUserRoles, runStages,
+  staleColumnCount, hiddenColIds, payslipHiddenColIds, aggregateColIds, netExcludedIds, approvalSettings, currentUserId, currentUserRoles, runStages,
   auditLog, auditLoading, payslipEnabled, colLabelMap, payslipSettings,
   onBack, onGenerate, onFinalize, onRetryGL, onConfirmPaid, onExport, onToggleEdit, onCellUpdate, onReorderCols,
   onSubmit, onApprove, onReject, onLoadAudit, onNewRun,
@@ -670,7 +692,11 @@ function PayrollGrid({
   approving: boolean;
   rejecting: boolean;
   staleColumnCount: number;
+  // The grid/Excel hidden set, and separately what the PAYSLIP hides plus which columns are
+  // aggregates — the payslip preview needs both to match the printed PDF.
   hiddenColIds: Set<string>;
+  payslipHiddenColIds: Set<string>;
+  aggregateColIds: Set<string>;
   netExcludedIds: Set<string>;
   approvalSettings: { payrollApproval: boolean; selfApproval: boolean };
   currentUserId: string | null;
@@ -1383,8 +1409,9 @@ function PayrollGrid({
         empName={empNames[payslipId] ?? payslipId}
         empIndex={empIds.indexOf(payslipId)}
         gridData={gridData}
-        hiddenColIds={hiddenColIds}
+        hiddenColIds={payslipHiddenColIds}
         netExcludedIds={netExcludedIds}
+        aggregateColIds={aggregateColIds}
         colLabelMap={colLabelMap}
         runName={activeRun.name}
         runPeriod={activeRun.date_start
@@ -1621,7 +1648,7 @@ export function Payroll() {
   const [pePage,      setPePage]      = useState(1); const [pePageSize,   setPePageSize]   = useState(10);
   const [psPage,      setPsPage]      = useState(1); const [psPageSize,   setPsPageSize]   = useState(10);
 
-  const BLANK_PS = { template_name: '', deduction_group_id: '', payment_type_id: '', company_name: '', company_address: '', header_note: '', footer_note: '', accent_color: '#3B82F6', show_emp_id: true, show_department: true, show_position: true, show_bank_account: false, visible_columns: [] as string[], net_columns: [] as string[] };
+  const BLANK_PS = { template_name: '', deduction_group_id: '', payment_type_id: '', company_name: '', company_address: '', header_note: '', footer_note: '', accent_color: '#3B82F6', show_emp_id: true, show_department: true, show_position: true, show_bank_account: false, visible_columns: [] as string[], net_columns: [] as string[], payslip_columns: [] as string[] };
   const [psTemplates,  setPsTemplates]  = useState<any[]>([]);
   const [psSelected,   setPsSelected]   = useState<any | null>(null);
   const [psForm,       setPsForm]       = useState<any>(BLANK_PS);
@@ -1685,8 +1712,10 @@ export function Payroll() {
   function openPsEdit(t: any) {
     let cols: string[] = [];
     let netCols: string[] = [];
+    let slipCols: string[] = [];
     try { cols = t.visible_columns ? JSON.parse(t.visible_columns) : []; } catch { cols = []; }
     try { netCols = t.net_columns ? JSON.parse(t.net_columns) : []; } catch { netCols = []; }
+    try { slipCols = t.payslip_columns ? JSON.parse(t.payslip_columns) : []; } catch { slipCols = []; }
     setPsForm({
       template_name:     t.template_name ?? '',
       deduction_group_id: t.deduction_group_id ? String(t.deduction_group_id) : '',
@@ -1703,6 +1732,7 @@ export function Payroll() {
       show_bank_account: !!t.show_bank_account,
       visible_columns:  cols,
       net_columns:      netCols,
+      payslip_columns:  slipCols,
     });
     setPsSelected(t);
     setPsModalOpen(true);
@@ -1725,6 +1755,7 @@ export function Payroll() {
         payment_type_id: psForm.payment_type_id || null,
         visible_columns: psForm.visible_columns,
         net_columns: psForm.net_columns,
+        payslip_columns: psForm.payslip_columns,
       };
       if (psSelected) {
         const res = await api.put(`/payroll/payslip-templates/${psSelected.id}`, payload);
@@ -2234,6 +2265,8 @@ export function Payroll() {
       calculation_rule: pc.calculation_rule ? String(pc.calculation_rule) : '',
       visible: pc.visible ? '1' : '0',
       include_in_net: pc.include_in_net ? '1' : '0',
+      payslip_section: (pc as any).payslip_section ?? '',
+      payslip_in_total: (pc as any).payslip_in_total ? '1' : '0',
       payslip_label: pc.payslip_label ?? '',
     });
     setEditingPc(null);
@@ -2253,6 +2286,8 @@ export function Payroll() {
       calculation_rule: pc.calculation_rule ? String(pc.calculation_rule) : '',
       visible: pc.visible ? '1' : '0',
       include_in_net: pc.include_in_net ? '1' : '0',
+      payslip_section: (pc as any).payslip_section ?? '',
+      payslip_in_total: (pc as any).payslip_in_total ? '1' : '0',
       payslip_label: pc.payslip_label ?? '',
     });
     setEditingPc(pc);
@@ -2499,6 +2534,10 @@ export function Payroll() {
       ?? null;
   }, [activeRun, psTemplates]);
 
+  // Drives the payroll GRID and the Excel export, and reads `visible_columns` on purpose.
+  // The PAYSLIP has its own list (`payslip_columns`, see Server/src/controllers/payslipController.js).
+  // These were one field, which is why hiding a column from the payslip also deleted it from the
+  // payroll report — do not merge them back.
   const hiddenColIds = useMemo(
     () => {
       const selected = parseTemplateIds(activeReportTemplate?.visible_columns);
@@ -2509,6 +2548,31 @@ export function Payroll() {
       );
     },
     [activeReportTemplate, parseTemplateIds, pcRows],
+  );
+
+  // What the PAYSLIP hides, as opposed to what the grid hides. Prefers the template's payslip list
+  // and falls back to the report list, exactly as payslipController.js does — otherwise this
+  // preview and the printed PDF show different columns.
+  const payslipHiddenColIds = useMemo(
+    () => {
+      const slip = parseTemplateIds(activeReportTemplate?.payslip_columns);
+      const rep  = parseTemplateIds(activeReportTemplate?.visible_columns);
+      const selected = slip.length ? slip : rep;
+      return new Set(
+        activeReportTemplate
+          ? (selected.length ? pcRows.filter(c => !selected.includes(String(c.id))).map(c => String(c.id)) : [])
+          : pcRows.filter(c => !c.visible).map(c => String(c.id))
+      );
+    },
+    [activeReportTemplate, parseTemplateIds, pcRows],
+  );
+
+  // Columns built from other columns. They are subtotals of the rows beside them, so the preview
+  // must not add them to a total as well — the same rule the PDF applies.
+  const aggregateColIds = useMemo(
+    () => new Set(pcRows.filter(c => (c.add_column_ids?.length ?? 0) + (c.sub_column_ids?.length ?? 0) > 0)
+      .map(c => String(c.id))),
+    [pcRows],
   );
 
   const netExcludedIds = useMemo(
@@ -2932,6 +2996,13 @@ export function Payroll() {
       const cur: string[] = f.net_columns ?? [];
       return { ...f, net_columns: cur.includes(id) ? cur.filter((x: string) => x !== id) : [...cur, id] };
     });
+    // Separate from toggleCol: `visible_columns` is the payroll grid and the Excel export,
+    // `payslip_columns` is the payslip PDF. They used to be one list, so hiding a column from the
+    // payslip also deleted it from the payroll report.
+    const togglePayslipCol = (id: string) => setPsForm((f: any) => {
+      const cur: string[] = f.payslip_columns ?? [];
+      return { ...f, payslip_columns: cur.includes(id) ? cur.filter((x: string) => x !== id) : [...cur, id] };
+    });
     const allIds = [...paymentCols, ...deductionCols].map((c: PayrollCol) => String(c.id));
 
     return (
@@ -3124,7 +3195,9 @@ export function Payroll() {
                     <p className="text-[12px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
                       <LayoutGrid size={13} className="text-[var(--accent)]" /> Report Columns
                     </p>
-                    <p className="text-[11px] text-[var(--text-muted)] -mt-1">Leave all unselected to show all columns.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] -mt-1">
+                      Shown in the payroll grid and the Excel export. Leave all unselected to show all columns.
+                    </p>
                     {paymentCols.length > 0 && (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -3181,6 +3254,74 @@ export function Payroll() {
                     )}
                     {paymentCols.length === 0 && deductionCols.length === 0 && (
                       <p className="text-[11px] text-[var(--text-muted)] italic">No payroll columns configured yet.</p>
+                    )}
+                  </div>
+
+                  {/* Payslip Columns — deliberately a SEPARATE list from Report Columns above. One
+                      field used to drive both, so hiding a column from the payslip also deleted it
+                      from the payroll report. */}
+                  <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-4 space-y-4">
+                    <p className="text-[12px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                      <FileText size={13} className="text-[var(--accent)]" /> Payslip Columns
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)] -mt-1">
+                      Printed on the payslip PDF. Leave all unselected to use the Report Columns above.
+                      Columns built from other columns (Gross, Total Allowance, Total Deduction) print as
+                      bold subtotal rows and are never counted twice.
+                    </p>
+                    {paymentCols.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-semibold text-[var(--accent)]">Earnings</p>
+                          <button type="button" className="text-[11px] text-[var(--accent)] hover:underline"
+                            onClick={() => setPsForm((f: any) => {
+                              const ids = paymentCols.map((c: PayrollCol) => String(c.id));
+                              const cur: string[] = f.payslip_columns ?? [];
+                              const allOn = ids.every((id: string) => cur.includes(id));
+                              return { ...f, payslip_columns: allOn ? cur.filter((id: string) => !ids.includes(id)) : [...new Set([...cur, ...ids])] };
+                            })}>
+                            {paymentCols.every((c: PayrollCol) => (ps.payslip_columns ?? []).includes(String(c.id))) ? 'Deselect All' : 'Select All'}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {paymentCols.map((c: PayrollCol) => {
+                            const sel = (ps.payslip_columns ?? []).includes(String(c.id));
+                            return (
+                              <button key={c.id} type="button" onClick={() => togglePayslipCol(String(c.id))}
+                                className={sel ? 'pill pill-accent text-[11px]' : 'text-[11px] text-[var(--text-muted)] border border-[var(--border)] rounded-full px-3 py-1 hover:border-[var(--accent)] transition-colors'}>
+                                {c.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {deductionCols.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-semibold text-[var(--danger)]">Deductions</p>
+                          <button type="button" className="text-[11px] text-[var(--accent)] hover:underline"
+                            onClick={() => setPsForm((f: any) => {
+                              const ids = deductionCols.map((c: PayrollCol) => String(c.id));
+                              const cur: string[] = f.payslip_columns ?? [];
+                              const allOn = ids.every((id: string) => cur.includes(id));
+                              return { ...f, payslip_columns: allOn ? cur.filter((id: string) => !ids.includes(id)) : [...new Set([...cur, ...ids])] };
+                            })}>
+                            {deductionCols.every((c: PayrollCol) => (ps.payslip_columns ?? []).includes(String(c.id))) ? 'Deselect All' : 'Select All'}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {deductionCols.map((c: PayrollCol) => {
+                            const sel = (ps.payslip_columns ?? []).includes(String(c.id));
+                            return (
+                              <button key={c.id} type="button" onClick={() => togglePayslipCol(String(c.id))}
+                                className={sel ? 'pill text-[11px] bg-[var(--danger)] text-white border-transparent' : 'text-[11px] text-[var(--text-muted)] border border-[var(--border)] rounded-full px-3 py-1 hover:border-[var(--danger)] transition-colors'}>
+                                {c.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -3247,6 +3388,8 @@ export function Payroll() {
           rejecting={rejecting}
           staleColumnCount={staleColumnCount}
           hiddenColIds={hiddenColIds}
+          payslipHiddenColIds={payslipHiddenColIds}
+          aggregateColIds={aggregateColIds}
           netExcludedIds={netExcludedIds}
           approvalSettings={approvalSettings}
           currentUserId={currentUserId}
@@ -4024,6 +4167,36 @@ export function Payroll() {
                       <option value="1">Yes</option>
                       <option value="0">No</option>
                     </select>
+                  </FormField>
+                </div>
+                {/* Payslip presentation only. Neither field affects the calculation or the GL
+                    posting — a column moved here still posts on its real side. */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Payslip Section">
+                    <select className={inputClass} value={pcForm.payslip_section}
+                      onChange={e => setPcForm(f => ({ ...f, payslip_section: e.target.value }))}>
+                      <option value="">Default (follow Payment/Deduction)</option>
+                      <option value="earnings">Earnings</option>
+                      <option value="deductions">Deductions</option>
+                      <option value="info">Information only</option>
+                    </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      Which side of the payslip this prints on. Use “Information only” for employer
+                      contributions that are neither paid to nor deducted from the employee.
+                    </p>
+                  </FormField>
+                  <FormField label="Count in Payslip Total">
+                    <select className={inputClass} value={pcForm.payslip_in_total}
+                      disabled={!pcForm.payslip_section || pcForm.payslip_section === 'info'}
+                      onChange={e => setPcForm(f => ({ ...f, payslip_in_total: e.target.value }))}>
+                      <option value="0">No</option>
+                      <option value="1">Yes</option>
+                    </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      Only applies when the section above moves this column. Leave as “No” unless the
+                      amount really is part of that subtotal — counting an employer contribution makes
+                      the printed net lower than the employee is actually paid.
+                    </p>
                   </FormField>
                 </div>
                 <div className="grid grid-cols-2 gap-4">

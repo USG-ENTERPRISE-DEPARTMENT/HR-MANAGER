@@ -131,11 +131,22 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     SELECT pc.id AS payroll_item_id,
            COALESCE(NULLIF(pc.payslip_label,''), pc.name) AS name,
            pc.payment_deduction, pc.visible, pc.include_in_net,
+           pc.payslip_section, pc.payslip_in_total,
            CONCAT(pd.amount, '') AS amount
     FROM payrolldata pd
     JOIN payrollcolumns pc ON pc.id = pd.payroll_item
     WHERE pd.payroll = ${BigInt(runId)} AND pd.employee = ${BigInt(empId)}
     ORDER BY COALESCE(pc.colorder, 99999)`;
+
+  // Which columns are running aggregates rather than real components?
+  //
+  // Derived at render time from payrollcolumn_links instead of a stored flag: a column that is
+  // composed from other columns (Gross = Salary Basic + Total Allowance) IS the subtotal of those
+  // columns, so adding it to a total alongside its own parts counts the same money twice. Reading
+  // the link table means there is no classification to keep in step with the formulas.
+  const linkRows = await query`
+    SELECT DISTINCT payrollcolumn_id FROM payrollcolumn_links`.catch(() => []);
+  const aggregateIds = new Set(linkRows.map(r => String(r.payrollcolumn_id)));
 
   // Find the best-matching template: payment type + group, then payment type,
   // then group, then the default template.
@@ -154,22 +165,57 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   const s = settings || {};
 
   // ── Categorise columns ──────────────────────────────────────────────────────
-  let visibleIds = null;
-  if (s.visible_columns) {
-    try { visibleIds = new Set(JSON.parse(s.visible_columns).map(String)); } catch { /* ignore */ }
-  }
-  let netIds = null;
-  if (s.net_columns) {
-    try { netIds = new Set(JSON.parse(s.net_columns).map(String)); } catch { /* ignore */ }
-  }
+  // `payslip_columns` is the PAYSLIP's own column list. `visible_columns` belongs to the payroll
+  // GRID and the Excel export (Client/src/components/Payroll.tsx `hiddenColIds`) — the two were one
+  // field, so hiding a column from the payslip also deleted it from the payroll report. Keep them
+  // separate. A null or empty payslip list falls back to visible_columns, so a template nobody has
+  // edited prints exactly as it did before.
+  const parseIds = (json) => {
+    if (!json) return null;
+    try {
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) && arr.length ? new Set(arr.map(String)) : null;
+    } catch { return null; }
+  };
+  const visibleIds = parseIds(s.visible_columns);
+  const slipIds    = parseIds(s.payslip_columns);
+  const printIds   = slipIds ?? visibleIds;
+  const netIds     = parseIds(s.net_columns);
+
   const colVisible = (r) => hasTemplate
-    ? (visibleIds ? visibleIds.has(String(r.payroll_item_id)) : true)
+    ? (printIds ? printIds.has(String(r.payroll_item_id)) : true)
     : r.visible != 0;
-  const earnings   = payrollData.filter(r => r.payment_deduction === 'Payment'   && colVisible(r));
-  const deductions = payrollData.filter(r => r.payment_deduction === 'Deduction' && colVisible(r));
-  const netRow     = payrollData.find(r => (r.name || '').toLowerCase().startsWith('net'));
-  const totalEarnings  = earnings.reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
-  const totalDeductions = deductions.reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+
+  // Which side a row prints on. `payslip_section` overrides `payment_deduction` for display only —
+  // an employer contribution is stored as a Payment (and posts to the GL as one) but is
+  // conventionally listed under Deductions on a payslip.
+  const sideOf = (r) => {
+    const forced = String(r.payslip_section || '').toLowerCase();
+    if (forced === 'earnings' || forced === 'deductions' || forced === 'info') return forced;
+    return r.payment_deduction === 'Deduction' ? 'deductions' : 'earnings';
+  };
+  const isMoved    = (r) => sideOf(r) !== (r.payment_deduction === 'Deduction' ? 'deductions' : 'earnings');
+  const isAggregate = (r) => aggregateIds.has(String(r.payroll_item_id));
+
+  const printed = payrollData.filter(colVisible);
+  // Itemised rows exclude aggregates; the aggregates themselves print as bold total rows in place,
+  // which is what produces "…allowances… / Total Allowances / Gross Salary".
+  const earnings   = printed.filter(r => sideOf(r) === 'earnings'   && !isAggregate(r));
+  const deductions = printed.filter(r => sideOf(r) === 'deductions' && !isAggregate(r));
+  const infoRows   = printed.filter(r => sideOf(r) === 'info');
+  const earningTotals   = printed.filter(r => sideOf(r) === 'earnings'   && isAggregate(r));
+  const deductionTotals = printed.filter(r => sideOf(r) === 'deductions' && isAggregate(r));
+
+  const netRow = payrollData.find(r => (r.name || '').toLowerCase().startsWith('net'));
+
+  // A row moved off its natural side counts only when explicitly told to. Default is not to count,
+  // so showing an employer contribution under Deductions does not shrink the printed net below what
+  // the employee is actually paid.
+  const countsInTotal = (r) => !isMoved(r) || !!r.payslip_in_total;
+  const sumOf = rows => rows.filter(countsInTotal)
+    .reduce((acc, r) => acc + (parseFloat(r.amount || '0') || 0), 0);
+  const totalEarnings   = sumOf(earnings);
+  const totalDeductions = sumOf(deductions);
   // ── Net pay ─────────────────────────────────────────────────────────────────
   // Resolution order, most specific first:
   //   1. The template's own net_columns, when the template defines them.
@@ -277,18 +323,24 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   doc.rect(50 + halfW + 8, y, halfW, 1).fill([acR, acG, acB]);
   y += 5;
 
-  const maxRows = Math.max(earnings.length, deductions.length, 1);
+  // Each side prints its itemised rows first, then any aggregate columns the template includes as
+  // bold subtotal rows — "…allowances… / Total Allowances / Gross Salary". The two sides are laid
+  // out in parallel, so the row count is the longer of the two.
+  const leftRows  = [...earnings.map(r => ({ r, bold: false })),   ...earningTotals.map(r => ({ r, bold: true }))];
+  const rightRows = [...deductions.map(r => ({ r, bold: false })), ...deductionTotals.map(r => ({ r, bold: true }))];
+
+  const cell = (row, x, labelW, amountX) => {
+    const font = row.bold ? 'Helvetica-Bold' : 'Helvetica';
+    doc.fillColor(row.bold ? '#111827' : '#4b5563').font(font).fontSize(8)
+      .text(row.r.name, x, y, { width: labelW });
+    doc.fillColor('#111827').font(font).fontSize(8)
+      .text(fmt(row.r.amount), amountX, y, { width: 55, align: 'right' });
+  };
+
+  const maxRows = Math.max(leftRows.length, rightRows.length, 1);
   for (let i = 0; i < maxRows; i++) {
-    const e = earnings[i];
-    const d = deductions[i];
-    if (e) {
-      doc.fillColor('#4b5563').font('Helvetica').fontSize(8).text(e.name, 50, y, { width: halfW - 60 });
-      doc.fillColor('#111827').font('Helvetica').fontSize(8).text(fmt(e.amount), 50 + halfW - 55, y, { width: 55, align: 'right' });
-    }
-    if (d) {
-      doc.fillColor('#4b5563').font('Helvetica').fontSize(8).text(d.name, 58 + halfW, y, { width: halfW - 60 });
-      doc.fillColor('#111827').font('Helvetica').fontSize(8).text(fmt(d.amount), 58 + halfW + halfW - 55, y, { width: 55, align: 'right' });
-    }
+    if (leftRows[i])  cell(leftRows[i],  50,          halfW - 60, 50 + halfW - 55);
+    if (rightRows[i]) cell(rightRows[i], 58 + halfW,  halfW - 60, 58 + halfW + halfW - 55);
     y += 14;
   }
 
@@ -302,6 +354,22 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   doc.fillColor('#374151').font('Helvetica-Bold').fontSize(8).text('Total Deductions', 58 + halfW, y, { width: halfW - 60 });
   doc.fillColor('#374151').font('Helvetica-Bold').fontSize(8).text(fmt(totalDeductions), 58 + halfW + halfW - 55, y, { width: 55, align: 'right' });
   y += 22;
+
+  // Information-only rows: amounts shown for transparency that belong to neither subtotal (employer
+  // contributions, year-to-date figures). Printed full width below the totals so they cannot be
+  // mistaken for part of the net calculation.
+  if (infoRows.length) {
+    doc.fillColor('#6b7280').font('Helvetica-Bold').fontSize(8).text('For information', 50, y);
+    y += 12;
+    doc.rect(50, y, pageW, 1).fill('#e5e7eb');
+    y += 5;
+    infoRows.forEach(r => {
+      doc.fillColor('#6b7280').font('Helvetica').fontSize(8).text(r.name, 50, y, { width: pageW - 70 });
+      doc.fillColor('#6b7280').font('Helvetica').fontSize(8).text(fmt(r.amount), doc.page.width - 130, y, { width: 80, align: 'right' });
+      y += 13;
+    });
+    y += 8;
+  }
 
   // Net Pay banner
   doc.rect(50, y, pageW, 32).fill([Math.min(acR + 220, 255), Math.min(acG + 220, 255), Math.min(acB + 220, 255)]);
