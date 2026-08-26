@@ -170,11 +170,28 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   const netRow     = payrollData.find(r => (r.name || '').toLowerCase().startsWith('net'));
   const totalEarnings  = earnings.reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
   const totalDeductions = deductions.reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+  // ── Net pay ─────────────────────────────────────────────────────────────────
+  // Resolution order, most specific first:
+  //   1. The template's own net_columns, when the template defines them.
+  //   2. Columns flagged `include_in_net` in Payroll Setup. This is the flag's whole purpose:
+  //      payrollcolumns holds both real components (Salary Basic, Paye) AND running aggregates
+  //      (Gross, Gross After NASSIT, Taxable Income, Total Deduction), and only the columns that
+  //      together make up net pay carry the flag.
+  //   3. An explicit column whose name starts with 'Net'.
+  //   4. Visible earnings minus visible deductions.
+  //
+  // Falling through to (4) is what produced a wrong figure: summing every visible Payment column
+  // adds Gross on top of the Salary Basic it already totals, and adds Total Deduction on top of the
+  // Paye and NASSIT lines it already totals — counting the same money twice on each side. For one
+  // run that showed 163,545.00 on the payslip against a true net of 81,472.50.
+  const netFlagged = payrollData.filter(r => r.include_in_net);
+  const signedSum = rows => rows.reduce(
+    (sum, r) => sum + (parseFloat(r.amount || '0') || 0) * (r.payment_deduction === 'Deduction' ? -1 : 1), 0);
   const netPay = netIds
-    ? payrollData
-        .filter(r => netIds.has(String(r.payroll_item_id)))
-        .reduce((sum, r) => sum + (parseFloat(r.amount || '0') || 0) * (r.payment_deduction === 'Deduction' ? -1 : 1), 0)
-    : (netRow ? parseFloat(netRow.amount || '0') : (totalEarnings - totalDeductions));
+    ? signedSum(payrollData.filter(r => netIds.has(String(r.payroll_item_id))))
+    : netFlagged.length ? signedSum(netFlagged)
+    : netRow ? parseFloat(netRow.amount || '0')
+    : (totalEarnings - totalDeductions);
 
   // Company branding: template first, then global App Setup (Settings → System → App Setup).
   const setupRows = await prisma.settings.findMany({ where: { category: 'app_setup' }, select: { name: true, value: true } }).catch(() => []);
