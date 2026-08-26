@@ -1,4 +1,4 @@
-import { useState, useMemo, type ComponentType } from 'react';
+import { useState, useMemo, useEffect, type ComponentType } from 'react';
 import { Download, FileSpreadsheet, FileText, Receipt, X, Stethoscope, Printer, TrendingUp } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { FormModal } from './ui/FormModal';
 import { AnimatePresence } from 'motion/react';
 import { SearchSelect } from './ui/SearchSelect';
 import { exportReportExcel, reportPdf, ReportPreview, uniqOpts } from './ui/reportTools';
+import { printDocument } from './ui/printDocument';
 import api from '../../lib/api';
 import { getCurrentUser } from '../../lib/auth';
 import { PageHeader } from './ui/PageHeader';
@@ -40,26 +41,15 @@ function exportCSV(filename: string, headers: string[], rows: (string | number)[
   URL.revokeObjectURL(url);
 }
 
-function printTable(title: string, headers: string[], rows: (string | number)[][]) {
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const html = `<!DOCTYPE html><html><head><title>${esc(title)}</title>
-    <style>body{font-family:sans-serif;padding:20px}h2{margin-bottom:16px}
-    table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px 12px;font-size:13px}
-    th{background:#f3f4f6;font-weight:600;text-align:left}tr:nth-child(even){background:#f9fafb}
-    @media print{button{display:none}}</style></head><body>
-    <h2>${esc(title)}</h2><table>
-    <thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${esc(String(c ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></body></html>`;
-  const w = window.open('', '_blank');
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
-  w.print();
-}
 
 export function UserReports() {
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Company name/address for printed document headers — one source, Settings > System > App Setup.
+  const [appSetup, setAppSetup] = useState<{ company_name?: string; company_address?: string } | null>(null);
+  useEffect(() => {
+    api.get('/settings/app-setup').then(r => setAppSetup(r.data?.data ?? r.data)).catch(() => {});
+  }, []);
 
   // Medical statement modal state
   const [medOpen,    setMedOpen]    = useState(false);
@@ -470,7 +460,20 @@ export function UserReports() {
                     return (
                       <>
                         <div className="flex justify-end gap-2 mb-2">
-                          <button onClick={() => printTable('My Medical Statement', recHeaders, allRecRows)}
+                          <button onClick={() => printDocument({
+                            title: 'Medical Statement',
+                            subtitle: [getCurrentUser()?.name, medData?.employee_code]
+                              .filter(Boolean).join(' · ') || undefined,
+                            summary: [
+                              { label: 'Medical Limit',     value: medData.medical_limit != null ? `${cur} ${fmt(medData.medical_limit)}` : '—' },
+                              { label: 'Amount Utilised',   value: `${cur} ${fmt(medData.amount_utilized)}` },
+                              { label: 'Remaining Balance', value: medData.limit_balance != null ? `${cur} ${fmt(medData.limit_balance)}` : '—' },
+                            ],
+                            numericColumns: [3],   // Cost
+                            statusColumn: 4,       // Status
+                            orgName: appSetup?.company_name,
+                            orgAddress: appSetup?.company_address,
+                          }, recHeaders, allRecRows)}
                             className="secondary-btn !py-1.5 !px-3 !text-[12px]">
                             <Printer size={13} />Print
                           </button>
