@@ -1077,6 +1077,7 @@ const finalizePayroll = asyncHandler(async (req, res) => {
 
   let documentRef = null;
   let paymentLog  = null;
+  let snapshot    = null;   // report layout frozen the moment the journal is accepted — see below
   // Record-only default: with GL posting switched off no bank is involved, so the run finalizes
   // straight to 'Completed'. The GL-success path below moves it to 'Bank Pending' instead.
   let finalStatus = 'Completed';
@@ -1094,6 +1095,25 @@ const finalizePayroll = asyncHandler(async (req, res) => {
       const result = await buildAndPostGL(id, req, run.name);
       documentRef = result.documentRef;
       paymentLog  = JSON.stringify(result.raw);
+
+      // Freeze the report layout HERE — the instant the journal is accepted, before the status is
+      // decided or written. From this moment the run's figures are at the bank, so its report is
+      // evidence of what was posted and a later template edit must not rewrite it.
+      //
+      // Taking it here rather than alongside the status write matters: the snapshot belongs to the
+      // posting, not to the status. If anything below this point throws, the journal has still gone
+      // to the bank, and the layout it was posted under is already captured.
+      //
+      // Swallowed on purpose. The journal HAS been posted by this point, so letting a failed
+      // snapshot reach the catch below would mark the run 'GL Failed' — and a retry would then post
+      // the same journal a second time. Losing the snapshot only means this run keeps resolving its
+      // template live, which is the old behaviour; a duplicate payment is unrecoverable.
+      try {
+        snapshot = await snapshotRunTemplate(id);
+      } catch (snapErr) {
+        console.error(`[finalize] run ${id}: GL posted but the template snapshot failed — the report will resolve live:`, snapErr.message);
+      }
+
       // The GL accepted the journal — but the core banking system still runs its own approval flow
       // before anyone is paid. Marking this 'Completed' is what used to make an unapproved run
       // indistinguishable from a settled one; it stays pending until the bank says otherwise.
@@ -1120,13 +1140,12 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   // blind write would erase a reference the bank already holds.
   const refToStore = documentRef ?? run.document_ref ?? null;
 
-  // Freeze the report layout for a run that actually reached the bank. From here its report is
-  // evidence of what was paid, so a later template edit must not rewrite it.
+  // Record-only mode (GL posting switched off) never enters the block above, so it has no snapshot
+  // yet. The run is still being finalised and will not change again, so freeze its layout too.
   //
-  // Deliberately NOT taken on a 'GL Failed' finalize: that run stays editable and gets retried, so
-  // freezing a layout it might still change would be wrong. retryGLPosting takes the snapshot when
-  // the retry succeeds instead.
-  const snapshot = finalStatus === 'GL Failed' ? null : await snapshotRunTemplate(id);
+  // 'GL Failed' deliberately gets none: that run stays editable and gets retried, so freezing a
+  // layout it might still change would be wrong. retryGLPosting snapshots when the retry succeeds.
+  if (!snapshot && finalStatus === 'Completed') snapshot = await snapshotRunTemplate(id);
   await exec`
     UPDATE payrollruns SET status=${statusSql}, document_ref=${refToStore}, payment_log=${paymentLog},
       template_snapshot=COALESCE(${snapshot}, template_snapshot),
@@ -1166,9 +1185,18 @@ const retryGLPosting = asyncHandler(async (req, res) => {
 
   try {
     const result = await buildAndPostGL(id, req, run.name);
-    // The journal has now reached the bank, so freeze the report layout here too — the finalize
-    // path deliberately skipped it while the run was still 'GL Failed' and retryable.
-    const snapshot = await snapshotRunTemplate(id);
+    // Freeze the layout the instant the journal is accepted, before the status is written — same
+    // rule as finalize. The snapshot belongs to the posting, not to the status change. The finalize
+    // path deliberately skipped it while this run was still 'GL Failed' and retryable.
+    //
+    // Swallowed for the same reason as finalize: the journal is already posted, so a failed
+    // snapshot must not send this run back down the failure path and invite a second posting.
+    let snapshot = null;
+    try {
+      snapshot = await snapshotRunTemplate(id);
+    } catch (snapErr) {
+      console.error(`[gl retry] run ${id}: GL posted but the template snapshot failed — the report will resolve live:`, snapErr.message);
+    }
     await exec`
       UPDATE payrollruns SET status='Bank Pending', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)},
         template_snapshot=COALESCE(${snapshot}, template_snapshot),
