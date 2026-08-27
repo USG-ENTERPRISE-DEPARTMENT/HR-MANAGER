@@ -5,7 +5,7 @@ import {
   ChevronsRight, RefreshCw, Lock, Send, ThumbsUp, ThumbsDown,
   ClipboardList, GitCompare, Clock, AlertTriangle, CheckSquare, Square, Copy,
   Palette, AlignLeft, LayoutGrid, User, ShieldCheck,
-  X, Columns2, Tag, Zap,
+  X, Columns2, Tag, Zap, Filter,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FormModal } from './ui/FormModal';
@@ -1621,6 +1621,8 @@ export function Payroll() {
   const [peSelectedEmpIds, setPeSelectedEmpIds] = useState<string[]>([]);
   const [peSearch,       setPeSearch]       = useState('');
   const [peFreqFilter,   setPeFreqFilter]   = useState('');
+  const [pePayShowFilters, setPePayShowFilters] = useState(false);
+  const [pfSearch,       setPfSearch]       = useState('');
   const [employeesList,  setEmployeesList]  = useState<RefItem[]>([]);
   const [currencies,     setCurrencies]     = useState<RefItem[]>([]);
 
@@ -2696,6 +2698,18 @@ export function Payroll() {
     return matchSearch && matchFreq;
   }), [peRows, peSearch, peFreqFilter]);
 
+  // Pay frequencies for the setup modal: searched by name or description, and always in the
+  // configured order (sort_order is no longer edited by hand, but it still drives the sequence
+  // everywhere frequencies are listed).
+  const pfFiltered = useMemo(() => {
+    const q = pfSearch.trim().toLowerCase();
+    return [...pfRows]
+      .filter(pf => !q
+        || (pf.name ?? '').toLowerCase().includes(q)
+        || (pf.description ?? '').toLowerCase().includes(q))
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [pfRows, pfSearch]);
+
   // ── Paged slices ────────────────────────────────────────────────────────────
   const pagedCg: CalcGroup[]   = filteredCg.slice((cgPage - 1) * cgPageSize, cgPage * cgPageSize);
   const pagedSc: SavedCalc[]   = filteredSc.slice((scPage - 1) * scPageSize, scPage * scPageSize);
@@ -2782,9 +2796,21 @@ export function Payroll() {
               }}>
                 <span className="text-[13px]">⚙</span> Pay Frequencies
               </button>}
+              <button
+                onClick={() => setPePayShowFilters(!pePayShowFilters)}
+                className={`secondary-btn shrink-0 relative ${pePayShowFilters || peFreqFilter ? 'ring-2 ring-[var(--accent)] border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-dim)]' : ''}`}
+              >
+                Filter <Filter className="w-[14px] h-[14px] fill-current opacity-80" />
+                {peFreqFilter && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[var(--accent)] text-white text-[9px] font-bold flex items-center justify-center">
+                    1
+                  </span>
+                )}
+              </button>
             </>
           }
-          filterBar={
+          showFilters={pePayShowFilters}
+          filterBar={pePayShowFilters ? (
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest mr-1">Frequency</span>
               <button
@@ -2813,7 +2839,7 @@ export function Payroll() {
                 </button>
               ))}
             </div>
-          }
+          ) : undefined}
         />
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -4420,8 +4446,8 @@ export function Payroll() {
               subtitle="Configure pay frequency options available to employees"
               maxWidth="2xl"
               scrollable={false}
-              onClose={() => { setPfSetupOpen(false); setEditingPf(null); setPfForm(BLANK_PF); }}
-              onSave={() => { setPfSetupOpen(false); setEditingPf(null); setPfForm(BLANK_PF); }}
+              onClose={() => { setPfSetupOpen(false); setEditingPf(null); setPfForm(BLANK_PF); setPfSearch(''); }}
+              onSave={() => { setPfSetupOpen(false); setEditingPf(null); setPfForm(BLANK_PF); setPfSearch(''); }}
               saveLabel="Done"
             >
               <div className="space-y-4">
@@ -4457,10 +4483,26 @@ export function Payroll() {
                   </div>
                 </div>
 
+                {/* Search — the list is short today, but frequencies accumulate. */}
+                {pfRows.length > 0 && (
+                  <div className="search-wrap w-full">
+                    <Search size={14} />
+                    <input
+                      type="search"
+                      autoComplete="off"
+                      placeholder="Search frequencies…"
+                      value={pfSearch}
+                      onChange={e => setPfSearch(e.target.value)}
+                    />
+                  </div>
+                )}
+
                 {/* Frequency list — scrolls independently */}
                 <div className="border border-[var(--border)] rounded-xl overflow-hidden">
                   {pfRows.length === 0 ? (
                     <div className="py-8 text-center text-[12px] text-[var(--text-muted)]">No pay frequencies yet.</div>
+                  ) : pfFiltered.length === 0 ? (
+                    <div className="py-8 text-center text-[12px] text-[var(--text-muted)]">No frequencies match “{pfSearch}”.</div>
                   ) : (
                     <div className="max-h-[220px] overflow-y-auto">
                       <table className="w-full border-collapse text-[13px]">
@@ -4472,7 +4514,7 @@ export function Payroll() {
                           </tr>
                         </thead>
                         <tbody>
-                          {[...pfRows].sort((a, b) => a.sort_order - b.sort_order).map(pf => (
+                          {pfFiltered.map(pf => (
                             <tr key={pf.id} className="tr">
                               <td className="td py-2 px-3 font-medium">{pf.name}</td>
                               <td className="td py-2 px-3 text-[var(--text-muted)] text-[12px]">{pf.description || '—'}</td>
