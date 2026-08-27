@@ -803,7 +803,6 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
     FROM   payrolldata pd
     JOIN   payrollcolumns    pc ON pc.id       = pd.payroll_item
     JOIN   employee           e  ON e.id        = pd.employee
-    LEFT JOIN payrollemployees pe ON pe.employee = pd.employee
     WHERE  pd.payroll = ${BigInt(run.id)} AND pc.posting_column = 'Yes'
     ORDER  BY pd.employee, COALESCE(pc.colorder, 99999)`;
 
@@ -956,7 +955,6 @@ async function buildAndPostGL(id, req, runName) {
     FROM   payrolldata pd
     JOIN   payrollcolumns    pc ON pc.id       = pd.payroll_item
     JOIN   employee           e  ON e.id        = pd.employee
-    LEFT JOIN payrollemployees pe ON pe.employee = pd.employee
     WHERE  pd.payroll = ${BigInt(id)} AND pc.posting_column = 'Yes'
     ORDER  BY pd.employee, COALESCE(pc.colorder, 99999)`;
 

@@ -480,11 +480,17 @@ const createPayFrequency = asyncHandler(async (req, res) => {
   if (dup.length) return respond.conflict(res, 'A pay frequency with this name already exists');
   // id is autoincrement — use the Prisma builder so we get the generated id back portably
   // (MySQL's LAST_INSERT_ID() has no cross-dialect equivalent in raw SQL).
+  // Append to the end when no order is given. The UI no longer asks for one — it is bookkeeping,
+  // not a decision anyone needs to make — so defaulting every new row to a fixed 99 would pile them
+  // all on the same position and leave their relative order down to the id tiebreak.
+  const nextOrder = sort_order != null && sort_order !== ''
+    ? parseInt(sort_order)
+    : Number((await query`SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM payfrequencies`)[0].n);
   const created = await prisma.payfrequencies.create({
     data: {
       name: name.trim(),
       description: description?.trim() || null,
-      sort_order: sort_order != null && sort_order !== '' ? parseInt(sort_order) : 99,
+      sort_order: nextOrder,
     },
     select: { id: true, name: true, description: true, is_active: true, sort_order: true },
   });
@@ -497,13 +503,19 @@ const updatePayFrequency = asyncHandler(async (req, res) => {
   if (!id) return respond.badReq(res, 'Invalid ID');
   const { name, description, sort_order, is_active } = req.body;
   if (!name?.trim()) return respond.badReq(res, 'Name is required');
-  const existing = await query`SELECT id FROM payfrequencies WHERE id = ${id} LIMIT 1`;
-  if (!existing.length) return respond.notFound(res, 'Pay frequency not found');
+  const [existing] = await query`SELECT id, sort_order FROM payfrequencies WHERE id = ${id} LIMIT 1`;
+  if (!existing) return respond.notFound(res, 'Pay frequency not found');
   const dup = await query`SELECT id FROM payfrequencies WHERE UPPER(name) = UPPER(${name.trim()}) AND id <> ${id} LIMIT 1`;
   if (dup.length) return respond.conflict(res, 'A pay frequency with this name already exists');
+  // Keep the existing position when no order is sent. The UI stopped asking for one, and defaulting
+  // to 99 here would silently re-order the frequency dropdowns across the app every time somebody
+  // corrected a name or a description.
+  const keptOrder = sort_order != null && sort_order !== ''
+    ? parseInt(sort_order)
+    : (existing.sort_order ?? 99);
   await exec`
     UPDATE payfrequencies SET name=${name.trim()}, description=${description?.trim() || null},
-      sort_order=${sort_order != null && sort_order !== '' ? parseInt(sort_order) : 99},
+      sort_order=${keptOrder},
       is_active=${is_active !== undefined ? !!is_active : true}
      WHERE id=${id}`;
   const [updated] = await query`SELECT id, name, description, is_active, sort_order FROM payfrequencies WHERE id = ${id}`;
@@ -555,9 +567,14 @@ const createPayrollEmployee = asyncHandler(async (req, res) => {
   // (Settings -> General). Accepting it per employee is what let "Cedis" and "GHS" be stored while
   // the system ran on Leones, and those values were posted to the bank. Any value sent is ignored.
 
+  // One record per employee PER FREQUENCY, not one per employee. Someone can be on Monthly and also
+  // on a Mid-Month frequency — two genuinely separate payments — but never twice on the same one,
+  // which would pay them twice in a single run.
   const empId = toBigInt(employee);
-  const dup = await query`SELECT id FROM payrollemployees WHERE employee = ${empId} LIMIT 1`;
-  if (dup.length) return respond.conflict(res, 'This employee already has a payroll record');
+  const freqId = toBigInt(pay_frequency);
+  const dup = await query`
+    SELECT id FROM payrollemployees WHERE employee = ${empId} AND pay_frequency = ${freqId} LIMIT 1`;
+  if (dup.length) return respond.conflict(res, 'This employee is already on that pay frequency');
 
   const nextId = Number((await query`SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM payrollemployees`)[0].nextId);
   await exec`
@@ -582,9 +599,15 @@ const updatePayrollEmployee = asyncHandler(async (req, res) => {
   const existing = await query`SELECT id FROM payrollemployees WHERE id = ${id} LIMIT 1`;
   if (!existing.length) return respond.notFound(res, 'Payroll employee not found');
 
+  // Same rule as create: unique per employee + frequency, so an employee may hold several records
+  // on different frequencies but never two on the same one. `id <> ${id}` exempts the row being
+  // edited, otherwise saving a record without changing its frequency would clash with itself.
   const empId = toBigInt(employee);
-  const dup = await query`SELECT id FROM payrollemployees WHERE employee = ${empId} AND id <> ${id} LIMIT 1`;
-  if (dup.length) return respond.conflict(res, 'This employee already has a payroll record');
+  const freqId = toBigInt(pay_frequency);
+  const dup = await query`
+    SELECT id FROM payrollemployees
+     WHERE employee = ${empId} AND pay_frequency = ${freqId} AND id <> ${id} LIMIT 1`;
+  if (dup.length) return respond.conflict(res, 'This employee is already on that pay frequency');
 
   await exec`
     UPDATE payrollemployees SET employee=${empId}, pay_frequency=${toBigInt(pay_frequency)}, currency=${await getSystemCurrency()},

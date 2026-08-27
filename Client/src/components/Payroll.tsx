@@ -4349,6 +4349,16 @@ export function Payroll() {
             <FormModal title={editingPe ? 'Edit Payroll Employee' : 'Add Payroll Employee'} maxWidth="lg"
               onClose={() => setPeModalOpen(false)} onSave={savePe} saveLabel={peSaving ? 'Saving…' : 'Save'}>
               <div className="space-y-4">
+                {/* Frequency first: the employee list below excludes anyone already on the chosen
+                    frequency, so it cannot filter correctly until this is set. */}
+                <FormField label="Pay Frequency" required>
+                  <Combobox
+                    options={pfRows.map(pf => ({ id: String(pf.id), label: pf.name }))}
+                    value={peForm.pay_frequency}
+                    onChange={id => setPeForm(f => ({ ...f, pay_frequency: id }))}
+                    placeholder="Select frequency…"
+                  />
+                </FormField>
                 {editingPe ? (
                   <FormField label="Employee" required>
                     <Combobox
@@ -4360,24 +4370,28 @@ export function Payroll() {
                   </FormField>
                 ) : (
                   <FormField label="Employees" required>
+                    {/* Employees already on ANOTHER frequency stay selectable — someone paid Monthly
+                        can legitimately also be on Mid-Month. Only those already on the frequency
+                        being added are excluded, since that would pay them twice in one run. The
+                        label shows what they are already on so the choice is informed. */}
                     <SearchableCheckList
                       options={employeesList
-                        .filter(e => !peRows.some(p => p.employee === e.id))
-                        .map(e => ({ id: e.id, label: e.name }))}
+                        .filter(e => !peRows.some(p =>
+                          p.employee === e.id &&
+                          String(p.pay_frequency ?? '') === String(peForm.pay_frequency ?? '')))
+                        .map(e => {
+                          const on = peRows
+                            .filter(p => p.employee === e.id)
+                            .map(p => p.freq_name)
+                            .filter(Boolean);
+                          return { id: e.id, label: on.length ? `${e.name} — already on ${on.join(', ')}` : e.name };
+                        })}
                       selected={peSelectedEmpIds}
                       onChange={setPeSelectedEmpIds}
                       placeholder="Search employees…"
                     />
                   </FormField>
                 )}
-                <FormField label="Pay Frequency" required>
-                  <Combobox
-                    options={pfRows.map(pf => ({ id: String(pf.id), label: pf.name }))}
-                    value={peForm.pay_frequency}
-                    onChange={id => setPeForm(f => ({ ...f, pay_frequency: id }))}
-                    placeholder="Select frequency…"
-                  />
-                </FormField>
                 <FormField label="Calculation Group">
                   <Combobox
                     options={[{ id: '', label: 'None' }, ...cgRows.map(cg => ({ id: cg.id, label: cg.name }))]}
@@ -4404,7 +4418,7 @@ export function Payroll() {
           {pfSetupOpen && (
             <FormModal title="Pay Frequencies"
               subtitle="Configure pay frequency options available to employees"
-              maxWidth="md"
+              maxWidth="2xl"
               scrollable={false}
               onClose={() => { setPfSetupOpen(false); setEditingPf(null); setPfForm(BLANK_PF); }}
               onSave={() => { setPfSetupOpen(false); setEditingPf(null); setPfForm(BLANK_PF); }}
@@ -4416,20 +4430,15 @@ export function Payroll() {
                   <p className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">
                     {editingPf ? 'Edit Frequency' : 'Add Frequency'}
                   </p>
-                  <div className="grid grid-cols-[1fr_80px] gap-3">
-                    <FormField label="Name" required>
-                      <input className={inputClass} value={pfForm.name}
-                        onChange={e => setPfForm(f => ({ ...f, name: e.target.value }))}
-                        placeholder="e.g. Monthly"
-                        onKeyDown={e => e.key === 'Enter' && savePf()} />
-                    </FormField>
-                    <FormField label="Order">
-                      <input className={inputClass} type="number" value={pfForm.sort_order}
-                        onChange={e => setPfForm(f => ({ ...f, sort_order: e.target.value }))}
-                        placeholder="99"
-                        onWheel={e => (e.target as HTMLInputElement).blur()} />
-                    </FormField>
-                  </div>
+                  {/* Order is not asked for: the server assigns the next position automatically.
+                      The column still exists and still drives the order everywhere frequencies are
+                      listed — it is just not something anyone needs to set by hand. */}
+                  <FormField label="Name" required>
+                    <input className={inputClass} value={pfForm.name}
+                      onChange={e => setPfForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Monthly"
+                      onKeyDown={e => e.key === 'Enter' && savePf()} />
+                  </FormField>
                   <FormField label="Description">
                     <input className={inputClass} value={pfForm.description}
                       onChange={e => setPfForm(f => ({ ...f, description: e.target.value }))}
@@ -4459,7 +4468,6 @@ export function Payroll() {
                           <tr>
                             <th className="th text-left py-2 px-3">Name</th>
                             <th className="th text-left py-2 px-3">Description</th>
-                            <th className="th text-center py-2 px-3">Order</th>
                             <th className="th py-2 px-3"></th>
                           </tr>
                         </thead>
@@ -4468,7 +4476,6 @@ export function Payroll() {
                             <tr key={pf.id} className="tr">
                               <td className="td py-2 px-3 font-medium">{pf.name}</td>
                               <td className="td py-2 px-3 text-[var(--text-muted)] text-[12px]">{pf.description || '—'}</td>
-                              <td className="td py-2 px-3 text-center text-[var(--text-muted)] text-[12px]">{pf.sort_order}</td>
                               <td className="td py-2 px-3 text-right">
                                 <div className="flex justify-end">
                                   <RowActions actions={[

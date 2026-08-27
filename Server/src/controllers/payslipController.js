@@ -103,7 +103,7 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   // ── Fetch run, settings, employee ──────────────────────────────────────────
   const [run] = await query`
     SELECT pr.id, pr.name, pr.date_start, pr.date_end, pr.status, pr.payment_type_id,
-           pr.template_snapshot,
+           pr.template_snapshot, pr.pay_frequency,
            pf.name AS freq_name
     FROM payrollruns pr
     LEFT JOIN payfrequencies pf ON pf.id = pr.pay_frequency
@@ -167,7 +167,15 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   const allTemplates = snapshot ? [] : await query`
     SELECT * FROM payslip_settings
     ORDER BY payment_type_id IS NULL ASC, deduction_group_id IS NULL ASC, id ASC`.catch(() => []);
-  const [empPe] = await query`SELECT deduction_group FROM payrollemployees WHERE employee = ${BigInt(empId)} LIMIT 1`.catch(() => [null]);
+  // An employee may hold a payroll record on several frequencies (Monthly and Mid-Month, say), so
+  // match the one belonging to THIS run's frequency. Picking any record would choose the wrong
+  // deduction group — and therefore the wrong payslip template — whenever the two differ.
+  // Falls back to any record for runs with no frequency set.
+  const [empPe] = run.pay_frequency != null
+    ? await query`
+        SELECT deduction_group FROM payrollemployees
+         WHERE employee = ${BigInt(empId)} AND pay_frequency = ${parseInt(run.pay_frequency)} LIMIT 1`.catch(() => [null])
+    : await query`SELECT deduction_group FROM payrollemployees WHERE employee = ${BigInt(empId)} LIMIT 1`.catch(() => [null]);
   const empGroup = empPe?.deduction_group ? String(empPe.deduction_group) : null;
   const runPaymentType = run.payment_type_id ? String(run.payment_type_id) : null;
   const [matched] = allTemplates
