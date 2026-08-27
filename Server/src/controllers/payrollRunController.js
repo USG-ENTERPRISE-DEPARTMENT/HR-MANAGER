@@ -531,7 +531,9 @@ async function resolveRunTemplate(runId) {
   if (run.template_snapshot) {
     try {
       const snap = JSON.parse(run.template_snapshot);
-      if (snap && typeof snap === 'object') return snap;
+      // `frozen` tells callers this came from the snapshot rather than the live template, so the UI
+      // can say the layout is fixed instead of letting someone edit a template expecting an effect.
+      if (snap && typeof snap === 'object') return { ...snap, frozen: true };
     } catch {
       // A corrupt snapshot must not break the report; fall through and resolve live.
       console.warn(`[payroll] run ${runId} has an unreadable template_snapshot — resolving live instead`);
@@ -642,11 +644,21 @@ const getPayrollData = asyncHandler(async (req, res) => {
   // has no matching template — consumers then fall back to each column's own visible/include_in_net flags.
   const templateVisibleCols = templateCols.length ? templateCols : null;
   const templateNetCols = template ? parseTemplateColumns(template.net_columns) : [];
+  const templatePayslipCols = template ? parseTemplateColumns(template.payslip_columns) : [];
 
+  // Return the whole resolved template, snapshot included. The client used to re-resolve it from
+  // its own live list of templates, which meant a finalised run's grid still followed later edits
+  // even though the server was correctly serving the snapshot. Anything rendering this run must use
+  // THIS object, not look the template up again.
   respond.ok(res, 'Payroll data retrieved', {
     cells, staleColumnCount, totalEnabledCols: relevantColCount,
     templateVisibleCols,
     templateNetCols: templateNetCols.length ? templateNetCols : null,
+    templatePayslipCols: templatePayslipCols.length ? templatePayslipCols : null,
+    // Null when no template matches; the client then falls back to each column's own flags.
+    reportTemplate: template ?? null,
+    // True once the run's layout is frozen — the UI can say so rather than implying edits apply.
+    templateFrozen: !!template?.frozen,
   });
 });
 

@@ -676,7 +676,7 @@ function PayslipSlideOver({
 
 function PayrollGrid({
   gridData, activeRun, editMode, generating, finalizing, retryingGL, confirmingPaid, submitting, approving, rejecting,
-  staleColumnCount, hiddenColIds, payslipHiddenColIds, aggregateColIds, netExcludedIds, approvalSettings, currentUserId, currentUserRoles, runStages,
+  staleColumnCount, hiddenColIds, payslipHiddenColIds, aggregateColIds, netExcludedIds, templateFrozen, approvalSettings, currentUserId, currentUserRoles, runStages,
   auditLog, auditLoading, payslipEnabled, colLabelMap, payslipSettings,
   onBack, onGenerate, onFinalize, onRetryGL, onConfirmPaid, onExport, onToggleEdit, onCellUpdate, onReorderCols,
   onSubmit, onApprove, onReject, onLoadAudit, onNewRun,
@@ -696,6 +696,8 @@ function PayrollGrid({
   // aggregates — the payslip preview needs both to match the printed PDF.
   hiddenColIds: Set<string>;
   payslipHiddenColIds: Set<string>;
+  // True once this run's report layout is frozen to a snapshot taken at GL-posting time.
+  templateFrozen?: boolean;
   aggregateColIds: Set<string>;
   netExcludedIds: Set<string>;
   approvalSettings: { payrollApproval: boolean; selfApproval: boolean };
@@ -1098,6 +1100,12 @@ function PayrollGrid({
               ? <Clock size={15} className="shrink-0" style={{ color: tone }} />
               : <CheckCircle size={15} className="shrink-0" style={{ color: tone }} />}
             <span className="font-semibold" style={{ color: tone }}>{label}</span>
+            {templateFrozen && (
+              <span className="text-[11px] text-[var(--text-muted)] border border-[var(--border)] rounded-full px-2 py-0.5"
+                title="This run's report layout was frozen when its journal was posted. Editing the report template will not change it.">
+                Layout frozen
+              </span>
+            )}
             <span className="text-[var(--text-muted)]">Document Ref:</span>
             <code className="font-mono text-[var(--text-primary)] bg-[var(--surface-hover,rgba(0,0,0,0.04))] px-2 py-0.5 rounded text-[12px]">{activeRun.document_ref}</code>
             {/* A re-posted run (rejected → regenerated → posted again) records the reference it
@@ -1583,6 +1591,11 @@ export function Payroll() {
   const activeRunPaymentType = ptRows.find((pt: PaymentType) => String(pt.id) === String(activeRun?.payment_type_id));
   const payslipEnabled = !activeRun?.payment_type_id || !!activeRunPaymentType?.generate_payslip;
   const [gridData,          setGridData]          = useState<GridCell[]>([]);
+  // The template the SERVER resolved for this run — the snapshot when the run is frozen, the live
+  // template otherwise. Re-resolving it here from the live template list is what let edits leak
+  // into finalised runs, so this is the only source the grid may use.
+  const [runTemplate,       setRunTemplate]       = useState<any | null>(null);
+  const [templateFrozen,    setTemplateFrozen]    = useState(false);
   const [staleColumnCount,  setStaleColumnCount]  = useState(0);
   const [editMode,          setEditMode]          = useState(false);
   const [gridLoading,       setGridLoading]       = useState(false);
@@ -1855,6 +1868,8 @@ export function Payroll() {
       const rd  = res.data.data;
       setGridData(Array.isArray(rd) ? rd : (rd?.cells || []));
       setStaleColumnCount(rd?.staleColumnCount ?? 0);
+      setRunTemplate(rd?.reportTemplate ?? null);
+      setTemplateFrozen(!!rd?.templateFrozen);
     } catch { toast.error('Failed to load payroll data'); }
     finally { setGridLoading(false); }
   }
@@ -1932,6 +1947,8 @@ export function Payroll() {
       const rd = dataRes.data.data;
       setGridData(Array.isArray(rd) ? rd : (rd?.cells || []));
       setStaleColumnCount(rd?.staleColumnCount ?? 0);
+      setRunTemplate(rd?.reportTemplate ?? null);
+      setTemplateFrozen(!!rd?.templateFrozen);
       setRunRows(runsRes.data.data || []);
       const updated = (runsRes.data.data || []).find((r: PayrollRun) => r.id === activeRunId);
       if (updated) setActiveRun(updated);
@@ -2524,6 +2541,14 @@ export function Payroll() {
   }, []);
 
   const activeReportTemplate = useMemo(() => {
+    // Always prefer what the SERVER resolved for this run. Once a run is finalised it carries a
+    // snapshot of the template as it stood when the journal was posted, and the server serves that.
+    // Re-resolving here from the live template list is exactly what made template edits still
+    // change a finalised run's grid, even though the server was already returning the frozen
+    // columns — the client was overriding a correct answer with a stale one.
+    if (runTemplate) return runTemplate;
+    // No run-resolved template (a run still being prepared, or an older response): fall back to
+    // matching the live templates, which is the right behaviour while the layout is not yet frozen.
     if (!activeRun || !psTemplates.length) return null;
     const runType = activeRun.payment_type_id ? String(activeRun.payment_type_id) : '';
     const runGroup = activeRun.deduction_group ? String(activeRun.deduction_group) : '';
@@ -2532,7 +2557,7 @@ export function Payroll() {
       ?? psTemplates.find(t => runGroup && !t.payment_type_id && String(t.deduction_group_id ?? '') === runGroup)
       ?? psTemplates.find(t => !t.payment_type_id && !t.deduction_group_id)
       ?? null;
-  }, [activeRun, psTemplates]);
+  }, [runTemplate, activeRun, psTemplates]);
 
   // Drives the payroll GRID and the Excel export, and reads `visible_columns` on purpose.
   // The PAYSLIP has its own list (`payslip_columns`, see Server/src/controllers/payslipController.js).
@@ -3373,6 +3398,7 @@ export function Payroll() {
           staleColumnCount={staleColumnCount}
           hiddenColIds={hiddenColIds}
           payslipHiddenColIds={payslipHiddenColIds}
+          templateFrozen={templateFrozen}
           aggregateColIds={aggregateColIds}
           netExcludedIds={netExcludedIds}
           approvalSettings={approvalSettings}
@@ -3384,7 +3410,7 @@ export function Payroll() {
           payslipEnabled={payslipEnabled}
           colLabelMap={new Map(pcRows.filter((c: PayrollCol) => c.payslip_label).map((c: PayrollCol) => [String(c.id), c.payslip_label!]))}
           payslipSettings={activeReportTemplate}
-          onBack={() => { setActiveRunId(null); setActiveRun(null); setGridData([]); setStaleColumnCount(0); setEditMode(false); setAuditLog([]); }}
+          onBack={() => { setActiveRunId(null); setActiveRun(null); setGridData([]); setRunTemplate(null); setTemplateFrozen(false); setStaleColumnCount(0); setEditMode(false); setAuditLog([]); }}
           onGenerate={generateRun}
           onFinalize={finalizeRun}
           onRetryGL={retryGL}
