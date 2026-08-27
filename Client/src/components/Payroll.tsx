@@ -2992,10 +2992,6 @@ export function Payroll() {
       const cur: string[] = f.visible_columns ?? [];
       return { ...f, visible_columns: cur.includes(id) ? cur.filter((x: string) => x !== id) : [...cur, id] };
     });
-    const toggleNetCol = (id: string) => setPsForm((f: any) => {
-      const cur: string[] = f.net_columns ?? [];
-      return { ...f, net_columns: cur.includes(id) ? cur.filter((x: string) => x !== id) : [...cur, id] };
-    });
     // Separate from toggleCol: `visible_columns` is the payroll grid and the Excel export,
     // `payslip_columns` is the payslip PDF. They used to be one list, so hiding a column from the
     // payslip also deleted it from the payroll report.
@@ -3003,7 +2999,6 @@ export function Payroll() {
       const cur: string[] = f.payslip_columns ?? [];
       return { ...f, payslip_columns: cur.includes(id) ? cur.filter((x: string) => x !== id) : [...cur, id] };
     });
-    const allIds = [...paymentCols, ...deductionCols].map((c: PayrollCol) => String(c.id));
 
     return (
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -3325,27 +3320,16 @@ export function Payroll() {
                     )}
                   </div>
 
-                  {/* Net Pay Columns */}
-                  <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3">
-                    <p className="text-[12px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                      <TrendingUp size={13} className="text-[var(--accent)]" /> Net Pay Columns
-                    </p>
-                    <p className="text-[11px] text-[var(--text-muted)] -mt-1">Leave all unselected to use each column's default net setting.</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {allIds.map(id => {
-                        const c = pcRows.find((col: PayrollCol) => String(col.id) === id);
-                        if (!c) return null;
-                        const sel = (ps.net_columns ?? []).includes(id);
-                        return (
-                          <button key={id} type="button" onClick={() => toggleNetCol(id)}
-                            className={sel ? 'pill pill-success text-[11px]' : 'text-[11px] text-[var(--text-muted)] border border-[var(--border)] rounded-full px-3 py-1 hover:border-[var(--success,#10b981)] transition-colors'}>
-                            {c.name}
-                          </button>
-                        );
-                      })}
-                      {allIds.length === 0 && <p className="text-[11px] text-[var(--text-muted)] italic">No columns configured yet.</p>}
-                    </div>
-                  </div>
+                  {/* Net Pay Columns used to be a third column picker here. It was removed from the
+                      editor: it was null on every template, so net pay actually came from each
+                      column's own "Include in Net Pay" flag (Payroll Columns tab) — which is where
+                      it belongs, since what makes up net pay is a property of the column, not of a
+                      template. Three overlapping column lists in one form is what made the original
+                      visible_columns bug so easy to miss.
+
+                      `net_columns` still exists in the database and payslipController still honours
+                      it as the highest-priority net override, so nothing breaks and the picker can
+                      come back if a template ever genuinely needs a different net basis. */}
                 </div>
 
                 {/* ── Right: sticky live preview ── */}

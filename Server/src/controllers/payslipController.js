@@ -103,6 +103,7 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   // ── Fetch run, settings, employee ──────────────────────────────────────────
   const [run] = await query`
     SELECT pr.id, pr.name, pr.date_start, pr.date_end, pr.status, pr.payment_type_id,
+           pr.template_snapshot,
            pf.name AS freq_name
     FROM payrollruns pr
     LEFT JOIN payfrequencies pf ON pf.id = pr.pay_frequency
@@ -148,19 +149,33 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     SELECT DISTINCT payrollcolumn_id FROM payrollcolumn_links`.catch(() => []);
   const aggregateIds = new Set(linkRows.map(r => String(r.payrollcolumn_id)));
 
+  // A run whose journal reached the bank carries the template as it stood at that moment. Its
+  // payslips are evidence of what was paid, so they must not change because someone later edited
+  // the template. Runs finalised before snapshots existed have none and resolve live, as before.
+  let snapshot = null;
+  if (run.template_snapshot) {
+    try {
+      const parsed = JSON.parse(run.template_snapshot);
+      if (parsed && typeof parsed === 'object') snapshot = parsed;
+    } catch {
+      console.warn(`[payslip] run ${runId} has an unreadable template_snapshot — resolving live instead`);
+    }
+  }
+
   // Find the best-matching template: payment type + group, then payment type,
   // then group, then the default template.
-  const allTemplates = await query`
+  const allTemplates = snapshot ? [] : await query`
     SELECT * FROM payslip_settings
     ORDER BY payment_type_id IS NULL ASC, deduction_group_id IS NULL ASC, id ASC`.catch(() => []);
   const [empPe] = await query`SELECT deduction_group FROM payrollemployees WHERE employee = ${BigInt(empId)} LIMIT 1`.catch(() => [null]);
   const empGroup = empPe?.deduction_group ? String(empPe.deduction_group) : null;
   const runPaymentType = run.payment_type_id ? String(run.payment_type_id) : null;
-  const [settings] = allTemplates
+  const [matched] = allTemplates
     .filter(t => runPaymentType && empGroup && String(t.payment_type_id) === runPaymentType && String(t.deduction_group_id) === empGroup)
     .concat(allTemplates.filter(t => runPaymentType && String(t.payment_type_id) === runPaymentType && !t.deduction_group_id))
     .concat(allTemplates.filter(t => empGroup && !t.payment_type_id && String(t.deduction_group_id) === empGroup))
     .concat(allTemplates.filter(t => !t.payment_type_id && !t.deduction_group_id));
+  const settings = snapshot ?? matched;
   const hasTemplate = !!settings;
   const s = settings || {};
 

@@ -3145,6 +3145,11 @@ model payrollruns {
   // the journal.
   bank_confirmed_at DateTime?          @db.DateTime(0)
   bank_confirmed_by BigInt?
+  // The report template as it stood when this run was finalised, stored as JSON. The template is
+  // otherwise resolved live from payslip_settings, so editing a template used to rewrite the report
+  // of every past run that matched it — including Completed runs already reconciled with the bank.
+  // Null on runs finalised before this existed; those still resolve live.
+  template_snapshot String?             @db.Text
 }
 
 // Per-run snapshot of the configured multi-stage approval flow + each stage's outcome. Written when a

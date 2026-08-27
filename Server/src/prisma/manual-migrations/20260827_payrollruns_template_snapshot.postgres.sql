@@ -1,0 +1,23 @@
+-- Freeze a payroll run's report layout when it is finalised.
+--
+-- WHY
+--
+-- resolveRunTemplate() looks the report template up LIVE, every time a run is rendered — it matches
+-- payslip_settings on the run's payment type and deduction group at read time. payrollruns stored
+-- nothing about which template a run used, so editing a template retroactively rewrote the report
+-- for every run that ever matched it, including Completed runs already reconciled with the bank.
+--
+-- A finalised run's report is evidence of what was paid. It must not change because someone later
+-- tidied up a template.
+--
+-- template_snapshot holds the resolved template as JSON (visible_columns, net_columns,
+-- payslip_columns and the branding fields) at the moment of finalisation. Runs that are finalised
+-- from now on render from the snapshot; anything still being prepared keeps following the live
+-- template, so fixing a template mid-preparation still works as before.
+--
+-- NULL means "no snapshot" — every run that already exists. Those keep resolving live exactly as
+-- they do today, so this changes nothing retroactively; it only stops the drift from here on.
+--
+-- Additive and nullable, safe to run BEFORE the code deploys.
+
+ALTER TABLE payrollruns ADD COLUMN IF NOT EXISTS template_snapshot TEXT NULL;

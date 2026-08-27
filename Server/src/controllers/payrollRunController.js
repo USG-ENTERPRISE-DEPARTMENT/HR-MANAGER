@@ -521,11 +521,26 @@ function parseTemplateColumns(raw) {
  * global default (neither set). Returns null when nothing matches.
  */
 async function resolveRunTemplate(runId) {
-  const [run] = await query`SELECT payment_type_id, deduction_group FROM payrollruns WHERE id = ${BigInt(runId)} LIMIT 1`;
+  const [run] = await query`SELECT payment_type_id, deduction_group, template_snapshot FROM payrollruns WHERE id = ${BigInt(runId)} LIMIT 1`;
   if (!run) return null;
+
+  // A finalised run carries the template as it stood when the journal was posted. Its report is
+  // evidence of what was paid, so it must not change because someone later edited the template.
+  // Runs finalised before snapshots existed have none and fall through to live resolution — which
+  // is the old behaviour, preserved deliberately rather than back-filled with today's template.
+  if (run.template_snapshot) {
+    try {
+      const snap = JSON.parse(run.template_snapshot);
+      if (snap && typeof snap === 'object') return snap;
+    } catch {
+      // A corrupt snapshot must not break the report; fall through and resolve live.
+      console.warn(`[payroll] run ${runId} has an unreadable template_snapshot — resolving live instead`);
+    }
+  }
+
   const pt = run.payment_type_id != null ? String(run.payment_type_id) : '';
   const dg = run.deduction_group != null ? String(run.deduction_group) : '';
-  const templates = await query`SELECT payment_type_id, deduction_group_id, visible_columns, net_columns FROM payslip_settings`;
+  const templates = await query`SELECT payment_type_id, deduction_group_id, visible_columns, net_columns, payslip_columns FROM payslip_settings`;
   const eq = (a, b) => String(a ?? '') === String(b ?? '');
   return (
     (pt && dg && templates.find(t => eq(t.payment_type_id, pt) && eq(t.deduction_group_id, dg))) ||
@@ -534,6 +549,54 @@ async function resolveRunTemplate(runId) {
     templates.find(t => (t.payment_type_id == null || t.payment_type_id === '') && (t.deduction_group_id == null || t.deduction_group_id === '')) ||
     null
   );
+}
+
+/**
+ * Capture the run's currently-resolved report template as JSON, for storing on the run.
+ *
+ * Called when a run's journal reaches the bank. Returns null when nothing matches — a run with no
+ * template shows every column, and that stays true however templates change later, so there is
+ * nothing to freeze.
+ *
+ * Resolves live on purpose: a run being finalised has no snapshot yet, and if it somehow did, the
+ * COALESCE at the call site keeps the first one rather than overwriting it.
+ */
+async function snapshotRunTemplate(runId) {
+  const [run] = await query`SELECT payment_type_id, deduction_group FROM payrollruns WHERE id = ${BigInt(runId)} LIMIT 1`;
+  if (!run) return null;
+  const pt = run.payment_type_id != null ? String(run.payment_type_id) : '';
+  const dg = run.deduction_group != null ? String(run.deduction_group) : '';
+  const templates = await query`SELECT * FROM payslip_settings`;
+  const eq = (a, b) => String(a ?? '') === String(b ?? '');
+  const t = (
+    (pt && dg && templates.find(x => eq(x.payment_type_id, pt) && eq(x.deduction_group_id, dg))) ||
+    (pt && templates.find(x => eq(x.payment_type_id, pt) && (x.deduction_group_id == null || x.deduction_group_id === ''))) ||
+    (dg && templates.find(x => (x.payment_type_id == null || x.payment_type_id === '') && eq(x.deduction_group_id, dg))) ||
+    templates.find(x => (x.payment_type_id == null || x.payment_type_id === '') && (x.deduction_group_id == null || x.deduction_group_id === '')) ||
+    null
+  );
+  if (!t) return null;
+  // Store the id and name too so the report can say which template it was rendered from, and so a
+  // renamed or deleted template is still traceable.
+  return JSON.stringify({
+    template_id: t.id != null ? String(t.id) : null,
+    template_name: t.template_name ?? null,
+    payment_type_id: t.payment_type_id != null ? String(t.payment_type_id) : null,
+    deduction_group_id: t.deduction_group_id != null ? String(t.deduction_group_id) : null,
+    visible_columns: t.visible_columns ?? null,
+    net_columns: t.net_columns ?? null,
+    payslip_columns: t.payslip_columns ?? null,
+    company_name: t.company_name ?? null,
+    company_address: t.company_address ?? null,
+    header_note: t.header_note ?? null,
+    footer_note: t.footer_note ?? null,
+    accent_color: t.accent_color ?? null,
+    show_emp_id: !!t.show_emp_id,
+    show_department: !!t.show_department,
+    show_position: !!t.show_position,
+    show_bank_account: !!t.show_bank_account,
+    snapshot_at: new Date().toISOString(),
+  });
 }
 
 // GET /payroll/runs/:id/data — retrieve all payroll cells for a run (employee × column), with stale-column warning count.
@@ -1056,8 +1119,17 @@ const finalizePayroll = asyncHandler(async (req, res) => {
   // Never overwrite a real reference with NULL — on a failed posting `documentRef` is null, and a
   // blind write would erase a reference the bank already holds.
   const refToStore = documentRef ?? run.document_ref ?? null;
+
+  // Freeze the report layout for a run that actually reached the bank. From here its report is
+  // evidence of what was paid, so a later template edit must not rewrite it.
+  //
+  // Deliberately NOT taken on a 'GL Failed' finalize: that run stays editable and gets retried, so
+  // freezing a layout it might still change would be wrong. retryGLPosting takes the snapshot when
+  // the retry succeeds instead.
+  const snapshot = finalStatus === 'GL Failed' ? null : await snapshotRunTemplate(id);
   await exec`
     UPDATE payrollruns SET status=${statusSql}, document_ref=${refToStore}, payment_log=${paymentLog},
+      template_snapshot=COALESCE(${snapshot}, template_snapshot),
       finalized_at=NOW(), updated_at=NOW() WHERE id=${BigInt(id)}`;
   await logAudit(id, 'finalize', req, { documentRef, status: finalStatus });
   logActivity({ module: 'Payroll', action: 'finalize', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef, status: finalStatus } });
@@ -1094,8 +1166,12 @@ const retryGLPosting = asyncHandler(async (req, res) => {
 
   try {
     const result = await buildAndPostGL(id, req, run.name);
+    // The journal has now reached the bank, so freeze the report layout here too — the finalize
+    // path deliberately skipped it while the run was still 'GL Failed' and retryable.
+    const snapshot = await snapshotRunTemplate(id);
     await exec`
       UPDATE payrollruns SET status='Bank Pending', document_ref=${result.documentRef}, payment_log=${JSON.stringify(result.raw)},
+        template_snapshot=COALESCE(${snapshot}, template_snapshot),
         updated_at=NOW() WHERE id=${BigInt(id)}`;
     logActivity({ module: 'Payroll', action: 'gl_retry_success', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef: result.documentRef } });
     const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
