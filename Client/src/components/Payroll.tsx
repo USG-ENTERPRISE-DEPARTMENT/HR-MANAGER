@@ -496,7 +496,7 @@ function FormulaInput({
 // ─── Payroll Grid ─────────────────────────────────────────────────────────────
 
 function PayslipSlideOver({
-  empId, empName, empIndex, gridData, hiddenColIds, netExcludedIds, aggregateColIds,
+  empId, empName, empIndex, gridData, hiddenColIds, netExcludedIds, aggregateColIds, colPayslipMeta,
   runName, runPeriod, colLabelMap, settings, onClose,
 }: {
   empId: string; empName: string; empIndex: number;
@@ -504,6 +504,9 @@ function PayslipSlideOver({
   // payslipHiddenColIds so this preview matches the printed PDF.
   gridData: GridCell[]; hiddenColIds: Set<string>; netExcludedIds: Set<string>;
   aggregateColIds: Set<string>;
+  // Per-column payslip section + whether a moved column counts, so this preview lays out the same
+  // way the PDF does.
+  colPayslipMeta: Map<string, { section: string; inTotal: boolean }>;
   runName: string; runPeriod: string; colLabelMap: Map<string, string>;
   settings: any | null; onClose: () => void;
 }) {
@@ -517,12 +520,30 @@ function PayslipSlideOver({
   const cells = gridData.filter(c => c.employee === empId);
   const visible = cells.filter(c => !hiddenColIds.has(String(c.payroll_item)))
     .sort((a, b) => (a.colorder ?? 99999) - (b.colorder ?? 99999));
-  const earnings   = visible.filter(c => c.payment_deduction !== 'Deduction');
-  const deductions = visible.filter(c => c.payment_deduction === 'Deduction');
-  // Aggregates (Gross, Total Allowance, Total Deduction) are subtotals of the rows beside them.
-  // Adding them to a total counts the same money twice — the payslip PDF excludes them too.
+
+  // Mirror payslipController's rules exactly — this preview and the printed PDF must agree.
+  //
+  //   side      : payslip_section overrides payment_deduction ('info' sits outside both totals)
+  //   itemised  : printed rows exclude aggregates, which render as their own subtotal rows
+  //   totals    : sum itemised rows only; a column moved off its natural side counts only when
+  //               payslip_in_total says so, so an employer contribution shown under Deductions
+  //               does not drag the printed net below what the employee is actually paid
+  const sideOf = (c: GridCell) =>
+    colPayslipMeta.get(String(c.payroll_item))?.section
+      ?? (c.payment_deduction === 'Deduction' ? 'deductions' : 'earnings');
+  const naturalSide = (c: GridCell) => (c.payment_deduction === 'Deduction' ? 'deductions' : 'earnings');
+  const countsInTotal = (c: GridCell) =>
+    sideOf(c) === naturalSide(c) || !!colPayslipMeta.get(String(c.payroll_item))?.inTotal;
+  const isAggregate = (c: GridCell) => aggregateColIds.has(String(c.payroll_item));
+
+  const earnings   = visible.filter(c => sideOf(c) === 'earnings'   && !isAggregate(c));
+  const deductions = visible.filter(c => sideOf(c) === 'deductions' && !isAggregate(c));
+  const infoRows   = visible.filter(c => sideOf(c) === 'info');
+  const earningTotals   = visible.filter(c => sideOf(c) === 'earnings'   && isAggregate(c));
+  const deductionTotals = visible.filter(c => sideOf(c) === 'deductions' && isAggregate(c));
+
   const sumReal = (rows: GridCell[]) => rows
-    .filter(c => !aggregateColIds.has(String(c.payroll_item)))
+    .filter(countsInTotal)
     .reduce((s, c) => s + (parseFloat(c.amount ?? '0') || 0), 0);
   const grossPay   = sumReal(earnings);
   const totalDed   = sumReal(deductions);
@@ -624,6 +645,16 @@ function PayslipSlideOver({
                     </div>
                   ))
                 }
+                {/* Aggregate columns (Total Allowance, Gross) print as their own bold subtotal rows
+                    in place, and are excluded from Gross Pay so nothing is counted twice. */}
+                {earningTotals.map(c => (
+                  <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] last:border-0 bg-[var(--bg)]">
+                    <span className="text-[12px] font-bold text-[var(--text-primary)]">{colLabelMap.get(c.payroll_item) ?? c.column_name}</span>
+                    <span className="text-[12px] font-bold text-[var(--text-primary)] tabular-nums">
+                      {fmt(parseFloat(c.amount ?? '0') || 0)}
+                    </span>
+                  </div>
+                ))}
                 <div className="flex items-center justify-between px-4 py-2.5 border-t-2" style={{ borderColor: accent, background: `${accent}10` }}>
                   <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: accent }}>Gross Pay</span>
                   <span className="text-[13px] font-bold tabular-nums" style={{ color: accent }}>{fmt(grossPay)}</span>
@@ -644,10 +675,36 @@ function PayslipSlideOver({
                       </span>
                     </div>
                   ))}
+                  {deductionTotals.map(c => (
+                    <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)] last:border-0 bg-[var(--bg)]">
+                      <span className="text-[12px] font-bold text-[var(--text-primary)]">{colLabelMap.get(c.payroll_item) ?? c.column_name}</span>
+                      <span className="text-[12px] font-bold text-[var(--danger)] tabular-nums">
+                        ({fmt(parseFloat(c.amount ?? '0') || 0)})
+                      </span>
+                    </div>
+                  ))}
                   <div className="flex items-center justify-between px-4 py-2.5 border-t-2 border-[var(--danger)] bg-[var(--danger-dim,rgba(239,68,68,0.07))]">
                     <span className="text-[11px] font-bold text-[var(--danger)] uppercase tracking-wide">Total Deductions</span>
                     <span className="text-[13px] font-bold text-[var(--danger)] tabular-nums">({fmt(totalDed)})</span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* For information: amounts that belong to neither subtotal — employer contributions and
+                the like. Shown below the totals so they cannot be read as part of the net. */}
+            {infoRows.length > 0 && (
+              <div className="px-5 pt-2 pb-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2 text-[var(--text-muted)]">For information</p>
+                <div className="rounded-[10px] border border-dashed border-[var(--border)] overflow-hidden bg-[var(--bg)]">
+                  {infoRows.map(c => (
+                    <div key={c.id} className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] last:border-0">
+                      <span className="text-[11.5px] text-[var(--text-muted)]">{colLabelMap.get(c.payroll_item) ?? c.column_name}</span>
+                      <span className="text-[11.5px] text-[var(--text-muted)] tabular-nums">
+                        {fmt(parseFloat(c.amount ?? '0') || 0)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -676,7 +733,7 @@ function PayslipSlideOver({
 
 function PayrollGrid({
   gridData, activeRun, editMode, generating, finalizing, retryingGL, confirmingPaid, submitting, approving, rejecting,
-  staleColumnCount, hiddenColIds, payslipHiddenColIds, aggregateColIds, netExcludedIds, templateFrozen, approvalSettings, currentUserId, currentUserRoles, runStages,
+  staleColumnCount, hiddenColIds, payslipHiddenColIds, aggregateColIds, colPayslipMeta, netExcludedIds, templateFrozen, approvalSettings, currentUserId, currentUserRoles, runStages,
   auditLog, auditLoading, payslipEnabled, colLabelMap, payslipSettings,
   onBack, onGenerate, onFinalize, onRetryGL, onConfirmPaid, onExport, onToggleEdit, onCellUpdate, onReorderCols,
   onSubmit, onApprove, onReject, onLoadAudit, onNewRun,
@@ -699,6 +756,7 @@ function PayrollGrid({
   // True once this run's report layout is frozen to a snapshot taken at GL-posting time.
   templateFrozen?: boolean;
   aggregateColIds: Set<string>;
+  colPayslipMeta: Map<string, { section: string; inTotal: boolean }>;
   netExcludedIds: Set<string>;
   approvalSettings: { payrollApproval: boolean; selfApproval: boolean };
   currentUserId: string | null;
@@ -1420,6 +1478,7 @@ function PayrollGrid({
         hiddenColIds={payslipHiddenColIds}
         netExcludedIds={netExcludedIds}
         aggregateColIds={aggregateColIds}
+        colPayslipMeta={colPayslipMeta}
         colLabelMap={colLabelMap}
         runName={activeRun.name}
         runPeriod={activeRun.date_start
@@ -2600,6 +2659,24 @@ export function Payroll() {
     [pcRows],
   );
 
+  // Per-column payslip presentation, so the in-app preview lays a payslip out the same way the PDF
+  // does. Without these the preview splits purely on payment_deduction, which puts an 'info' column
+  // (an employer contribution) under Earnings and counts it in the total — inflating both subtotals
+  // by the same amount, so Net Pay still looks right while neither subtotal is real.
+  const colPayslipMeta = useMemo(() => {
+    const m = new Map<string, { section: string; inTotal: boolean }>();
+    for (const c of pcRows) {
+      const forced = String((c as any).payslip_section || '').toLowerCase();
+      m.set(String(c.id), {
+        section: ['earnings', 'deductions', 'info'].includes(forced)
+          ? forced
+          : (c.payment_deduction === 'Deduction' ? 'deductions' : 'earnings'),
+        inTotal: !!(c as any).payslip_in_total,
+      });
+    }
+    return m;
+  }, [pcRows]);
+
   const netExcludedIds = useMemo(
     () => {
       const selected = parseTemplateIds(activeReportTemplate?.net_columns);
@@ -3400,6 +3477,7 @@ export function Payroll() {
           payslipHiddenColIds={payslipHiddenColIds}
           templateFrozen={templateFrozen}
           aggregateColIds={aggregateColIds}
+          colPayslipMeta={colPayslipMeta}
           netExcludedIds={netExcludedIds}
           approvalSettings={approvalSettings}
           currentUserId={currentUserId}
