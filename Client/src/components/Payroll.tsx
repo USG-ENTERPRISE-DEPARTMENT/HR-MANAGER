@@ -2694,7 +2694,11 @@ export function Payroll() {
   const filteredPe = useMemo(() => peRows.filter(r => {
     const matchSearch = (r.emp_name ?? '').toLowerCase().includes(peSearch.toLowerCase()) ||
       (r.freq_name ?? '').toLowerCase().includes(peSearch.toLowerCase());
-    const matchFreq = !peFreqFilter || r.pay_frequency === peFreqFilter;
+    // Compare as strings on BOTH sides. The chip stores String(pf.id) while the API returns
+    // pay_frequency as a number, so a strict `4 === '4'` was always false and every frequency
+    // filter came back empty. The declared type says `string | null`, which is why the compiler
+    // never caught it.
+    const matchFreq = !peFreqFilter || String(r.pay_frequency ?? '') === String(peFreqFilter);
     return matchSearch && matchFreq;
   }), [peRows, peSearch, peFreqFilter]);
 
