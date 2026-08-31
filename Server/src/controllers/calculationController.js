@@ -224,6 +224,8 @@ const updatePayrollColumn = asyncHandler(async (req, res) => {
     salarycomponent_gl, posting_column, posting_branch, deduction_groups,
     component_ids, add_column_ids, sub_column_ids, calculation_function,
     calculation_rule, visible, include_in_net, payslip_label,
+    // Payslip presentation only — neither affects the calculation or the GL posting.
+    payslip_section, payslip_in_total = 0,
   } = req.body;
   if (!name?.trim()) return respond.badReq(res, 'Name is required');
 
