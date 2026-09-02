@@ -9,8 +9,8 @@
     "dev": "nodemon server.js",
     "smoke": "node smoke/run.js",
     "cert:generate": "node scripts/generate-cert.js",
-    "db:use-mysql": "prisma generate --schema=src/prisma/schema.prisma && echo Client now on MYSQL (reads DATABASE_URL) — restart the server.",
-    "db:use-pg": "prisma generate --schema=src/prisma/schema.postgres.prisma && echo Client now on POSTGRES (reads PG_URL) — restart the server.",
+    "db:use-mysql": "prisma generate --schema=src/prisma/schema.prisma && echo Client now on MYSQL - reads DATABASE_URL. Restart the server.",
+    "db:use-pg": "prisma generate --schema=src/prisma/schema.postgres.prisma && echo Client now on POSTGRES - reads PG_URL. Restart the server.",
     "db:which": "node -e \"const{prisma}=require('./src/helpers/dbQueryHelper');console.log('Active Prisma client provider:',prisma._activeProvider)\""
   },
   "prisma": {
