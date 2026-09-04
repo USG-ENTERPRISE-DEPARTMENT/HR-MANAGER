@@ -152,8 +152,11 @@ const limit2dp = (v: any): string => {
 // and the read-only View slide-over. `template.visible_columns` must be an array of column ids.
 // `logoUrl` is passed in rather than read from `template`: the logo is one app-wide value from
 // App Setup, so the preview must show the same image the PDF will print.
-function PayslipTemplatePreview({ template, paymentCols, deductionCols, logoUrl }: {
+function PayslipTemplatePreview({ template, paymentCols, deductionCols, logoUrl, companyName, companyAddress }: {
   template: any; paymentCols: PayrollCol[]; deductionCols: PayrollCol[]; logoUrl?: string;
+  // Company details are passed in for the same reason as logoUrl: they are one app-wide value
+  // from App Setup, so the preview must show what the PDF will actually print.
+  companyName?: string; companyAddress?: string;
 }) {
   const accent = template.accent_color || '#3B82F6';
   // Mirror the PDF: prefer the payslip's own column list, fall back to the report list. Reading
@@ -177,8 +180,8 @@ function PayslipTemplatePreview({ template, paymentCols, deductionCols, logoUrl 
       <div className="px-5 py-3 flex items-center gap-3" style={{ background: accent }}>
         {logoUrl && <img src={logoUrl} alt="" className="h-8 w-8 rounded object-contain bg-white/20 shrink-0" />}
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-white text-[13px] truncate">{template.company_name || 'Company Name'}</p>
-          {template.company_address && <p className="text-white/75 text-[10px] mt-0.5 truncate">{template.company_address}</p>}
+          <p className="font-bold text-white text-[13px] truncate">{companyName || template.company_name || 'Company Name'}</p>
+          {(companyAddress || template.company_address) && <p className="text-white/75 text-[10px] mt-0.5 truncate">{companyAddress || template.company_address}</p>}
         </div>
         <div className="text-right shrink-0">
           <p className="text-white/90 font-semibold text-[11px]">PAYSLIP</p>
@@ -512,7 +515,7 @@ function PayslipSlideOver({
 }) {
   // The company logo/name come from the report template if set, otherwise fall back to the
   // global App Setup (Settings → System → App Setup), so an uploaded company logo shows by default.
-  const [appSetup, setAppSetup] = useState<{ company_name?: string; company_logo?: string } | null>(null);
+  const [appSetup, setAppSetup] = useState<{ company_name?: string; company_address?: string; company_logo?: string } | null>(null);
   useEffect(() => {
     api.get('/settings/app-setup').then(r => setAppSetup(r.data?.data ?? r.data)).catch(() => {});
   }, []);
@@ -552,8 +555,9 @@ function PayslipSlideOver({
     .reduce((s, c) => s + (c.payment_deduction === 'Deduction' ? -1 : 1) * (parseFloat(c.amount ?? '0') || 0), 0);
 
   const accent  = settings?.accent_color || '#3B82F6';
-  const company = settings?.company_name || appSetup?.company_name || '';
-  const address = settings?.company_address || '';
+  // App Setup first, template only as a fallback — the same order the PDF uses.
+  const company = appSetup?.company_name || settings?.company_name || '';
+  const address = appSetup?.company_address || settings?.company_address || '';
   // One logo app-wide, from Settings > System > App Setup. Templates no longer carry their own:
   // which template renders a payslip depends on payment type and deduction group, so a per-template
   // logo meant the preview and the printed PDF could disagree.
@@ -1555,7 +1559,7 @@ function PayrollGrid({
 
 export function Payroll() {
   // The one company logo, used by every payslip template (Settings > System > App Setup).
-  const [appSetup, setAppSetup] = useState<{ company_name?: string; company_logo?: string } | null>(null);
+  const [appSetup, setAppSetup] = useState<{ company_name?: string; company_address?: string; company_logo?: string } | null>(null);
   useEffect(() => {
     api.get('/settings/app-setup').then(r => setAppSetup(r.data?.data ?? r.data)).catch(() => {});
   }, []);
@@ -3246,12 +3250,26 @@ export function Payroll() {
                     <p className="text-[12px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
                       <Palette size={13} className="text-[var(--accent)]" /> Branding
                     </p>
-                    <FormField label="Company Name">
-                      <input className={inputClass} value={ps.company_name} onChange={e => setPsForm((f: any) => ({ ...f, company_name: e.target.value }))} placeholder="e.g. Acme Corp Ltd" />
-                    </FormField>
-                    <FormField label="Company Address">
-                      <CountedTextarea className={inputClass} rows={2} maxChars={500} value={ps.company_address} onChange={e => setPsForm((f: any) => ({ ...f, company_address: e.target.value }))} placeholder="Full address..." />
-                    </FormField>
+                    {/* Company name and address are configured once in Settings > System > App Setup,
+                        like the logo. They are shown here read-only: a payslip is rendered by whichever
+                        template matches its payment type and deduction group, so a per-template name
+                        meant the name you saw while editing was often not the one printed — and
+                        renaming the company meant editing every template. */}
+                    <div>
+                      <p className="text-[11.5px] font-semibold text-[var(--text-muted)] mb-1.5">Company Details</p>
+                      <div className="rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 space-y-1">
+                        <p className="text-[13px] font-semibold text-[var(--text-primary)]">
+                          {appSetup?.company_name || <span className="text-[var(--text-muted)] font-normal">No company name set</span>}
+                        </p>
+                        {appSetup?.company_address && (
+                          <p className="text-[11.5px] text-[var(--text-muted)] whitespace-pre-line">{appSetup.company_address}</p>
+                        )}
+                        <p className="text-[11px] text-[var(--text-muted)] pt-1">
+                          Used on every payslip, the careers portal and outgoing email. Change it in
+                          {' '}<span className="font-semibold text-[var(--text-primary)]">Settings &rarr; System &rarr; App Setup</span>.
+                        </p>
+                      </div>
+                    </div>
                     {/* The logo is configured once in Settings > System > App Setup and used by every
                         template, the careers portal and outgoing email. Showing an upload here would let
                         someone set a value that has no effect on the printed payslip. */}
@@ -3468,7 +3486,7 @@ export function Payroll() {
                 <div className="w-72 shrink-0">
                   <div className="sticky top-4">
                     <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Live Preview</p>
-                    <PayslipTemplatePreview template={ps} paymentCols={paymentCols} deductionCols={deductionCols} logoUrl={appLogoUrl} />
+                    <PayslipTemplatePreview template={ps} paymentCols={paymentCols} deductionCols={deductionCols} logoUrl={appLogoUrl} companyName={appSetup?.company_name} companyAddress={appSetup?.company_address} />
                   </div>
                 </div>
               </div>
@@ -4071,6 +4089,8 @@ export function Payroll() {
                     paymentCols={pcRows.filter((c: PayrollCol) => c.payment_deduction === 'Payment')}
                     deductionCols={pcRows.filter((c: PayrollCol) => c.payment_deduction === 'Deduction')}
                     logoUrl={appLogoUrl}
+                    companyName={appSetup?.company_name}
+                    companyAddress={appSetup?.company_address}
                   />
                 </div>
               );

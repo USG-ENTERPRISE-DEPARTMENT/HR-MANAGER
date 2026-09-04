@@ -257,7 +257,7 @@ const saveModuleSettings = asyncHandler(async (req, res) => {
   return respond.ok(res, 'Module settings saved');
 });
 
-// ── App Setup (company name + logo) ───────────────────────────────────────────
+// ── App Setup (company name, address + logo) ─────────────────────────────────
 // Persisted in the settings table under category 'app_setup' so App Setup edits survive reloads.
 
 // GET /settings/app-setup
@@ -269,13 +269,20 @@ const getAppSetup = asyncHandler(async (req, res) => {
   for (const r of rows) map[r.name] = r.value ?? '';
   return respond.ok(res, 'App setup', {
     company_name: map.company_name ?? '',
+    // Printed under the company name on payslips and used by the public portals. Held here rather
+    // than per payslip template, so changing it does not mean editing every template.
+    company_address: map.company_address ?? '',
     company_logo: map.company_logo ?? '',
   });
 });
 
 // PUT /settings/app-setup
 const saveAppSetup = asyncHandler(async (req, res) => {
-  const fields = { company_name: req.body.company_name, company_logo: req.body.company_logo };
+  const fields = {
+    company_name:    req.body.company_name,
+    company_address: req.body.company_address,
+    company_logo:    req.body.company_logo,
+  };
   await prisma.$transaction(async (tx) => {
     for (const [name, value] of Object.entries(fields)) {
       if (value === undefined) continue;

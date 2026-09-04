@@ -647,7 +647,9 @@ const getPayslipTemplates = asyncHandler(async (_req, res) => {
 
 // POST /calculation/payslip-templates — create a payslip template with branding, visible column list, and display flags.
 const createPayslipTemplate = asyncHandler(async (req, res) => {
-  // company_logo_url is deliberately NOT read: the logo comes from App Setup for every template.
+  // company_logo_url, company_name and company_address are deliberately NOT read from the request:
+  // all three come from App Setup for every template. The columns still exist and any value already
+  // stored is used as a fallback, so nothing breaks before App Setup is filled in.
   const { template_name, deduction_group_id, payment_type_id, company_name, company_address,
           header_note, footer_note, accent_color, show_emp_id, show_department,
           show_position, show_bank_account, visible_columns, net_columns,
@@ -676,7 +678,9 @@ const createPayslipTemplate = asyncHandler(async (req, res) => {
 const updatePayslipTemplate = asyncHandler(async (req, res) => {
   const id = toBigInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
-  // company_logo_url is deliberately NOT read: the logo comes from App Setup for every template.
+  // company_logo_url, company_name and company_address are deliberately NOT read from the request:
+  // all three come from App Setup for every template. The columns still exist and any value already
+  // stored is used as a fallback, so nothing breaks before App Setup is filled in.
   const { template_name, deduction_group_id, payment_type_id, company_name, company_address,
           header_note, footer_note, accent_color, show_emp_id, show_department,
           show_position, show_bank_account, visible_columns, net_columns,

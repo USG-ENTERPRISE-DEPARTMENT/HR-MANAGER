@@ -10,6 +10,7 @@ const { sendSchedulingInvite, sendInterviewConfirmation, buildIcs, sendCandidate
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const { toBigInt, s } = require('../helpers/controllerHelpers');
+const { getCompanyBranding } = require('../helpers/settingsHelper');
 
 // job_status enum: Prisma client value is 'On_hold' (DB stores "On hold"); the UI uses 'On Hold'.
 // Normalise between the two so the client can keep using the spaced label everywhere.
@@ -106,11 +107,11 @@ const createJob = asyncHandler(async (req, res) => {
     experienceLevel, jobFunction, educationLevel, currency, attachment,
   } = req.body;
 
-  // Auto-fill companyName from payslip_settings
-  const psRow = await prisma.payslip_settings
-    .findFirst({ select: { company_name: true } })
-    .catch(() => null);
-  const resolvedCompanyName = psRow?.company_name ?? null;
+  // Company name comes from App Setup (Settings → System → App Setup), the one place it is
+  // configured. This used to read payslip_settings.findFirst() — whichever payslip TEMPLATE
+  // happened to be first — so adding or reordering templates could silently change the company
+  // name stamped on new job postings.
+  const resolvedCompanyName = (await getCompanyBranding().catch(() => null))?.name || null;
 
   const job = await prisma.job.create({
     data: {
@@ -160,11 +161,8 @@ const updateJob = asyncHandler(async (req, res) => {
     experienceLevel, jobFunction, educationLevel, currency, attachment,
   } = req.body;
 
-  // Keep companyName in sync with payslip_settings
-  const psRow = await prisma.payslip_settings
-    .findFirst({ select: { company_name: true } })
-    .catch(() => null);
-  const resolvedCompanyName = psRow?.company_name ?? null;
+  // Keep companyName in sync with App Setup — see the note on the create path above.
+  const resolvedCompanyName = (await getCompanyBranding().catch(() => null))?.name || null;
 
   const job = await prisma.job.update({
     where: { id },
@@ -590,7 +588,6 @@ const hireCandidate = asyncHandler(async (req, res) => {
 const getPublicSettings = asyncHandler(async (req, res) => {
   // From App Setup, not from a payslip template. `company_logo_url` is kept as the response key so
   // the public portals do not need changing; only where the value comes from has moved.
-  const { getCompanyBranding } = require('../helpers/settingsHelper');
   const b = await getCompanyBranding();
   return respond.ok(res, 'Settings', {
     company_name:     b.name,

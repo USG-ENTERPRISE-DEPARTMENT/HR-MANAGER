@@ -19,6 +19,7 @@ const logoUrl = (name?: string) =>
 const initialAppSetup = {
   id: 1,
   companyName: 'UNION SYSTEMS Global Solutions',
+  companyAddress: '',
   logoName: 'usg_logo.png',
 };
 
@@ -96,7 +97,7 @@ export function System() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
 
   /* ── App Setup form state ─────────────────────────────────────────────── */
-  const [setupForm, setSetupForm]       = useState({ companyName: '', logoName: '' });
+  const [setupForm, setSetupForm]       = useState({ companyName: '', companyAddress: '', logoName: '' });
   const [logoPreview, setLogoPreview]   = useState<string>('');   // object URL of the chosen logo file
   const [logoUploading, setLogoUploading] = useState(false);
 
@@ -108,6 +109,7 @@ export function System() {
         setAppSetup(prev => ({
           ...prev,
           companyName: d.company_name || prev.companyName,
+          companyAddress: d.company_address || '',
           logoName:    d.company_logo || '',
         }));
       })
@@ -210,7 +212,7 @@ export function System() {
      HANDLERS — App Setup
   ───────────────────────────────────────────────────────────────────────── */
   const openEditSetup = () => {
-    setSetupForm({ companyName: appSetup.companyName, logoName: appSetup.logoName });
+    setSetupForm({ companyName: appSetup.companyName, companyAddress: appSetup.companyAddress ?? '', logoName: appSetup.logoName });
     setLogoPreview(logoUrl(appSetup.logoName));   // show the saved logo when editing
     setIsFormOpen(true);
   };
@@ -231,7 +233,7 @@ export function System() {
 
   const handleSaveSetup = async () => {
     try {
-      await api.put('/settings/app-setup', { company_name: setupForm.companyName, company_logo: setupForm.logoName });
+      await api.put('/settings/app-setup', { company_name: setupForm.companyName, company_address: setupForm.companyAddress, company_logo: setupForm.logoName });
       setAppSetup((prev) => ({ ...prev, ...setupForm }));
       setIsFormOpen(false);
       toast.success('App setup updated');
@@ -816,6 +818,15 @@ export function System() {
                 value={setupForm.companyName}
                 onChange={(e) => setSetupForm({ ...setupForm, companyName: e.target.value })}
                 placeholder="Enter company name"
+              />
+            </div>
+            <div>
+              <label className="label">Company Address</label>
+              <textarea
+                rows={2}
+                value={setupForm.companyAddress}
+                onChange={(e) => setSetupForm({ ...setupForm, companyAddress: e.target.value })}
+                placeholder="Printed under the company name on payslips"
               />
             </div>
             <div>

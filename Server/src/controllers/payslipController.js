@@ -262,11 +262,17 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     : netRow ? parseFloat(netRow.amount || '0')
     : (totalEarnings - totalDeductions);
 
-  // Company branding: template first, then global App Setup (Settings → System → App Setup).
+  // Company branding comes from App Setup (Settings → System → App Setup), not from the template.
   const setupRows = await prisma.settings.findMany({ where: { category: 'app_setup' }, select: { name: true, value: true } }).catch(() => []);
   const setup = {};
   setupRows.forEach(r => { setup[r.name] = r.value; });
-  const companyName = s.company_name || setup.company_name || 'Payslip';
+  // The company name follows the logo: one value app-wide. Which template renders a payslip
+  // depends on payment type and deduction group, so a per-template name meant the name shown while
+  // editing one template was often not the one printed — and renaming the company meant editing
+  // every template. A template that still carries its own name is used only as a fallback for an
+  // App Setup that has none, so nothing breaks before the name is filled in.
+  const companyName = setup.company_name || s.company_name || 'Payslip';
+  const companyAddress = setup.company_address || s.company_address || '';
   // The logo always comes from App Setup, never from the template. Per-template logos were
   // confusing rather than useful: which template renders a payslip depends on payment type and
   // deduction group, so the logo shown while editing one template was often not the one printed.
@@ -297,8 +303,8 @@ const downloadPayslip = asyncHandler(async (req, res) => {
 
   doc.fillColor('white').font('Helvetica-Bold').fontSize(16)
     .text(companyName, textX, 65, { width: doc.page.width - 130 - textX });
-  if (s.company_address) {
-    doc.fillColor('white').font('Helvetica').fontSize(8).text(s.company_address, textX, 85, { width: doc.page.width - 130 - textX });
+  if (companyAddress) {
+    doc.fillColor('white').font('Helvetica').fontSize(8).text(companyAddress, textX, 85, { width: doc.page.width - 130 - textX });
   }
   doc.fillColor('white').font('Helvetica').fontSize(9)
     .text('PAYSLIP', doc.page.width - 130, 72, { align: 'right', width: 80 })
