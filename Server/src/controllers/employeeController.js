@@ -1701,7 +1701,12 @@ const getEmployeeDirectory = asyncHandler(async (req, res) => {
            e.hireDate, e.confirmationDate,
            COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS job_title,
            COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department,
-           COALESCE(br.title, CONCAT(e.branchId, ''))     AS branch
+           COALESCE(br.title, CONCAT(e.branchId, ''))     AS branch,
+           -- Deliberately NOT wrapped in the COALESCE(..., branchId) fallback used for the labels
+           -- above: that substitutes the raw id when the join misses, which is a readable hint in a
+           -- display name but would be a WRONG branch code to a caller that matches on it. A null
+           -- says "unknown", which is the truth.
+           br.comp_code                                   AS branch_code
     FROM employee e
     LEFT JOIN codelistvalue      jt   ON jt.id   = e.jobTitleId
     LEFT JOIN companystructures  dept ON dept.id = e.departmentId
@@ -1735,7 +1740,57 @@ const getEmployeeDirectory = asyncHandler(async (req, res) => {
       jobTitle:        r.job_title ?? null,
       department:      r.department ?? null,
       branch:          r.branch ?? null,
+      // The code the core banking system knows a branch by (companystructures.comp_code, e.g. '003').
+      // Null when the employee has no branch, or their branchId points at a structure that no longer
+      // exists — see the note on the SELECT.
+      branchCode:      r.branch_code ?? null,
       hireDate:        r.hiredate ?? r.hireDate ?? null,
+    })),
+  });
+});
+
+// ── Branch list for the core banking system (API key only) ───────────────────
+// GET /me/branches
+//
+// The companion to `branchCode` on the employee directory: that returns a code per employee, this
+// resolves a code to its name and address. Same key-only caller and auth model.
+//
+// Branches are rows in `companystructures` — the single table holding the whole org tree
+// (Head Office, Branch, Department, Unit, Outlet), which is what `employee.branchId` points at.
+// The legacy `branches` and `tb_branch` tables are NOT used: both are @@ignore'd in the schema and
+// referenced by no code.
+//
+// Not paginated. There are 20 branches (21 with Head Office) and the count is bounded by how many
+// offices the company physically has, so this cannot grow to a size worth paging.
+const getBranches = asyncHandler(async (req, res) => {
+  // Head Office is a separate structure type but carries a branch code ('000') and is the GL posting
+  // default, so a caller resolving codes needs it in the list. ?type=Branch narrows to real branches.
+  const typeFilter = String(req.query.type ?? '').trim().toLowerCase();
+  const types = typeFilter === 'branch'      ? ['Branch']
+              : typeFilter === 'head_office' ? ['Head_Office']
+              : ['Branch', 'Head_Office'];
+
+  const rows = await prisma.companystructures.findMany({
+    where: { type: { in: types } },
+    select: {
+      id: true, comp_code: true, title: true, description: true,
+      address: true, type: true, approval_status: true,
+    },
+    orderBy: { comp_code: 'asc' },
+  });
+
+  respond.ok(res, 'Branches retrieved', {
+    total: rows.length,
+    branches: rows.map(r => ({
+      id:          String(r.id),
+      // The code the bank matches on, and what `branchCode` on the employee directory returns.
+      code:        r.comp_code ?? null,
+      name:        r.title ?? null,
+      description: r.description ?? null,
+      address:     r.address ?? null,
+      // 'Branch' or 'Head Office' — the enum stores Head_Office, mapped here for display.
+      type:        r.type === 'Head_Office' ? 'Head Office' : (r.type ?? null),
+      approvalStatus: r.approval_status ?? null,
     })),
   });
 });
@@ -1743,6 +1798,7 @@ const getEmployeeDirectory = asyncHandler(async (req, res) => {
 module.exports = {
   roSupervisorBlock,
   getEmployeeDirectory,
+  getBranches,
   getAllEmployees,
   getEmployeeApprovals,
   getEmployeeApprovalFlow,

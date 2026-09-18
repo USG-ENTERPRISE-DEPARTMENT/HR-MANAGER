@@ -85,6 +85,12 @@ router.get('/payroll/runs/by-reference/:reference', apiKeyOnly, payrollRun.getPa
 // server-to-server endpoints rather than under /me/profile and friends.
 router.get('/employees', apiKeyOnly, employeeCtrl.getEmployeeDirectory);
 
+// ── Branch list (API key only) ───────────────────────────────────────────────
+// Companion to `branchCode` on the directory above: resolves a branch code to its name and address.
+// Same key-only caller, and mounted BEFORE `mobileAuth` for the same reason — reference data about
+// the company, not about any one person.
+router.get('/branches', apiKeyOnly, employeeCtrl.getBranches);
+
 router.use(mobileAuth);
 
 // ── Session / identity ───────────────────────────────────────────────────────

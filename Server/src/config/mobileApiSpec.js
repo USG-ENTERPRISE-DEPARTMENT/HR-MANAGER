@@ -697,6 +697,12 @@ spec.paths['/employees'] = {
               "nullable": true,
               "example": "Head Office"
             },
+            "branchCode": {
+              "type": "string",
+              "nullable": true,
+              "example": "003",
+              "description": "The branch code the core banking system knows the branch by. Null when the employee has no branch set, or their branch no longer exists. Resolve it against `GET /branches`."
+            },
             "hireDate": {
               "type": "string",
               "nullable": true,
@@ -720,6 +726,55 @@ spec.paths['/employees'] = {
 // Written longhand rather than via op(): that helper folds in COMMON_ERRORS, whose 403 and 404 text
 // describes self-scoped record access ("not owned by this employee"), which would misdescribe this
 // endpoint's failure modes.
+// ── Branch list ──────────────────────────────────────────────────────────────
+// Companion to `branchCode` on the employee directory. Written longhand for the same reason as the
+// endpoints around it: op() folds in COMMON_ERRORS, whose 403/404 text describes self-scoped access.
+spec.paths['/branches'] = {
+  get: {
+    tags: ['Core Banking'],
+    summary: 'List branches and Head Office',
+    description: "Reference data for resolving the `branchCode` returned by `GET /employees` to a\nbranch name and address.\n\nAuthenticated with the `x-api-key` header **alone** — no `x-employee-id`, because the caller is a\nsystem rather than a person. Nothing here is personal data: it describes the company's offices.\n\nHead Office is included by default. It is a distinct structure type but carries a branch code\n(`000`) and is the GL posting default, so a caller resolving codes needs it. Use `?type=Branch` to\nexclude it.\n\nNot paginated — the list is bounded by the number of offices the company physically has.",
+    security: [{ ApiKeyAuth: [] }],
+    parameters: [
+      {
+        name: 'type',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['Branch', 'Head_Office'], example: 'Branch' },
+        description: 'Narrow to one structure type. Omit for branches **and** Head Office.',
+      },
+    ],
+    responses: {
+      200: {
+        description: 'Success',
+        content: { 'application/json': { schema: okEnvelope({
+          type: 'object',
+          properties: {
+            total: { type: 'integer', example: 21, description: 'Number of rows returned. There is no paging.' },
+            branches: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id:   id('270'),
+                  code: { type: 'string', nullable: true, example: '003', description: 'What `branchCode` on the employee directory returns, and what the bank matches on.' },
+                  name: { type: 'string', nullable: true, example: 'BO BRANCH' },
+                  description: { type: 'string', nullable: true, example: 'Bo Branch' },
+                  address: { type: 'string', nullable: true, example: '12 Fenton Road, Bo' },
+                  type: { type: 'string', nullable: true, example: 'Branch', description: "'Branch' or 'Head Office'." },
+                  approvalStatus: { type: 'string', nullable: true, example: 'Approved' },
+                },
+              },
+            },
+          },
+        }, 'Branches retrieved') } },
+      },
+      401: errorEnvelope('401', 'Missing or invalid API key'),
+      429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
+    },
+  },
+};
+
 spec.paths['/payroll/runs/by-reference/{reference}'] = {
   get: {
     tags: ['Payroll'],
