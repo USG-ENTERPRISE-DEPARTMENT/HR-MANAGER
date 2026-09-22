@@ -191,7 +191,13 @@ function writeTable(ctx: Ctx, block: Extract<ContentBlock, { type: 'table' }>) {
     : cols === 2 ? [0.38, 0.62]
     : [0.3, ...Array(cols - 1).fill(0.7 / (cols - 1))];
   const widths = weights.map(w => w * BODY_W);
-  const xs = widths.reduce<number[]>((acc, w, i) => [...acc, (acc[i] ?? MARGIN) + (i ? widths[i - 1] : 0)], [MARGIN]);
+  // Left edge of each column: a running sum of the widths before it. Written as a plain loop
+  // deliberately — a reduce that seeded an accumulator with [MARGIN] and appended per column
+  // produced a leading duplicate ([56, 56, …]), so columns 0 and 1 shared an x and printed on top
+  // of each other.
+  const xs: number[] = [];
+  let runX = MARGIN;
+  for (const w of widths) { xs.push(runX); runX += w; }
 
   const padX = 6, padY = 5, size = 8.2, lh = size + 2.6;
 
