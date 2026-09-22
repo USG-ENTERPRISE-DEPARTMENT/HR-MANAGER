@@ -1,13 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search, Users, CalendarCheck, Building2, Banknote, Stethoscope,
   ChevronRight, ArrowLeft, BookOpen, Lightbulb, AlertTriangle,
   CheckCircle2, Clock, FileText, ListChecks, Sparkles, X, BarChart2, Briefcase, UserCheck,
   ShieldAlert, Activity, KeyRound, UserCog, TrendingUp, Star, FolderOpen, Mail,
+  Download, Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import { inputClass } from './ui/FormField';
 import { HairlineDecor } from './ui/HairlineDecor';
+import api from '../../lib/api';
 
 // ─── Data types ──────────────────────────────────────────────────────────────
 
@@ -2842,10 +2845,47 @@ type View =
 export function Help() {
   const [view, setView]           = useState<View>({ type: 'home' });
   const [query, setQuery]         = useState('');
+  const [downloading, setDownloading] = useState<null | 'all' | 'module'>(null);
+  const [companyName, setCompanyName] = useState('');
+
+  // Cover-page branding follows App Setup, the same single source the payslip and job postings use.
+  // Failure is non-fatal: the manual just falls back to a generic title.
+  useEffect(() => {
+    api.get('/settings/app-setup')
+      .then(r => setCompanyName((r.data?.data ?? r.data)?.company_name || ''))
+      .catch(() => {});
+  }, []);
 
   const activeModule = MODULES.find(m => view.type !== 'home' && m.id === view.moduleId);
   const activeArticle = activeModule?.articles.find(a => view.type === 'article' && a.id === view.articleId);
   const searchResults = useMemo(() => searchArticles(query), [query]);
+
+  // Generating ~100 articles takes a moment and blocks the main thread, so the button reports
+  // progress rather than appearing dead.
+  const downloadManual = async (moduleId?: string) => {
+    if (downloading) return;
+    setDownloading(moduleId ? 'module' : 'all');
+    const toastId = toast.loading(moduleId ? 'Building module guide…' : 'Building the user manual…');
+    try {
+      const { buildHelpManualPdf } = await import('./help/helpManualPdf');
+      const { blob, filename, pages } = await buildHelpManualPdf(MODULES, { companyName, moduleId });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      // Revoking immediately can cancel the download in some browsers; give it a tick.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+
+      toast.success(`Manual downloaded — ${pages} pages`, { id: toastId });
+    } catch (err) {
+      console.error('Manual export failed', err);
+      toast.error('Could not build the manual. Please try again.', { id: toastId });
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const goHome   = () => { setView({ type: 'home' }); setQuery(''); };
   const goModule = (moduleId: string) => setView({ type: 'module', moduleId });
@@ -2875,20 +2915,38 @@ export function Help() {
             )}
           </div>
 
-          {/* Search bar */}
-          <div className="relative">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search for anything — leave setup, running payroll, adding employees…"
-              className={`${inputClass} !pl-10 !pr-10 w-full shadow-sm`}
-            />
-            {query && (
-              <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                <X size={14} />
-              </button>
-            )}
+          {/* Search bar + manual download */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search for anything — leave setup, running payroll, adding employees…"
+                className={`${inputClass} !pl-10 !pr-10 w-full shadow-sm`}
+              />
+              {query && (
+                <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => downloadManual()}
+              disabled={!!downloading}
+              title="Download the complete user manual as a PDF"
+              className="shrink-0 inline-flex items-center gap-2 px-3.5 h-[38px] rounded-lg text-[12px] font-semibold
+                         bg-[var(--accent)] text-white shadow-sm transition-all
+                         hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {downloading === 'all'
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Download size={14} />}
+              <span className="hidden sm:inline">
+                {downloading === 'all' ? 'Building…' : 'Download manual'}
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -3054,6 +3112,22 @@ export function Help() {
                     <h2 className="text-[18px] font-bold text-[var(--text-primary)]">{activeModule.title}</h2>
                     <p className="text-[12px] text-[var(--text-muted)]">{activeModule.articles.length} articles</p>
                   </div>
+
+                  {/* Export just this module — the full manual is large, and someone training on one
+                      area rarely wants all 12 modules. */}
+                  <button
+                    onClick={() => downloadManual(activeModule.id)}
+                    disabled={!!downloading}
+                    title={`Download the ${activeModule.title} guide as a PDF`}
+                    className="ml-auto shrink-0 inline-flex items-center gap-1.5 px-3 h-[34px] rounded-lg text-[12px] font-medium
+                               bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] transition-all
+                               hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {downloading === 'module'
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <Download size={13} />}
+                    <span className="hidden sm:inline">{downloading === 'module' ? 'Building…' : 'Download this module'}</span>
+                  </button>
                 </div>
 
                 {/* Article list */}
