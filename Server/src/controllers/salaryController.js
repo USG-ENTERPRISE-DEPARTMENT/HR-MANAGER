@@ -421,12 +421,33 @@ function makeGradeComponentHandlers(table, fkCol, label) {
 const paygradeComp = makeGradeComponentHandlers('paygrade_components', 'paygrade_id', 'Paygrade');
 const notchComp = makeGradeComponentHandlers('notch_components', 'notch_id', 'Notch');
 
+/**
+ * Order notches the way a person reads them: 1, 1.5, 2, 2.5 … 10, 10.5, 11.
+ *
+ * Sorting by name alone is alphabetical, which puts "Notch 10" and "Notch 12.5" before "Notch 2"
+ * and buries "Notch 4" in thirteenth place — it looks like the notch is missing.
+ *
+ * Done in JavaScript rather than SQL on purpose: extracting the number needs `substring(… from …)`
+ * on Postgres and `REGEXP_SUBSTR` on MySQL, and this application runs on both. The lists are a few
+ * hundred rows, so the cost is irrelevant.
+ */
+const byNotchNumber = (rows) => {
+  const num = (name) => {
+    const m = String(name ?? '').match(/([0-9]+(?:\.[0-9]+)?)[^0-9]*$/);
+    return m ? Number(m[1]) : Number.POSITIVE_INFINITY;   // unnumbered names sort last
+  };
+  return [...rows].sort((a, b) =>
+    String(a.paygrade_name ?? '').localeCompare(String(b.paygrade_name ?? '')) ||
+    num(a.name) - num(b.name) ||
+    String(a.name ?? '').localeCompare(String(b.name ?? '')));
+};
+
 // GET /salary/notches — list all salary notches (named pay points within a paygrade band).
 const getNotches = asyncHandler(async (_req, res) => {
   const rows = await query`
     SELECT n.id, n.name, n.paygradeId, p.name AS paygrade_name, n.currency, CONCAT(n.amount, '') AS amount
-     FROM notches n LEFT JOIN paygrades p ON p.id = n.paygradeId ORDER BY n.name ASC`;
-  respond.ok(res, 'Notches retrieved', rows);
+     FROM notches n LEFT JOIN paygrades p ON p.id = n.paygradeId`;
+  respond.ok(res, 'Notches retrieved', byNotchNumber(rows));
 });
 
 // POST /salary/notches — create a notch within a paygrade; validates that the amount falls within the
@@ -665,8 +686,9 @@ const getSalaryRefs = asyncHandler(async (_req, res) => {
     prisma.employee.findMany({ where: { approvalStatus: 'APPROVED' }, select: { id: true, firstName: true, lastName: true, employee_id: true }, orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }] }),
     prisma.salarycomponent.findMany({ select: { id: true, name: true, is_notch_linked: true }, orderBy: { name: 'asc' } }),
     query`SELECT id, code, name, description FROM salarycomponenttype ORDER BY name ASC`,
+    // Ordered by byNotchNumber below, not in SQL — see the note on that helper.
     query`SELECT n.id, n.name, n.paygradeId, p.name AS paygrade_name, n.currency, CONCAT(n.amount, '') AS amount
-           FROM notches n LEFT JOIN paygrades p ON p.id = n.paygradeId ORDER BY n.name ASC`,
+           FROM notches n LEFT JOIN paygrades p ON p.id = n.paygradeId`,
     query`SELECT id, name, currency, CONCAT(min_salary, '') AS min_salary, CONCAT(max_salary, '') AS max_salary FROM paygrades ORDER BY name ASC`,
     prisma.paymenttype.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
@@ -675,7 +697,7 @@ const getSalaryRefs = asyncHandler(async (_req, res) => {
     employees: serialize(employees.map(e => ({ id: e.id, label: `${e.firstName} ${e.lastName}`.trim() + (e.employee_id ? ` (${e.employee_id})` : '') }))),
     components: serialize(components.map(c => ({ id: c.id, label: c.name, is_notch_linked: c.is_notch_linked }))),
     componentTypes,
-    notches: notches.map(n => ({ id: n.id, label: `${n.name}${n.amount ? ` (${n.currency ?? ''} ${n.amount})` : ''}`, ...n })),
+    notches: byNotchNumber(notches).map(n => ({ id: n.id, label: `${n.name}${n.amount ? ` (${n.currency ?? ''} ${n.amount})` : ''}`, ...n })),
     paygrades: paygrades.map(p => ({ id: p.id, label: `${p.name}${p.currency ? ` (${p.currency})` : ''}`, name: p.name, currency: p.currency, min_salary: p.min_salary, max_salary: p.max_salary })),
     paymentTypes: serialize(paymentTypes.map(p => ({ id: p.id, label: p.name }))),
   });

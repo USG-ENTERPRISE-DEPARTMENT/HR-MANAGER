@@ -77,10 +77,15 @@ async function buildSalaryByEmp(empIdBigs) {
 
   const empIn = Prisma.join(empIdBigs);
   const compNameById = new Map((await query`SELECT id, name FROM salarycomponent`).map(c => [String(c.id), c.name]));
-  const emps = await query`SELECT id, paygradeId, notcheId FROM employee WHERE id IN (${empIn})`;
+  // Aliased to single-case names deliberately. Postgres folds unquoted identifiers, so selecting
+  // `paygradeId` returns the result key `paygradeid` there but `paygradeId` on MySQL — and reading
+  // the wrong one in JS yields undefined for every row, silently resolving no paygrade or notch
+  // components at all (every employee's salary comes out zero while the query itself succeeds).
+  const emps = await query`
+    SELECT id, paygradeId AS paygrade_id, notcheId AS notch_id FROM employee WHERE id IN (${empIn})`;
 
-  const pgIds = [...new Set(emps.map(e => e.paygradeId).filter(v => v != null).map(String))];
-  const ntIds = [...new Set(emps.map(e => e.notcheId).filter(v => v != null).map(String))];
+  const pgIds = [...new Set(emps.map(e => e.paygrade_id).filter(v => v != null).map(String))];
+  const ntIds = [...new Set(emps.map(e => e.notch_id).filter(v => v != null).map(String))];
   const pgComps = pgIds.length ? await query`SELECT paygrade_id, component_id, CONCAT(amount, '') amount FROM paygrade_components WHERE paygrade_id IN (${Prisma.join(pgIds.map(BigInt))})` : [];
   const ntComps = ntIds.length ? await query`SELECT notch_id, component_id, CONCAT(amount, '') amount FROM notch_components WHERE notch_id IN (${Prisma.join(ntIds.map(BigInt))})` : [];
   const exceptions = await query`SELECT employee, component, CONCAT(amount, '') amount, excluded FROM employeesalary WHERE employee IN (${empIn})`;
@@ -105,8 +110,8 @@ async function buildSalaryByEmp(empIdBigs) {
       sourceCount++;
     };
     // 1. paygrade   2. notch (override)
-    (pgByGrade[String(emp.paygradeId)] || []).forEach(r => put(r.component_id, r.amount));
-    (ntByNotch[String(emp.notcheId)]   || []).forEach(r => put(r.component_id, r.amount));
+    (pgByGrade[String(emp.paygrade_id)] || []).forEach(r => put(r.component_id, r.amount));
+    (ntByNotch[String(emp.notch_id)]    || []).forEach(r => put(r.component_id, r.amount));
     // 3. exceptions
     (excByEmp[eid] || []).forEach(r => {
       const nm = compNameById.get(String(r.component));
@@ -478,7 +483,14 @@ const generatePayroll = asyncHandler(async (req, res) => {
   // Delete previous data for this run
   await exec`DELETE FROM payrolldata WHERE payroll = ${BigInt(id)}`;
 
-  // Calculate and insert
+  // Calculate everything first, then write it in batches.
+  //
+  // calcColumn is pure CPU — it takes no database handle — so the whole grid can be computed before
+  // anything is written. That matters because the database may be across a slow link: one INSERT per
+  // employee per column is tens of thousands of round trips, and at a few hundred milliseconds each
+  // the request dies long before it finishes, leaving a half-generated run. The cost of a write is
+  // the NUMBER OF STATEMENTS, not the number of rows, so batching turns hours into seconds.
+  const values = [];
   for (const pe of payrollEmps) {
     const eid = String(Number(pe.employee));
     const salaryMap = salaryByEmp[eid] || {};
@@ -488,8 +500,15 @@ const generatePayroll = asyncHandler(async (req, res) => {
       // A column with no groups is universal and always runs.
       if (col.groupIds.length && !col.groupIds.includes(String(pe.deduction_group ?? ''))) continue;
       const amount = calcColumn(col, salaryMap, allCols, savedCalcs, pe.employee, pe.deduction_exemptions, cache, { compNameById });
-      await exec`INSERT INTO payrolldata (payroll, employee, payroll_item, amount) VALUES (${BigInt(id)}, ${BigInt(pe.employee)}, ${parseInt(col.id)}, ${String(amount)})`;
+      values.push(Prisma.sql`(${BigInt(id)}, ${BigInt(pe.employee)}, ${parseInt(col.id)}, ${String(amount)})`);
     }
+  }
+
+  // 4 parameters per row, kept well under the 65535-parameter limit both drivers impose.
+  const ROWS_PER_INSERT = 2000;
+  for (let i = 0; i < values.length; i += ROWS_PER_INSERT) {
+    const chunk = values.slice(i, i + ROWS_PER_INSERT);
+    await exec`INSERT INTO payrolldata (payroll, employee, payroll_item, amount) VALUES ${Prisma.join(chunk)}`;
   }
 
   await logAudit(id, 'generate', req, { employees: payrollEmps.length, columns: allCols.length });

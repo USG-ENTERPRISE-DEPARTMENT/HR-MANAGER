@@ -722,6 +722,24 @@ const report = require('../controllers/reportController');
 router.post('/reports/table.pdf', report.tablePdf);
 
 // ─────────────────────────────────────────────
+// Legacy data migration (Settings → System → Migration)
+//
+// Reads the old IceHRM production database and reports what would move. Everything here is
+// read-only; `execute` is intentionally refused until the loader is built and reviewed.
+// Guarded by manage_settings: this exposes the shape and volume of the entire HR dataset.
+// ─────────────────────────────────────────────
+const migration = require('../controllers/migrationController');
+router.get ('/migration/plan',      permissionGuard('manage_settings'), migration.getPlan);
+router.get ('/migration/target',    permissionGuard('manage_settings'), migration.getTarget);
+router.post('/migration/preflight', permissionGuard('manage_settings'), migration.postPreflight);
+router.post('/migration/dry-run',   permissionGuard('manage_settings'), migration.postDryRun);
+router.get ('/migration/status',    permissionGuard('manage_settings'), migration.getStatus);
+// Live progress of the running (or last) migration — polled by the UI while a load is in flight.
+router.get ('/migration/job',       permissionGuard('manage_settings'), migration.getJob);
+// Writes. Requires an explicit target, and confirm:"MIGRATE LIVE" for the production database.
+router.post('/migration/execute',   permissionGuard('manage_settings'), migration.postExecute);
+
+// ─────────────────────────────────────────────
 // Attendance — static routes before /attendance/:id
 // ─────────────────────────────────────────────
 router.post  ('/attendance/punch',                    attendance.punch);

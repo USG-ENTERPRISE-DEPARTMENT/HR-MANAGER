@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ConfirmAlert } from './ConfirmAlert';
 import { useCan } from '@/hooks/useCan';
 import api from '../../lib/api';
+import { MigrationPanel } from './system/MigrationPanel';
 
 const logoUrl = (name?: string) =>
   !name ? '' : name.startsWith('blob:') || name.startsWith('http') ? name : `${api.defaults.baseURL}/documents/${name}`;
@@ -71,7 +72,10 @@ export function System() {
   const canManage = can('manage_app_settings');   // gates all App Settings actions
   /* ── Tab state ────────────────────────────────────────────────────────── */
   const [activeTab, setActiveTab]       = useState('App Setup');
-  const tabs                            = ['App Setup', 'Parameter Creation'];
+  // Migration is gated on manage_settings rather than manage_app_settings: it exposes the shape
+  // and volume of the entire HR dataset, which is a wider disclosure than editing app branding.
+  const canMigrate = can('manage_settings');
+  const tabs = ['App Setup', 'Parameter Creation', ...(canMigrate ? ['Migration'] : [])];
 
   /* ── Parameter sub-tab (dropdown) ────────────────────────────────────── */
   const [subTab, setSubTab]             = useState('Code Creation');
@@ -453,7 +457,16 @@ export function System() {
         ))}
       </div>
 
+      {/* Migration owns its whole card: it is a task screen, not a searchable table, so none of
+          the shared toolbar (search, filters, export, pagination) below applies to it. */}
+      {activeTab === 'Migration' && (
+        <div className="bg-[var(--bg)] rounded-[16px] overflow-hidden flex flex-col flex-1 min-h-0">
+          <MigrationPanel />
+        </div>
+      )}
+
       {/* Main card */}
+      {activeTab !== 'Migration' && (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 min-h-0 drop-shadow-sm">
 
         {/* ── Toolbar area ─────────────────────────────────────────────────── */}
@@ -805,6 +818,7 @@ export function System() {
           />
         )}
       </div>
+      )}
 
       {/* ── MODALS ───────────────────────────────────────────────────────────── */}
       <AnimatePresence>

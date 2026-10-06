@@ -423,7 +423,9 @@ export function Salary() {
   const [notchSearch, setNotchSearch]   = useState('');
   const [notchPage, setNotchPage]       = useState(1);
   const PG_PAGE_SIZE    = 8;
-  const NOTCH_PAGE_SIZE = 6;
+  // A band can carry 24 notches (Band 4B does), so six per page meant four pages to read one
+  // grade and left the panel half empty. Twelve fills the space the paygrade list already uses.
+  const NOTCH_PAGE_SIZE = 12;
 
   const [tablePage, setTablePage]         = useState(1);
   const [tablePageSize, setTablePageSize] = useState(10);

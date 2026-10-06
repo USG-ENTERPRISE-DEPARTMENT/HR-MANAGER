@@ -85,6 +85,11 @@ model employee {
   retirement_date     DateTime? @db.Date
   spouse_name         String?   @db.VarChar(100)
   ssn_num             String?   @db.VarChar(20)
+  // Social-security number carried over from the legacy IceHRM system, where 973 of 1,281
+  // employees had one. Needed by the NASSIT statutory report. Not unique: in the legacy data
+  // 5 numbers are shared by 11 employees (one person holding two records after the UTB merge,
+  // and one genuine data-entry error where two people share a number).
+  nassit_num          String?   @db.VarChar(20)
   staff_level         Int?
   staff_role          Int?
   termination_date         DateTime? @db.Date
