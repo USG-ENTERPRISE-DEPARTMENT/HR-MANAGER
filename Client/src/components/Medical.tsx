@@ -6,7 +6,7 @@ import {
   Plus, Edit, Trash2, CheckCircle2, XCircle, RefreshCw,
   FileText, X, UploadCloud, Send, Eye, ChevronLeft, Download, Upload,
   Calendar, Stethoscope, Pill, Landmark, UserCircle2, DollarSign, Paperclip,
-  Clock, ShieldCheck,
+  Clock, ShieldCheck, Loader2, ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageHeader } from './ui/PageHeader';
@@ -60,10 +60,25 @@ function F({ label, required, children }: { label: string; required?: boolean; c
   );
 }
 
-function EmptyTable({ cols }: { cols: number }) {
+function EmptyTable({ cols, loading }: { cols: number; loading?: boolean }) {
   return (
-    <tr><td colSpan={cols} className="td text-center py-10 text-[13px] text-[var(--text-muted)]">No data available in table</td></tr>
+    <tr><td colSpan={cols} className="td text-center py-10 text-[13px] text-[var(--text-muted)]">
+      {loading
+        ? <span className="inline-flex items-center gap-2"><Loader2 size={15} className="animate-spin text-[var(--accent)]" />Loading…</span>
+        : 'No data available in table'}
+    </td></tr>
   );
+}
+
+// Wraps a list fetch with a loading flag so tables can show a spinner instead of "No data" while it runs.
+function useLoadRows(url: string) {
+  const [rows, setRows]       = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const load = () => {
+    setLoading(true);
+    api.get(url).then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
+  };
+  return { rows, setRows, loading, load };
 }
 
 function StatusPill({ status }: { status?: string }) {
@@ -316,12 +331,12 @@ interface ExportConfig {
 
 function MedTable({
   search, onSearch, onAdd, addLabel = 'Add New',
-  headers, headerAligns, rows, renderRow, emptyColSpan, total, filtered,
+  headers, headerAligns, rows, renderRow, emptyColSpan, total, filtered, loading,
 }: {
   search: string; onSearch: (q: string) => void; onAdd?: () => void; addLabel?: string;
   headers: string[]; headerAligns?: ('left' | 'right' | 'center')[];
   rows: any[]; renderRow: (row: any, i: number) => React.ReactNode;
-  emptyColSpan: number; total: number; filtered: number;
+  emptyColSpan: number; total: number; filtered: number; loading?: boolean;
 }) {
   const [page, setPage]         = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -343,7 +358,7 @@ function MedTable({
               return <th key={h} className={`th ${cls}`}>{h}</th>;
             })}</tr>
           </thead>
-          <tbody>{paged.length > 0 ? paged.map(renderRow) : <EmptyTable cols={emptyColSpan} />}</tbody>
+          <tbody>{paged.length > 0 ? paged.map(renderRow) : <EmptyTable cols={emptyColSpan} loading={loading} />}</tbody>
         </table>
       </div>
       <TablePagination
@@ -731,7 +746,7 @@ function StaffMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean; cur
   const employees = useEmployees();
   const { limitCurrencyMap } = useLimitCurrencyMap();
   const appCurrency = getSettings().general.currency;
-  const [rows, setRows]         = useState<any[]>([]);
+  const { rows, loading, load } = useLoadRows('/medical/staff');
   const [search, setSearch]     = useState('');
   const [open, setOpen]         = useState(false);
   const [saving, setSaving]     = useState(false);
@@ -750,7 +765,6 @@ function StaffMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean; cur
     return emp?.paygradId ? (limitCurrencyMap[emp.paygradId] ?? appCurrency) : appCurrency;
   }, [f.employee, employees, limitCurrencyMap, appCurrency]);
 
-  function load() { api.get('/medical/staff').then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}); }
   useEffect(load, []);
 
   function openAdd() { setSel(null); setF({ ...blank, ...(currentEmpId ? { employee: currentEmpId } : {}) }); setOpen(true); }
@@ -824,7 +838,7 @@ function StaffMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean; cur
     <>
       <MedTable search={search} onSearch={setSearch} onAdd={allowCreate ? openAdd : undefined} addLabel="Add Request"
         headers={['Employee', 'Admission Date', 'Discharged Date', 'Illness Type', `Cost${appCurrency ? ` (${appCurrency})` : ''}`, 'Status', 'Actions']}
-        rows={filtered} emptyColSpan={7} total={rows.length} filtered={filtered.length}
+        rows={filtered} emptyColSpan={7} total={rows.length} filtered={filtered.length} loading={loading}
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td">{row.employee_name}</td>
@@ -957,7 +971,7 @@ function DependentMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean;
   const allDependents = useAllDependents();
   const { limitCurrencyMap } = useLimitCurrencyMap();
   const appCurrency = getSettings().general.currency;
-  const [rows, setRows]         = useState<any[]>([]);
+  const { rows, loading, load } = useLoadRows('/medical/dependents-requests');
   const [search, setSearch]     = useState('');
   const [open, setOpen]         = useState(false);
   const [saving, setSaving]     = useState(false);
@@ -1000,7 +1014,6 @@ function DependentMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean;
     return emp?.paygradId ? (limitCurrencyMap[emp.paygradId] ?? appCurrency) : appCurrency;
   }, [f.employee, employees, limitCurrencyMap, appCurrency]);
 
-  function load() { api.get('/medical/dependents-requests').then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}); }
   useEffect(load, []);
 
   function openAdd() { setSel(null); setF({ ...blank, ...(currentEmpId ? { employee: currentEmpId } : {}) }); setOpen(true); }
@@ -1077,7 +1090,7 @@ function DependentMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean;
     <>
       <MedTable search={search} onSearch={setSearch} onAdd={allowCreate ? openAdd : undefined} addLabel="Add Request"
         headers={['Employee', 'Dependent', 'Relationship', 'Date Attended', 'Illness Type', `Cost${appCurrency ? ` (${appCurrency})` : ''}`, 'Status', 'Actions']}
-        rows={filtered} emptyColSpan={8} total={rows.length} filtered={filtered.length}
+        rows={filtered} emptyColSpan={8} total={rows.length} filtered={filtered.length} loading={loading}
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td">{row.employee_name}</td>
@@ -1216,7 +1229,7 @@ function MedicalLimitsTab() {
   const currencies = useCurrencies();
   const { reloadLimitMap } = useLimitCurrencyMap();
   const appCurrency = getSettings().general.currency;
-  const [rows, setRows]       = useState<any[]>([]);
+  const { rows, loading, load } = useLoadRows('/medical/limits');
   const [search, setSearch]   = useState('');
   const [open, setOpen]       = useState(false);
   const [saving, setSaving]   = useState(false);
@@ -1234,7 +1247,6 @@ function MedicalLimitsTab() {
     }
   }, [currencies]);
 
-  function load() { api.get('/medical/limits').then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}); }
   useEffect(load, []);
 
   function openAdd() {
@@ -1276,7 +1288,7 @@ function MedicalLimitsTab() {
     <>
       <MedTable search={search} onSearch={setSearch} onAdd={canManage ? openAdd : undefined} addLabel="Add Limit"
         headers={['Pay Grade', 'Currency', 'Limit Amount', 'Actions']}
-        rows={filtered} emptyColSpan={4} total={rows.length} filtered={filtered.length}
+        rows={filtered} emptyColSpan={4} total={rows.length} filtered={filtered.length} loading={loading}
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td">{row.grade_name ?? row.paygrade}</td>
@@ -1481,7 +1493,7 @@ function MedicalEnquiryDetail({ row, onClose }: { row: any; onClose: () => void 
 function StaffMedicalEnquiryTab() {
   const { can } = useCan();
   const canReset = can('reset_medical_utilization');
-  const [rows, setRows]         = useState<any[]>([]);
+  const { rows, loading, load: loadRows } = useLoadRows('/medical/enquiry');
   const [search, setSearch]     = useState('');
   const [page, setPage]         = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -1490,12 +1502,58 @@ function StaffMedicalEnquiryTab() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const appCurrency = getSettings().general.currency;
 
-  const loadRows = () => { api.get('/medical/enquiry').then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}); };
+  const [gradeFilter, setGradeFilter] = useState('');
+  const [utilFilter, setUtilFilter]   = useState('');
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+
   useEffect(() => { loadRows(); }, []);
 
-  const filtered = rows.filter(r => !search || (r.employee_name ?? '').toLowerCase().includes(search.toLowerCase()));
-  useEffect(() => { setPage(1); }, [search]);
+  const pctOf = (r: any) => r.medical_limit ? ((r.total_utilized ?? 0) / r.medical_limit) * 100 : null;
+  const grades = useMemo(() => [...new Set(rows.map(r => r.grade).filter((g: any) => g && g !== '—'))].sort() as string[], [rows]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let out = rows.filter(r => {
+      if (q && !(r.employee_name ?? '').toLowerCase().includes(q) && !(r.employee_empid ?? '').toLowerCase().includes(q)) return false;
+      if (gradeFilter && r.grade !== gradeFilter) return false;
+      const p = pctOf(r);
+      if (utilFilter === 'over'    && !(p !== null && p >= 100)) return false;
+      if (utilFilter === 'near'    && !(p !== null && p >= 80 && p < 100)) return false;
+      if (utilFilter === 'used'    && !((r.total_utilized ?? 0) > 0)) return false;
+      if (utilFilter === 'unused'  && (r.total_utilized ?? 0) > 0) return false;
+      if (utilFilter === 'nolimit' && r.medical_limit !== null) return false;
+      return true;
+    });
+    if (sort) {
+      const sign = sort.dir === 'asc' ? 1 : -1;
+      const val = (r: any): string | number => {
+        if (sort.key === 'employee_name' || sort.key === 'grade') return String(r[sort.key] ?? '').toLowerCase();
+        if (sort.key === 'pct') return pctOf(r) ?? -1;
+        return r[sort.key] ?? -Infinity; // null limit/balance sort below every real amount
+      };
+      out = [...out].sort((a, b) => { const va = val(a), vb = val(b); return (va < vb ? -1 : va > vb ? 1 : 0) * sign; });
+    }
+    return out;
+  }, [rows, search, gradeFilter, utilFilter, sort]);
+  useEffect(() => { setPage(1); }, [search, gradeFilter, utilFilter, sort]);
   const paged: any[] = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  // Text columns start A→Z; amounts start highest-first. Third click clears the sort.
+  const toggleSort = (key: string) => setSort(s => {
+    const first: 'asc' | 'desc' = key === 'employee_name' || key === 'grade' ? 'asc' : 'desc';
+    if (!s || s.key !== key) return { key, dir: first };
+    if (s.dir === first) return { key, dir: first === 'asc' ? 'desc' : 'asc' };
+    return null;
+  });
+  const sortTh = (k: string, label: string, right?: boolean) => (
+    <th key={k} className={`th cursor-pointer select-none ${right ? '!text-right' : ''}`} onClick={() => toggleSort(k)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {sort?.key !== k ? <ArrowUpDown size={11} className="opacity-30" />
+          : sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+      </span>
+    </th>
+  );
 
   const fmt = (n: number, c: string) => {
     const cur = c || appCurrency;
@@ -1541,7 +1599,31 @@ function StaffMedicalEnquiryTab() {
         <TableToolbar
           searchQuery={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search employees…"
+          searchPlaceholder="Search name or staff ID…"
+          filterBar={
+            <div className="flex items-center gap-2 flex-wrap w-full">
+              <select className={`${inputClass} !w-auto min-w-[160px]`} value={gradeFilter} onChange={e => setGradeFilter(e.target.value)}>
+                <option value="">All pay grades</option>
+                {grades.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <select className={`${inputClass} !w-auto min-w-[180px]`} value={utilFilter} onChange={e => setUtilFilter(e.target.value)}>
+                <option value="">All utilisation</option>
+                <option value="over">Over limit (≥ 100%)</option>
+                <option value="near">Near limit (80–99%)</option>
+                <option value="used">Has used medical</option>
+                <option value="unused">Nothing used</option>
+                <option value="nolimit">No limit set</option>
+              </select>
+              {(search || gradeFilter || utilFilter || sort) && (
+                <button className="secondary-btn text-[12px]" onClick={() => { setSearch(''); setGradeFilter(''); setUtilFilter(''); setSort(null); }}>
+                  <X size={13} /> Clear
+                </button>
+              )}
+              <span className="text-[11px] text-[var(--text-muted)] ml-auto">
+                {filtered.length !== rows.length ? `${filtered.length} of ${rows.length} employees` : `${rows.length} employees`}
+              </span>
+            </div>
+          }
           actions={
             <>
               <button className="secondary-btn shrink-0" onClick={() => setHistoryOpen(true)}>
@@ -1562,14 +1644,14 @@ function StaffMedicalEnquiryTab() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className="th">Employee</th>
-                <th className="th">Pay Grade</th>
-                <th className="th !text-right">Limit</th>
-                <th className="th !text-right">Staff Used</th>
-                <th className="th !text-right">Dependent Used</th>
-                <th className="th !text-right">Total Used</th>
-                <th className="th !text-right">Balance</th>
-                <th className="th">Utilisation</th>
+                {sortTh('employee_name', 'Employee')}
+                {sortTh('grade', 'Pay Grade')}
+                {sortTh('medical_limit', 'Limit', true)}
+                {sortTh('staff_utilized', 'Staff Used', true)}
+                {sortTh('dep_utilized', 'Dependent Used', true)}
+                {sortTh('total_utilized', 'Total Used', true)}
+                {sortTh('limit_balance', 'Balance', true)}
+                {sortTh('pct', 'Utilisation')}
               </tr>
             </thead>
             <tbody>
@@ -1591,7 +1673,7 @@ function StaffMedicalEnquiryTab() {
                   </td>
                   <td className="td"><UtilBar used={row.total_utilized ?? 0} limit={row.medical_limit} /></td>
                 </tr>
-              )) : <EmptyTable cols={8} />}
+              )) : <EmptyTable cols={8} loading={loading} />}
             </tbody>
           </table>
         </div>
@@ -1769,7 +1851,7 @@ function histMoney(amount: any, currency?: string): string {
 function RegisteredHospitalsTab() {
   const { can } = useCan();
   const canManage = can('manage_hospitals');
-  const [rows, setRows]       = useState<any[]>([]);
+  const { rows, loading, load } = useLoadRows('/medical/hospitals');
   const [search, setSearch]   = useState('');
   const [open, setOpen]       = useState(false);
   const [saving, setSaving]   = useState(false);
@@ -1779,7 +1861,6 @@ function RegisteredHospitalsTab() {
   const [f, setF] = useState(blank);
   const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }));
 
-  function load() { api.get('/medical/hospitals').then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}); }
   useEffect(load, []);
 
   function openAdd() { setSel(null); setF(blank); setOpen(true); }
@@ -1808,7 +1889,7 @@ function RegisteredHospitalsTab() {
     <>
       <MedTable search={search} onSearch={setSearch} onAdd={canManage ? openAdd : undefined} addLabel="Register Hospital"
         headers={['Name', 'Type', 'Account', 'Actions']}
-        rows={filtered} emptyColSpan={4} total={rows.length} filtered={filtered.length}
+        rows={filtered} emptyColSpan={4} total={rows.length} filtered={filtered.length} loading={loading}
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td">{row.name}</td>
@@ -2111,7 +2192,7 @@ function HospitalClaimsTab() {
   const [whtPharmacy, setWhtPharmacy] = useState(0);
 
   // List view
-  const [rows, setRows]         = useState<any[]>([]);
+  const { rows, loading, load } = useLoadRows('/medical/claims');
   const [search, setSearch]     = useState('');
   const [pending, setPending]   = useState<any>(null);
   const [viewDetail, setViewDetail] = useState<any>(null);
@@ -2144,9 +2225,6 @@ function HospitalClaimsTab() {
     }).catch(() => {});
   }, []);
 
-  function load() {
-    api.get('/medical/claims').then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {});
-  }
   useEffect(load, []);
 
   // Sync hospitalType when hospital selection changes
@@ -2340,7 +2418,7 @@ function HospitalClaimsTab() {
       <MedTable search={search} onSearch={setSearch} onAdd={allowCreate ? openAdd : undefined} addLabel="Add Claim"
         headers={['Hospital', 'Type', 'Items', `Total${appCurrency ? ` (${appCurrency})` : ''}`, 'WHT', 'Credit', 'Status', 'Actions']}
         headerAligns={['left', 'left', 'center', 'right', 'right', 'right', 'left', 'right']}
-        rows={filtered} emptyColSpan={8} total={rows.length} filtered={filtered.length}
+        rows={filtered} emptyColSpan={8} total={rows.length} filtered={filtered.length} loading={loading}
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td font-medium">{row.hospital_name}</td>

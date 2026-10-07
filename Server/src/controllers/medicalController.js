@@ -1046,9 +1046,11 @@ exports.deleteMedicalLimit = asyncHandler(async (req, res) => {
 // GET /medical/enquiry — aggregate view of medical utilisation for all active employees: limit, staff-used,
 // dependent-used, total utilised, and remaining balance. Includes amounts from approved hospital claim items.
 exports.getMedicalEnquiry = asyncHandler(async (req, res) => {
-  // Raw join: paygrades relation is not defined in Prisma schema
+  // Raw join: paygrades relation is not defined in Prisma schema.
+  // Names are aliased to lowercase keys — Postgres lowercases unquoted mixed-case columns, so reading
+  // `emp.firstName` back would be undefined (blank names).
   const employees = await prisma.$queryRaw`
-    SELECT e.id, e.firstName, e.lastName, e.employee_id,
+    SELECT e.id, e.firstName AS first_name, e.lastName AS last_name, e.employee_id,
            pg.id AS pg_id, pg.name AS pg_name
     FROM employee e
     LEFT JOIN paygrades pg ON pg.id = e.paygradeId
@@ -1100,7 +1102,7 @@ exports.getMedicalEnquiry = asyncHandler(async (req, res) => {
     return {
       employee_id:     String(emp.id),
       employee_empid:  emp.employee_id,
-      employee_name:   `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim(),
+      employee_name:   `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
       grade:           emp.pg_name ?? '—',
       currency,
       medical_limit:   limit,
@@ -1122,7 +1124,7 @@ exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
   if (!empIdBig) return respond.badReq(res, 'Invalid employee ID');
 
   const [emp] = await prisma.$queryRaw`
-    SELECT e.id, e.firstName, e.lastName, e.employee_id,
+    SELECT e.id, e.firstName AS first_name, e.lastName AS last_name, e.employee_id,
            pg.id AS pg_id, pg.name AS pg_name
     FROM employee e
     LEFT JOIN paygrades pg ON pg.id = e.paygradeId
@@ -1171,7 +1173,7 @@ exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
   respond.ok(res, 'Employee medical enquiry', serializeMedical({
     employee_id:    String(emp.id),
     employee_empid: emp.employee_id,
-    employee_name:  `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim(),
+    employee_name:  `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
     grade:          emp.pg_name ?? '—',
     currency,
     medical_limit:  limit,
@@ -1217,7 +1219,7 @@ exports.getMyMedicalEnquiry = asyncHandler(async (req, res) => {
   if (!empId) return respond.ok(res, 'My medical enquiry', null);
 
   const [emp] = await prisma.$queryRaw`
-    SELECT e.id, e.firstName, e.lastName, e.employee_id,
+    SELECT e.id, e.firstName AS first_name, e.lastName AS last_name, e.employee_id,
            pg.id AS pg_id, pg.name AS pg_name
     FROM employee e
     LEFT JOIN paygrades pg ON pg.id = e.paygradeId
@@ -1265,7 +1267,7 @@ exports.getMyMedicalEnquiry = asyncHandler(async (req, res) => {
   const toDateStr = v => v instanceof Date ? v.toISOString().slice(0, 10) : (v ? String(v).slice(0, 10) : null);
 
   respond.ok(res, 'My medical enquiry', serializeMedical({
-    employee_name:   `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim(),
+    employee_name:   `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
     employee_empid:  emp.employee_id,
     grade:           emp.pg_name ?? '—',
     currency,
@@ -1349,6 +1351,11 @@ exports.getHospitalClaims = asyncHandler(async (req, res) => {
     : [];
   const hospMap = Object.fromEntries(hospitals.map(h => [h.id, { name: h.name, type: h.type }]));
 
+  // Resolve who posted and who approved, the same way the staff and dependent listings do. Without
+  // this the claim shows blank actors: the ids are stored correctly, but the screen has only a
+  // number and no name to display.
+  const um = await userMap([...rows.map(r => r.posted_by), ...rows.map(r => r.approved_by)]);
+
   respond.ok(res, 'Hospital claims', rows.map(r => {
     let items = [];
     try { items = JSON.parse(r.items ?? '[]'); } catch {}
@@ -1357,6 +1364,8 @@ exports.getHospitalClaims = asyncHandler(async (req, res) => {
       ...s(r),
       hospital_name:  hosp.name  ?? null,
       hospital_type:  hosp.type  ?? null,
+      posted_by_name:   um[String(r.posted_by)]   ?? null,
+      approved_by_name: um[String(r.approved_by)] ?? null,
       item_count:     items.length,
       items,
       total_amount:        parseFloat(r.total_amount ?? 0),
@@ -2032,7 +2041,7 @@ exports.resetMedicalUtilization = asyncHandler(async (req, res) => {
 
   // Compute current utilization for every active employee (same logic as getMedicalEnquiry).
   const employees = await prisma.$queryRaw`
-    SELECT e.id, e.firstName, e.lastName, e.employee_id,
+    SELECT e.id, e.firstName AS first_name, e.lastName AS last_name, e.employee_id,
            pg.id AS pg_id, pg.name AS pg_name
     FROM employee e
     LEFT JOIN paygrades pg ON pg.id = e.paygradeId
@@ -2076,7 +2085,7 @@ exports.resetMedicalUtilization = asyncHandler(async (req, res) => {
     const depUsed   = depMap[String(emp.id)]   ?? 0;
     const utilized  = staffUsed + depUsed;
     const balance   = limit !== null ? limit - utilized : null;
-    const name      = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim();
+    const name      = `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim();
 
     await prisma.$executeRaw`INSERT INTO medicalutilizationhistory
          (period_label, employee_id, employee_name, grade, currency, medical_limit,

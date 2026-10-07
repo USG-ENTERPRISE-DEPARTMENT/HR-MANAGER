@@ -626,10 +626,12 @@ const getPayrollData = asyncHandler(async (req, res) => {
   const cells = await query`
     SELECT pd.id, pd.employee, pd.payroll_item, pd.amount,
            TRIM(CONCAT(COALESCE(e.firstName,''), ' ', COALESCE(e.lastName,''))) AS emp_name,
+           e.employee_id AS emp_code, dept.title AS department,
            pc.name AS column_name, pc.colorder, pc.payment_deduction,
            COALESCE(pc.visible, TRUE) AS visible
     FROM   payrolldata pd
     LEFT JOIN employee       e  ON e.id  = pd.employee
+    LEFT JOIN companystructures dept ON dept.id = e.departmentId
     LEFT JOIN payrollcolumns pc ON pc.id = pd.payroll_item
     WHERE  pd.payroll = ${BigInt(id)}
     ORDER BY emp_name, COALESCE(pc.colorder, 99999), pc.id`;

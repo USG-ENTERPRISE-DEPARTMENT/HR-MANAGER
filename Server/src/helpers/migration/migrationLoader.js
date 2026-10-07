@@ -2275,6 +2275,21 @@ class MigrationRun {
     // parse failures and no unknown employee ids.
     //
     // `hospital` needs no mapping because the hospital ids above are preserved.
+    // The two systems name the SAME fields differently, so an item copied verbatim renders blank:
+    // the claim screen reads `amount`, `type`, `narration` and `employee_id`, while the legacy blob
+    // carries `medical_amount`, `staff_or_dependent`, `notes` and `employee`. Left untranslated
+    // every line shows 0.00 — the amount is there, just under a key nothing reads.
+    //
+    //   legacy                  ->  target
+    //   employee                ->  employee_id   (and remapped to the migrated id)
+    //   medical_amount          ->  amount
+    //   notes                   ->  narration
+    //   staff_or_dependent      ->  type          ("Staff"/"Dependent" -> 'self'/'dependent')
+    //   staff_dependant_name    ->  dependent_name
+    //
+    // `staff_dependant` is the RELATIONSHIP, not a name — it reads "Son" on all 4,179 items
+    // including the Staff ones — so it is kept as-is rather than used as `dependent_name`.
+    // Measured across both claim tables: 4,176 "Staff" and 3 "Dependent".
     const translateItems = (raw) => {
       let arr;
       try { arr = JSON.parse(raw || '[]'); } catch { return { json: raw, unresolved: 0 }; }
@@ -2282,12 +2297,24 @@ class MigrationRun {
       let unresolved = 0;
       const out = arr.map((item) => {
         const legacy = String(item?.employee ?? '').trim();
-        if (!legacy) return item;
-        const mapped = this.map.employee.get(legacy);
+        const mapped = legacy ? this.map.employee.get(legacy) : null;
         // An item whose employee did not migrate keeps its name and amount so the claim still
         // totals correctly; only the id is cleared, so nothing links to the wrong person.
-        if (!mapped) { unresolved++; return { ...item, employee: '' }; }
-        return { ...item, employee: String(mapped) };
+        if (legacy && !mapped) unresolved++;
+
+        const isDependent = /depend/i.test(String(item?.staff_or_dependent ?? ''));
+        return {
+          ...item,
+          // Both spellings are kept: `employee_id` is what the claim screen reads, and `employee`
+          // stays so anything still looking for the legacy key keeps working.
+          employee:       mapped ? String(mapped) : '',
+          employee_id:    mapped ? String(mapped) : '',
+          employee_name:  item?.employee_name ?? '',
+          type:           isDependent ? 'dependent' : 'self',
+          dependent_name: item?.staff_dependant_name ?? '',
+          narration:      item?.notes ?? '',
+          amount:         item?.medical_amount ?? '0',
+        };
       });
       return { json: JSON.stringify(out), unresolved };
     };

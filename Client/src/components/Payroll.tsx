@@ -5,7 +5,7 @@ import {
   ChevronsRight, RefreshCw, Lock, Send, ThumbsUp, ThumbsDown,
   ClipboardList, GitCompare, Clock, AlertTriangle, CheckSquare, Square, Copy,
   Palette, AlignLeft, LayoutGrid, User, ShieldCheck,
-  X, Columns2, Tag, Zap, Filter,
+  X, Columns2, Tag, Zap, Filter, ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FormModal } from './ui/FormModal';
@@ -117,6 +117,7 @@ interface AuditEntry {
 }
 interface GridCell {
   id: string; employee: string; emp_name: string;
+  emp_code?: string | null; department?: string | null;
   payroll_item: string; column_name: string;
   payment_deduction: string | null; amount: string | null;
   colorder: number | null; visible: number | null;
@@ -869,10 +870,13 @@ function PayrollGrid({
   }
   function handleDragEnd() { setDragSrc(null); setDragOver(null); }
 
-  const cellOf = useCallback(
-    (eid: string, pid: string) => gridData.find(c => c.employee === eid && c.payroll_item === pid),
-    [gridData],
-  );
+  // Indexed lookup — sorting by a column reads every employee's cell, so a linear find per cell gets slow.
+  const cellMap = useMemo(() => {
+    const m = new Map<string, GridCell>();
+    for (const c of gridData) m.set(`${c.employee}|${c.payroll_item}`, c);
+    return m;
+  }, [gridData]);
+  const cellOf = useCallback((eid: string, pid: string) => cellMap.get(`${eid}|${pid}`), [cellMap]);
 
   const netPay = useCallback((eid: string) =>
     gridData
@@ -887,6 +891,63 @@ function PayrollGrid({
   );
 
   const totalNet   = useMemo(() => empIds.reduce((s, eid) => s + netPay(eid), 0), [empIds, netPay]);
+
+  // ── Search / filter / sort over the grid's employees ──
+  // Summary cards above keep whole-run totals; only the grid rows and its footer follow the filter.
+  const [gridSearch, setGridSearch] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+
+  const empInfo = useMemo(() => {
+    const m: Record<string, { code: string; dept: string }> = {};
+    for (const c of gridData) if (!m[c.employee]) m[c.employee] = { code: c.emp_code ?? '', dept: c.department ?? '' };
+    return m;
+  }, [gridData]);
+  const departments = useMemo(
+    () => [...new Set(Object.values(empInfo).map(i => i.dept).filter(Boolean))].sort(),
+    [empInfo],
+  );
+
+  const viewEmpIds = useMemo(() => {
+    const q = gridSearch.trim().toLowerCase();
+    let ids = empIds.filter(eid => {
+      if (deptFilter && empInfo[eid]?.dept !== deptFilter) return false;
+      if (!q) return true;
+      return (empNames[eid] ?? '').toLowerCase().includes(q)
+        || (empInfo[eid]?.code ?? '').toLowerCase().includes(q);
+    });
+    if (sort) {
+      const sign = sort.dir === 'asc' ? 1 : -1;
+      const val = (eid: string): string | number =>
+        sort.key === 'name' ? (empNames[eid] ?? '').toLowerCase()
+        : sort.key === 'net' ? netPay(eid)
+        : parseFloat(cellOf(eid, sort.key)?.amount ?? '0') || 0;
+      ids = [...ids].sort((a, b) => {
+        const va = val(a), vb = val(b);
+        return (va < vb ? -1 : va > vb ? 1 : 0) * sign;
+      });
+    }
+    return ids;
+  }, [empIds, empNames, empInfo, gridSearch, deptFilter, sort, netPay, cellOf]);
+
+  const isFiltered = viewEmpIds.length !== empIds.length;
+  const viewColTotal = useCallback((pid: string) =>
+    isFiltered ? viewEmpIds.reduce((s, eid) => s + (parseFloat(cellOf(eid, pid)?.amount ?? '0') || 0), 0) : colTotal(pid),
+    [isFiltered, viewEmpIds, cellOf, colTotal],
+  );
+  const viewTotalNet = useMemo(
+    () => isFiltered ? viewEmpIds.reduce((s, eid) => s + netPay(eid), 0) : totalNet,
+    [isFiltered, viewEmpIds, netPay, totalNet],
+  );
+
+  // Click cycles: ascending → descending → off (back to the run's own order).
+  const toggleSort = (key: string) => setSort(s =>
+    !s || s.key !== key ? { key, dir: key === 'name' ? 'asc' : 'desc' }
+    : s.dir === (key === 'name' ? 'asc' : 'desc') ? { key, dir: key === 'name' ? 'desc' : 'asc' }
+    : null);
+  const sortIcon = (key: string) => sort?.key !== key
+    ? <ArrowUpDown size={11} className="inline opacity-30" />
+    : sort.dir === 'asc' ? <ArrowUp size={11} className="inline" /> : <ArrowDown size={11} className="inline" />;
   const totalGross = useMemo(() =>
     gridData.filter(c => c.payment_deduction !== 'Deduction' && !netExcludedIds.has(String(c.payroll_item))).reduce((s, c) => s + (parseFloat(c.amount ?? '0') || 0), 0),
     [gridData, netExcludedIds],
@@ -1307,6 +1368,34 @@ function PayrollGrid({
             </div>
           </div>
 
+          {/* Search + department filter */}
+          <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-[320px]">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                className={`${inputClass} !pl-8`}
+                placeholder="Search name or staff ID…"
+                value={gridSearch}
+                onChange={e => setGridSearch(e.target.value)}
+              />
+            </div>
+            {departments.length > 0 && (
+              <select className={`${inputClass} !w-auto min-w-[180px]`} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+                <option value="">All departments</option>
+                {departments.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+            {(gridSearch || deptFilter || sort) && (
+              <button className="secondary-btn text-[12px]" onClick={() => { setGridSearch(''); setDeptFilter(''); setSort(null); }}>
+                <X size={13} /> Clear
+              </button>
+            )}
+            <span className="text-[11px] text-[var(--text-muted)] ml-auto">
+              {isFiltered ? `${viewEmpIds.length} of ${empIds.length} employees` : `${empIds.length} employees`}
+              {' · '}click a column header to sort
+            </span>
+          </div>
+
           {/* Scrollable table wrapper */}
           <div
             ref={wrapRef}
@@ -1321,10 +1410,11 @@ function PayrollGrid({
                 {/* ── Single header row — no forced grouping; each column carries its own type colour ── */}
                 <tr>
                   <th
-                    className={`${stickyHead()} th text-left`}
+                    className={`${stickyHead()} th text-left cursor-pointer select-none`}
                     style={{ minWidth: 180, zIndex: 21 }}
+                    onClick={() => toggleSort('name')}
                   >
-                    Employee
+                    Employee {sortIcon('name')}
                   </th>
 
                   {displayCols.map(([pid, c]: ColEntry) => {
@@ -1338,27 +1428,33 @@ function PayrollGrid({
                         onDragOver={(e: { preventDefault(): void }) => { e.preventDefault(); handleDragOver(pid); }}
                         onDrop={() => handleDrop(pid)}
                         onDragEnd={handleDragEnd}
+                        onClick={() => toggleSort(String(pid))}
+                        title="Click to sort · drag to reorder"
                         className={`th text-right py-2 px-3 font-medium whitespace-nowrap select-none cursor-grab active:cursor-grabbing transition-opacity ${
                           isDeduction ? 'text-[var(--danger)]' : 'text-[var(--accent)]'
                         } ${dragSrc === pid ? 'opacity-40' : ''} ${dragOver === pid ? 'border-l-2 border-l-[var(--accent)]' : ''}`}
                         style={{ minWidth: 110, borderBottom: `2px solid ${stripe}` }}
                       >
-                        {c.name}
+                        {c.name} {sortIcon(String(pid))}
                       </th>
                     );
                   })}
 
                   <th
-                    className="th text-right py-2 px-3 font-bold text-[var(--success)] whitespace-nowrap"
+                    className="th text-right py-2 px-3 font-bold text-[var(--success)] whitespace-nowrap cursor-pointer select-none"
                     style={{ minWidth: 120, borderBottom: '2px solid var(--success)' }}
+                    onClick={() => toggleSort('net')}
                   >
-                    Net Pay
+                    Net Pay {sortIcon('net')}
                   </th>
                 </tr>
               </thead>
 
               <tbody>
-                {empIds.map((eid, empIdx) => {
+                {viewEmpIds.length === 0 && (
+                  <tr><td colSpan={displayCols.length + 2} className="td text-center py-8 text-[var(--text-muted)]">No employees match your search.</td></tr>
+                )}
+                {viewEmpIds.map((eid, empIdx) => {
                   const net = netPay(eid);
                   return (
                     <motion.tr
@@ -1366,7 +1462,7 @@ function PayrollGrid({
                       className="tr"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      transition={{ delay: empIdx * 0.03 }}
+                      transition={{ delay: Math.min(empIdx, 20) * 0.03 }}
                     >
                       {/* Pinned employee name — click to open payslip (only when payslips are enabled) */}
                       <td
@@ -1376,9 +1472,16 @@ function PayrollGrid({
                       >
                         <div className="flex items-center gap-2.5">
                           <Initials name={empNames[eid] ?? eid} index={empIdx} />
-                          <span className={`font-medium text-[var(--text-primary)] whitespace-nowrap transition-colors ${payslipEnabled ? 'group-hover:text-[var(--accent)]' : ''}`}>
-                            {empNames[eid] ?? eid}
-                          </span>
+                          <div className="min-w-0">
+                            <span className={`block font-medium text-[var(--text-primary)] whitespace-nowrap transition-colors ${payslipEnabled ? 'group-hover:text-[var(--accent)]' : ''}`}>
+                              {empNames[eid] ?? eid}
+                            </span>
+                            {(empInfo[eid]?.code || empInfo[eid]?.dept) && (
+                              <span className="block text-[10px] text-[var(--text-muted)] whitespace-nowrap">
+                                {[empInfo[eid]?.code, empInfo[eid]?.dept].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -1436,10 +1539,10 @@ function PayrollGrid({
                     className={`${stickyCell()} td font-bold text-[10px] uppercase tracking-widest text-[var(--text-muted)] whitespace-nowrap`}
                     style={{ background: 'var(--bg)', zIndex: 11 }}
                   >
-                    Totals
+                    {isFiltered ? `Totals (${viewEmpIds.length} shown)` : 'Totals'}
                   </td>
                   {displayCols.map(([pid, c]) => {
-                    const total = colTotal(pid);
+                    const total = viewColTotal(pid);
                     const isZero = total === 0;
                     return (
                       <td
@@ -1463,7 +1566,7 @@ function PayrollGrid({
                     className="td text-right font-bold text-[var(--success)] whitespace-nowrap tabular-nums"
                     style={{ background: 'var(--bg)', minWidth: 120 }}
                   >
-                    {fmt(totalNet)}
+                    {fmt(viewTotalNet)}
                   </td>
                 </tr>
               </tfoot>
