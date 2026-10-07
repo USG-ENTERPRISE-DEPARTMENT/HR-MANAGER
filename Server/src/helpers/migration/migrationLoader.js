@@ -2417,6 +2417,7 @@ class MigrationRun {
       e.notes.push(`${r.codesCreated} positions created and ${r.assignmentsCreated} employees seated` +
         (r.alreadyAssigned ? `, ${r.alreadyAssigned} already held a position` : ''));
       e.notes.push(`${r.rm} RM (supervise someone) · ${r.ro} RO · ${r.tagsSet} RM/RO tags set`);
+      if (r.reattached) e.notes.push(`${r.reattached} employees whose supervisor has left were placed under the next manager up their chain`);
       if (r.excluded) e.notes.push(`${r.excluded} ${r.excludedPrefixes.join('/')} staff left out by design — their positions are set up separately`);
       if (r.skippedCycle) e.notes.push(`${r.skippedCycle} employees in a supervisor loop were not placed — assign them from the PC Codes screen`);
       if (r.note) e.notes.push(r.note);

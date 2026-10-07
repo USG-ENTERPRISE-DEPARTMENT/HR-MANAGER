@@ -1699,7 +1699,86 @@ const confirmPayrollManually = asyncHandler(async (req, res) => {
   respond.ok(res, 'Payroll run marked as paid', rows[0] || null);
 });
 
+// ── NASSIT report ─────────────────────────────────────────────────────────────
+// Which payroll columns feed the report, matched BY NAME because each staff group has its own copy
+// (Permanent, Contract, MGT, SNR MGT, UTB) and new groups follow the same naming:
+//   basic    — "Basic Salary", "Basic UTB"
+//   employee — "NASSIT (5%) - Permanent", "NASSIT (5%) UTB", …       (5% deducted from staff)
+//   employer — "NASSIT 10% (Payt) - Perm", "NASSIT 10% (Payt) UTB", … (10% paid by the bank)
+// The employer 10% also appears as a "(Deduc)" column that offsets the payment; only "(Payt)" is
+// read, or the employer share would be counted twice.
+const NASSIT_COLUMNS = {
+  basic:    /^basic\s+(salary|utb)$/i,
+  employee: /^nassit\s*\(5%\)/i,
+  employer: /^nassit\s*10%\s*\(payt\)/i,
+};
+
+// GET /payroll/runs/:id/nassit-report — per-employee NASSIT contributions for a COMPLETED run:
+// staff ID, names, NASSIT number, basic salary, employee 5%, employer 10% and the total remitted.
+const getNassitReport = asyncHandler(async (req, res) => {
+  const id = BigInt(req.params.id);
+  const [run] = await query`SELECT id, name, status, date_start, date_end FROM payrollruns WHERE id = ${id} LIMIT 1`;
+  if (!run) return respond.notFound(res, 'Payroll run not found');
+  if (run.status !== 'Completed') {
+    return respond.badReq(res, `The NASSIT report is only available for completed payroll runs (this run is ${run.status})`);
+  }
+
+  // Names aliased to lowercase keys — Postgres returns unquoted mixed-case columns lowercased.
+  // NOT `staff_id`: pgKeyMap renames that key to `Staff_ID` (a legacy model's field), so it read as empty.
+  const cells = await query`
+    SELECT pd.employee, pd.amount, pc.name AS col,
+           e.employee_id AS staff_code, e.firstName AS first_name, e.middleName AS middle_name,
+           e.lastName AS last_name, e.nassit_num
+    FROM   payrolldata pd
+    JOIN   payrollcolumns pc ON pc.id = pd.payroll_item
+    JOIN   employee e        ON e.id  = pd.employee
+    WHERE  pd.payroll = ${id}`;
+
+  const kindOf = (name) => Object.keys(NASSIT_COLUMNS).find(k => NASSIT_COLUMNS[k].test(String(name ?? '').trim()));
+  const used = { basic: new Set(), employee: new Set(), employer: new Set() };
+  const byEmp = new Map();
+  for (const c of cells) {
+    const kind = kindOf(c.col);
+    if (!kind) continue;
+    used[kind].add(c.col);
+    const key = String(c.employee);
+    if (!byEmp.has(key)) {
+      byEmp.set(key, {
+        staff_id: c.staff_code ?? '', nassit_num: (c.nassit_num ?? '').trim(),
+        // Legacy names carry stray padding ("  KABBA "); trim and collapse inner runs of spaces.
+        first_name:  String(c.first_name  ?? '').replace(/\s+/g, ' ').trim(),
+        middle_name: String(c.middle_name ?? '').replace(/\s+/g, ' ').trim(),
+        last_name:   String(c.last_name   ?? '').replace(/\s+/g, ' ').trim(),
+        basic: 0, employee: 0, employer: 0,
+      });
+    }
+    byEmp.get(key)[kind] += parseFloat(c.amount ?? '0') || 0;
+  }
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+  // Only staff who actually contribute or are paid a basic in this run.
+  const rows = [...byEmp.values()]
+    .filter(r => r.basic || r.employee || r.employer)
+    .map(r => ({ ...r, basic: r2(r.basic), employee: r2(r.employee), employer: r2(r.employer),
+                 total: r2(r.employee + r.employer) }))
+    .sort((a, b) => String(a.staff_id).localeCompare(String(b.staff_id), undefined, { numeric: true }));
+
+  const totals = rows.reduce((t, r) => ({
+    basic: t.basic + r.basic, employee: t.employee + r.employee, employer: t.employer + r.employer, total: t.total + r.total,
+  }), { basic: 0, employee: 0, employer: 0, total: 0 });
+
+  respond.ok(res, 'NASSIT report', {
+    run: { id: String(run.id), name: run.name, date_start: run.date_start, date_end: run.date_end },
+    rows,
+    totals: { basic: r2(totals.basic), employee: r2(totals.employee), employer: r2(totals.employer), total: r2(totals.total) },
+    // Which columns were read, so the report can show its source rather than look like magic.
+    columns: { basic: [...used.basic], employee: [...used.employee], employer: [...used.employer] },
+    missingNassitNumber: rows.filter(r => !r.nassit_num).length,
+  });
+});
+
 module.exports = {
+  getNassitReport,
   getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
   getPayrollByReference, rejectPayrollFromBank, confirmPayrollFromBank, confirmPayrollManually,

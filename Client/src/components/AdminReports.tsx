@@ -295,6 +295,60 @@ export function AdminReports() {
       foot: ['Total', fmtAmt(totals.pay), fmtAmt(totals.ded), fmtAmt(totals.pay - totals.ded)] as (string | number)[],
     };
   }, [paySumCells]);
+  // ── NASSIT report state ──────────────────────────────────────────────────────
+  // Per-employee NASSIT contributions for a COMPLETED payroll run, built server-side from the run's
+  // Basic / NASSIT 5% / NASSIT 10% (Payt) columns (GET /payroll/runs/:id/nassit-report).
+  const [nassitOpen,    setNassitOpen]    = useState(false);
+  const [nassitRun,     setNassitRun]     = useState('');
+  const [nassitData,    setNassitData]    = useState<any | null>(null);
+  const [nassitLoading, setNassitLoading] = useState(false);
+  const [nassitPdfBusy, setNassitPdfBusy] = useState(false);
+
+  function openNassitReport() {
+    setNassitOpen(true);
+    setNassitRun('');
+    setNassitData(null);
+    ensureRuns();
+  }
+
+  useEffect(() => {
+    if (!nassitRun) { setNassitData(null); return; }
+    setNassitLoading(true);
+    api.get(`/payroll/runs/${nassitRun}/nassit-report`)
+      .then(r => setNassitData(r.data.data ?? null))
+      .catch((e) => { setNassitData(null); toast.error(e?.response?.data?.message ?? 'Failed to load the NASSIT report'); })
+      .finally(() => setNassitLoading(false));
+  }, [nassitRun]);
+
+  // Same columns, in the same order, as the NASSIT submission file.
+  const NASSIT_HEADERS = ['STAFF ID', 'FIRST NAME', 'MIDDLE NAME', 'LAST NAME', 'NASSIT No.', 'BASIC SALARY',
+    'EMPLOYEE NASSIT 5%', 'EMPLOYER NASSIT 10%', 'TOTAL'];
+  const nassit = useMemo(() => {
+    const list: any[] = nassitData?.rows ?? [];
+    const t = nassitData?.totals ?? { basic: 0, employee: 0, employer: 0, total: 0 };
+    const base = (r: any) => [r.staff_id, r.first_name, r.middle_name, r.last_name, r.nassit_num];
+    return {
+      // Display / PDF: formatted amounts.
+      rows: list.map(r => [...base(r), fmtAmt(r.basic), fmtAmt(r.employee), fmtAmt(r.employer), fmtAmt(r.total)]) as (string | number)[][],
+      foot: ['Total', '', '', '', `${list.length} staff`, fmtAmt(t.basic), fmtAmt(t.employee), fmtAmt(t.employer), fmtAmt(t.total)] as (string | number)[],
+      // Excel / CSV: plain numbers so the file can be summed and uploaded as-is.
+      raw: list.map(r => [...base(r), r.basic, r.employee, r.employer, r.total]) as (string | number)[][],
+      rawFoot: ['Total', '', '', '', '', t.basic, t.employee, t.employer, t.total] as (string | number)[],
+    };
+  }, [nassitData]);
+  // nassitRunName / nassitSummary are derived further down, after `runs` is declared.
+
+  function downloadNassitCsv() {
+    const cell = (v: string | number) => typeof v === 'number' ? v.toFixed(2) : `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [NASSIT_HEADERS.map(h => `"${h}"`).join(','), ...nassit.raw.map(r => r.map(cell).join(','))].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = Object.assign(document.createElement('a'), {
+      href: url, download: `NASSIT REPORT - ${nassitRunName || 'payroll run'}.csv`,
+    });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Leave Utilization report state ──────────────────────────────────────────
   const [leaveOpen,    setLeaveOpen]    = useState(false);
   const [leaveData,    setLeaveData]    = useState<any[]>([]);
@@ -418,6 +472,8 @@ export function AdminReports() {
 
   const paySumRunName = runs.find((r: any) => String(r.id) === paySumRun)?.name ?? '';
   const paySumSummary = paySumRun ? `Payroll run: ${paySumRunName}` : 'No run selected';
+  const nassitRunName = runs.find((r: any) => String(r.id) === nassitRun)?.name ?? '';
+  const nassitSummary = nassitRun ? `Payroll run: ${nassitRunName}` : 'No run selected';
 
   function ensureRuns() {
     if (runs.length === 0) {
@@ -522,6 +578,14 @@ export function AdminReports() {
       description: 'Overview of salary disbursements, deductions, and net pay across the company.',
       icon: FileText,
       action: openPayrollSummary,
+      actionLabel: 'Generate',
+    },
+    {
+      id: 8,
+      name: 'NASSIT Report',
+      description: 'Employee 5% and employer 10% NASSIT contributions per staff member for a completed payroll run.',
+      icon: FileSpreadsheet,
+      action: openNassitReport,
       actionLabel: 'Generate',
     },
     {
@@ -783,6 +847,70 @@ export function AdminReports() {
                 />
               ) : (
                 <p className="text-center text-[var(--text-muted)] text-sm py-8">Select a payroll run to generate the summary.</p>
+              )}
+            </div>
+          </FormModal>
+        )}
+      </AnimatePresence>
+
+      {/* NASSIT report modal */}
+      <AnimatePresence>
+        {nassitOpen && (
+          <FormModal
+            title="NASSIT Report"
+            subtitle="Employee 5% and employer 10% NASSIT contributions for a completed payroll run"
+            maxWidth="5xl"
+            onClose={() => setNassitOpen(false)}
+            onSave={() => setNassitOpen(false)}
+            saveLabel="Close"
+          >
+            <div className="space-y-4">
+              <div className="flex items-end gap-3 flex-wrap">
+                <div className="w-96 max-w-full">
+                  <label className="label">Payroll Run</label>
+                  <SearchSelect
+                    value={nassitRun}
+                    onChange={setNassitRun}
+                    options={runs.filter((r: any) => r.status === 'Completed')
+                      .map((r: any) => ({ id: String(r.id), label: r.name }))}
+                    placeholder={runsLoading ? 'Loading runs…' : 'Select a completed run…'}
+                  />
+                </div>
+                {canExport && nassit.raw.length > 0 && (
+                  <button className="secondary-btn" onClick={downloadNassitCsv}>
+                    <Download size={14} /> Download CSV
+                  </button>
+                )}
+              </div>
+
+              {nassitLoading ? (
+                <p className="text-center text-[var(--text-muted)] text-sm py-8">Loading NASSIT contributions…</p>
+              ) : nassitRun && nassitData ? (
+                <>
+                  {nassitData.missingNassitNumber > 0 && (
+                    <p className="text-[12px] text-[var(--warning)]">
+                      {nassitData.missingNassitNumber} staff member{nassitData.missingNassitNumber === 1 ? ' has' : 's have'} no NASSIT number on their employee record.
+                    </p>
+                  )}
+                  <ReportPreview
+                    canExport={canExport}
+                    headers={NASSIT_HEADERS}
+                    rows={nassit.rows}
+                    total={nassit.rows.length}
+                    emptyMessage="This payroll run has no NASSIT contributions."
+                    pdfBusy={nassitPdfBusy}
+                    onExcel={() => exportReportExcel('NASSIT Report', nassitSummary, NASSIT_HEADERS, [...nassit.raw, nassit.rawFoot])}
+                    onPdf={() => reportPdf('NASSIT Report', nassitSummary, NASSIT_HEADERS, [...nassit.rows, nassit.foot], setNassitPdfBusy)}
+                    footRow={nassit.rows.length ? nassit.foot : undefined}
+                  />
+                  {nassit.rows.length > 0 && (
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Source columns — Basic: {nassitData.columns.basic.join(', ') || '—'} · Employee 5%: {nassitData.columns.employee.join(', ') || '—'} · Employer 10%: {nassitData.columns.employer.join(', ') || '—'}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-center text-[var(--text-muted)] text-sm py-8">Select a completed payroll run to generate the NASSIT report.</p>
               )}
             </div>
           </FormModal>
