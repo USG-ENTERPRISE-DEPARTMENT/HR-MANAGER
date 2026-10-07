@@ -156,6 +156,7 @@ const STEP_ORDER = [
   { key: 'grades',           label: 'Pay grades and notches' },
   { key: 'employees',        label: 'Employees' },
   { key: 'access',           label: 'Roles, permissions and admin login' },
+  { key: 'pccodes',          label: 'PC codes (positions)' },
   { key: 'components',       label: 'Salary components' },
   { key: 'notchcomponents',  label: 'Notch salary amounts' },
   { key: 'payrollconfig',    label: 'Payroll columns' },

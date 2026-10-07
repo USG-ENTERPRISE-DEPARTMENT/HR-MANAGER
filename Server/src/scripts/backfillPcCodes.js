@@ -1,10 +1,13 @@
 /*
- * One-off backfill: give every existing employee an RM/RO tag, a PC code, and a current
+ * Backfill: give every existing employee an RM/RO tag, a PC code, and a current
  * assignment — derived from the existing `supervisorId` staff hierarchy.
  *
  * Usage:
  *   node src/scripts/backfillPcCodes.js --dry-run   # validate + preview, write nothing
  *   node src/scripts/backfillPcCodes.js             # apply
+ *
+ * Also run automatically by the migration loader (helpers/migration/migrationLoader.js) as its
+ * "PC codes" step, against whichever database the migration targets.
  *
  * Rules (agreed):
  *   - RM = employee who supervises at least one other employee; RO = everyone else (leaf).
@@ -14,30 +17,28 @@
  *
  * Idempotent: employees that already have an open PC-code assignment are skipped, and RM/RO
  * tags are only set when currently null.
+ *
+ * Writes are BATCHED (a handful of statements in total, not ~3 per employee): the migration
+ * target is a remote database at ~550ms round-trip, where per-row writes took ~30 minutes.
  */
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 const { nextChildCode, ROOT_CODE } = require('../helpers/pcCodeHelper');
 
-const DRY = process.argv.includes('--dry-run');
+const BATCH = 500;
 
-async function main() {
-  // Only ACTIVE + APPROVED employees get positions. Terminated/resigned/pending staff must not
-  // occupy a seat. A non-active supervisor simply isn't in this set, so their active reports
-  // become roots (attach under the root) rather than hanging off a vacated seat.
-  const emps = await prisma.employee.findMany({
-    where: { lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED' },
-    select: { id: true, firstName: true, lastName: true, supervisorId: true, rmRoType: true, jobTitleId: true },
-  });
+// Staff codes left out of the PC-code tree entirely. UTB is a separate unit whose own chain of
+// command ends at two staff who have resigned (UTB00001, UTB00006), so none of its 352 staff connect
+// to the bank's hierarchy — and placing them all at the top would overflow the 99-per-level scheme.
+// Agreed: UTB positions are set up separately, by hand. Override with PC_CODE_EXCLUDE_PREFIXES
+// (comma-separated; set it to an empty string to include everyone).
+const EXCLUDED_PREFIXES = (process.env.PC_CODE_EXCLUDE_PREFIXES ?? 'UTB')
+  .split(',').map(s => s.trim()).filter(Boolean);
 
-  // Positions are named for the ROLE (job title), not the person who holds them. Resolve every
-  // referenced job-title id up front so seat creation below is a cheap map lookup.
-  const titleIds = [...new Set(emps.map(e => e.jobTitleId).filter(v => v != null).map(Number))];
-  const titleRows = titleIds.length
-    ? await prisma.codeListValue.findMany({ where: { id: { in: titleIds } }, select: { id: true, label: true } })
-    : [];
-  const titleById = new Map(titleRows.map(t => [String(t.id), t.label]));
-  // Name = job title, or a neutral "Position <code>" when the employee has no title (never a name).
+/**
+ * Work out every employee's code and tag from the supervisor tree. Pure — reads nothing, writes
+ * nothing — so the dry run and the real run cannot disagree.
+ */
+function planPcCodes(emps, titleById) {
   const seatName = (e, code) => (e.jobTitleId != null && titleById.get(String(e.jobTitleId))) || `Position ${code}`;
   const byId = new Map(emps.map(e => [e.id.toString(), e]));
   const exists = id => id != null && byId.has(id.toString());
@@ -45,24 +46,16 @@ async function main() {
   // (000…0) rather than getting a fresh code beneath it. The root is a single seat, so only the first
   // such employee can take it; any others are treated as ordinary roots (placed under the root).
   const selfSupervises = e => e.supervisorId != null && e.supervisorId.toString() === e.id.toString();
-  // Ordinary root = no supervisor, or a supervisor who isn't in this active/approved set. These get a
-  // new code directly under the synthetic root, as before. Self-supervisors are handled separately.
+  // Ordinary root = no supervisor, or a supervisor who isn't in this active/approved set.
   const isRoot = e => !selfSupervises(e) && (!e.supervisorId || !exists(e.supervisorId));
 
-  // Pick the single employee who will occupy the root seat (first self-supervisor, by id for
-  // determinism). Extras are demoted to ordinary roots and warned about.
   const selfSupervisors = emps.filter(selfSupervises).sort((a, b) => (a.id < b.id ? -1 : 1));
-  const rootOccupant = selfSupervisors[0] ?? null;
-  const rootOccupantId = rootOccupant ? rootOccupant.id.toString() : null;
-  const demotedSelfRoots = selfSupervisors.slice(1).map(e => e.id.toString()); // treated as ordinary roots
+  const rootOccupantId = selfSupervisors[0] ? selfSupervisors[0].id.toString() : null;
+  const demotedSelfRoots = selfSupervisors.slice(1).map(e => e.id.toString());
 
-  // children map (only among existing employees). The root occupant collects children the same way;
-  // demoted self-supervisors and ordinary roots are parents too, just anchored under the synthetic root.
   const childrenOf = new Map();
   for (const e of emps) {
     const id = e.id.toString();
-    // The root occupant and ordinary/demoted roots have no *parent* among employees — skip adding
-    // them as someone's child. (A self-supervisor's own self-edge must never make them their own child.)
     if (id === rootOccupantId || isRoot(e) || demotedSelfRoots.includes(id)) continue;
     const s = e.supervisorId.toString();
     if (!childrenOf.has(s)) childrenOf.set(s, []);
@@ -74,150 +67,239 @@ async function main() {
   if (rootOccupantId) rmSet.add(rootOccupantId);
   const tagOf = id => (rmSet.has(id) ? 'RM' : 'RO');
 
-  // ── Validate the whole tree fits the code scheme BEFORE writing anything ──
-  // BFS from roots; a node's code is generated from its parent's code. Throws if a node has
-  // >99 children or the chain is deeper than the scheme supports.
-  const roots = emps.filter(isRoot).map(e => e.id.toString());
-  const codeFor = new Map();            // employeeId -> generated code
-  const order = [];                     // DFS order (parents before children)
+  const label = id => { const e = byId.get(id); return e ? `${e.firstName} ${e.lastName} (#${id})` : `#${id}`; };
+  const codeFor = new Map();     // employeeId -> generated code
+  const parentOf = new Map();    // employeeId -> parent employeeId (null = the synthetic root)
+  const order = [];              // parents before children
   const errors = [];
 
-  // Recursively number a parent's children, depth-first, so parents precede children in `order`.
   function assignCodes(parentEmpId, parentCode) {
-    const kids = childrenOf.get(parentEmpId) || [];
     const sibCodes = [];
-    for (const kid of kids) {
+    for (const kid of childrenOf.get(parentEmpId) || []) {
       let code;
       try { code = nextChildCode(parentCode, sibCodes); }
-      catch (e) { errors.push(`${label(kid)} under ${label(parentEmpId)}: ${e.message}`); continue; }
+      catch (err) { errors.push(`${label(kid)} under ${label(parentEmpId)}: ${err.message}`); continue; }
       sibCodes.push(code);
       codeFor.set(kid, code);
+      parentOf.set(kid, parentEmpId);
       order.push(kid);
-      assignCodes(kid, code);           // recurse depth-first
+      assignCodes(kid, code);
     }
   }
-  function label(id) { const e = byId.get(id); return e ? `${e.firstName} ${e.lastName} (#${id})` : `#${id}`; }
 
-  // Everything that hangs directly off the synthetic root shares ONE sibling-code list, so their
-  // codes don't collide. That set is: the root occupant's own direct reports, plus every ordinary
-  // root (no/foreign supervisor) and any demoted extra self-supervisor. They are all siblings under
-  // 000…0, whether their "parent" is the occupant or the synthetic root itself.
+  // Everything hanging directly off the root shares ONE sibling list so their codes don't collide:
+  // the root occupant's direct reports, every ordinary root, and any demoted self-supervisor.
   const rootSibCodes = [];
-  const numberUnderRoot = (rid) => {
+  const numberUnderRoot = (rid, parentEmpId) => {
     let code;
     try { code = nextChildCode(ROOT_CODE, rootSibCodes); }
-    catch (e) { errors.push(`${label(rid)} (under root): ${e.message}`); return; }
+    catch (err) { errors.push(`${label(rid)} (under root): ${err.message}`); return; }
     rootSibCodes.push(code);
     codeFor.set(rid, code);
+    parentOf.set(rid, parentEmpId);
     order.push(rid);
-    assignCodes(rid, code);        // number this node's own subtree with its private sibling list
+    assignCodes(rid, code);
   };
 
-  // The self-supervising employee OCCUPIES the root code itself; place them first, then their direct
-  // reports (as root-children), so parents precede children in `order`.
   if (rootOccupantId) {
     codeFor.set(rootOccupantId, ROOT_CODE);
+    parentOf.set(rootOccupantId, null);
     order.push(rootOccupantId);
-    for (const kid of (childrenOf.get(rootOccupantId) || [])) numberUnderRoot(kid);
+    for (const kid of childrenOf.get(rootOccupantId) || []) numberUnderRoot(kid, rootOccupantId);
   }
+  const roots = emps.filter(isRoot).map(e => e.id.toString());
+  for (const rid of [...roots, ...demotedSelfRoots]) numberUnderRoot(rid, null);
 
-  // Ordinary roots + demoted self-supervisors: also direct children of the synthetic root.
-  for (const rid of [...roots, ...demotedSelfRoots]) numberUnderRoot(rid);
-
-  // Employees never reached from a root are inside a supervisor cycle — reported and skipped
-  // (agreed: these are test/system accounts; assign by hand later if needed).
+  // Never reached from a root = inside a supervisor cycle; reported and left for manual assignment.
   const skipped = emps.filter(e => !codeFor.has(e.id.toString()));
 
-  const rmCount = emps.filter(e => tagOf(e.id.toString()) === 'RM').length;
-  console.log(`Employees              : ${emps.length}`);
-  console.log(`  root occupant        : ${rootOccupant ? label(rootOccupantId) + '  → ' + ROOT_CODE : '(none — no self-supervising employee)'}`);
-  console.log(`  roots (under root)   : ${roots.length + demotedSelfRoots.length}`);
-  console.log(`  RM (has reports)     : ${rmCount}`);
-  console.log(`  RO (leaf)            : ${emps.length - rmCount}`);
-  console.log(`Codes generated        : ${codeFor.size}`);
-  if (demotedSelfRoots.length) {
-    console.log(`⚠ Multiple self-supervising employees — only the first occupies the root; these were placed under it:`);
-    demotedSelfRoots.forEach(id => console.log(`   - ${label(id)}`));
-  }
-  if (skipped.length) {
-    console.log(`Skipped (supervisor cycle): ${skipped.length}`);
-    skipped.forEach(e => console.log(`   - ${e.firstName} ${e.lastName} (#${e.id})`));
-  }
-  if (errors.length) {
-    console.log(`\n❌ ${errors.length} employees do NOT fit the code scheme:`);
-    errors.slice(0, 20).forEach(e => console.log('   - ' + e));
-    if (errors.length > 20) console.log(`   … and ${errors.length - 20} more`);
-    console.log('\nAborting — widen the scheme or flatten these branches first. Nothing was written.');
-    process.exit(1);
-  }
-  console.log('✔ All employees fit the code scheme.');
-
-  // Sample preview
-  console.log('\nSample (first 8):');
-  order.slice(0, 8).forEach(id => console.log(`   ${codeFor.get(id)}  ${tagOf(id).padEnd(2)}  ${label(id)}`));
-
-  if (DRY) { console.log('\n[dry-run] No changes written.'); await prisma.$disconnect(); return; }
-
-  // ── Apply ──
-  // Skip employees that already hold a PC code (idempotent re-run).
-  const alreadyAssigned = new Set(
-    (await prisma.pccodeassignments.findMany({ where: { endDate: null }, select: { employeeId: true } }))
-      .map(a => a.employeeId.toString())
-  );
-
-  let codesCreated = 0, assignmentsCreated = 0, tagsSet = 0;
-  // Insert parents before children (order[] is already parent-first) so reportsToId resolves.
-  const empToCodeRow = new Map();       // employeeId -> pccodes.id
-  const rootRow = await prisma.pccodes.findFirst({ where: { reportsToId: null } });
-
-  for (const id of order) {
-    const e = byId.get(id);
-    const tag = tagOf(id);
-
-    // RM/RO tag (only when unset)
-    if (!e.rmRoType) {
-      await prisma.employee.update({ where: { id: BigInt(id) }, data: { rmRoType: tag } });
-      tagsSet++;
-    }
-
-    if (alreadyAssigned.has(id)) continue; // keep existing placement
-
-    // The root occupant takes over the EXISTING synthetic root row instead of creating a new code —
-    // relabel it (by job title) and assign them to it. Their children then report to this same row.
-    if (id === rootOccupantId) {
-      await prisma.pccodes.update({
-        where: { id: rootRow.id },
-        data:  { name: seatName(e, ROOT_CODE), isActive: true },
-      });
-      empToCodeRow.set(id, rootRow.id);
-      await prisma.pccodeassignments.create({
-        data: { pcCodeId: rootRow.id, employeeId: BigInt(id), startDate: new Date(), endDate: null },
-      });
-      assignmentsCreated++;
-      continue;
-    }
-
-    // Parent code: the employee's supervisor's code, or the root row for ordinary/demoted roots.
-    const parentEmpId = (isRoot(e) || demotedSelfRoots.includes(id)) ? null : e.supervisorId.toString();
-    const reportsToId = parentEmpId ? (empToCodeRow.get(parentEmpId) ?? rootRow.id) : rootRow.id;
-
-    const codeRow = await prisma.pccodes.create({
-      data: { code: codeFor.get(id), name: seatName(e, codeFor.get(id)), reportsToId, isActive: true },
-    });
-    empToCodeRow.set(id, codeRow.id);
-    codesCreated++;
-
-    await prisma.pccodeassignments.create({
-      data: { pcCodeId: codeRow.id, employeeId: BigInt(id), startDate: new Date(), endDate: null },
-    });
-    assignmentsCreated++;
-  }
-
-  console.log(`\n✅ Backfill complete:`);
-  console.log(`   RM/RO tags set      : ${tagsSet}`);
-  console.log(`   PC codes created    : ${codesCreated}`);
-  console.log(`   assignments created : ${assignmentsCreated}`);
-  await prisma.$disconnect();
+  return {
+    byId, order, codeFor, parentOf, tagOf, seatName, label, errors, skipped,
+    rootOccupantId, demotedSelfRoots, rootCount: roots.length + demotedSelfRoots.length,
+    rmCount: emps.filter(e => tagOf(e.id.toString()) === 'RM').length,
+  };
 }
 
-main().catch(async e => { console.error('❌ backfill failed:', e.message); await prisma.$disconnect(); process.exit(1); });
+/**
+ * Run the backfill against a database.
+ *
+ * @param {object}  [opts]
+ * @param {string}  [opts.url]     connection string; omitted → the app's own database (PG_URL)
+ * @param {boolean} [opts.dryRun]  plan and validate only
+ * @param {boolean} [opts.quiet]   suppress console output (the migration reports its own notes)
+ * @returns {Promise<object>} counts — throws on a tree that does not fit the code scheme
+ */
+async function backfillPcCodes({ url, dryRun = false, quiet = false } = {}) {
+  const log = quiet ? () => {} : console.log;
+  const prisma = url ? new PrismaClient({ datasources: { db: { url } } }) : new PrismaClient();
+  try {
+    // Only ACTIVE + APPROVED employees get positions. Terminated/resigned/pending staff must not
+    // occupy a seat. A non-active supervisor simply isn't in this set, so their active reports
+    // become roots (attach under the root) rather than hanging off a vacated seat.
+    // Excluded units (see EXCLUDED_PREFIXES) are left out here, so they get no seat and no RM/RO tag
+    // — and anyone reporting to one of their staff is treated like any other employee whose
+    // supervisor is outside the set (placed under the root).
+    const emps = await prisma.employee.findMany({
+      where: {
+        lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED',
+        ...(EXCLUDED_PREFIXES.length ? {
+          OR: [
+            { employee_id: null },
+            { AND: EXCLUDED_PREFIXES.map(pre => ({ NOT: { employee_id: { startsWith: pre, mode: 'insensitive' } } })) },
+          ],
+        } : {}),
+      },
+      select: { id: true, firstName: true, lastName: true, supervisorId: true, rmRoType: true, jobTitleId: true },
+    });
+    const excludedCount = EXCLUDED_PREFIXES.length
+      ? await prisma.employee.count({
+          where: { lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED',
+                   OR: EXCLUDED_PREFIXES.map(pre => ({ employee_id: { startsWith: pre, mode: 'insensitive' } })) },
+        })
+      : 0;
+
+    // Positions are named for the ROLE (job title), never the person who holds them.
+    const titleIds = [...new Set(emps.map(e => e.jobTitleId).filter(v => v != null).map(Number))];
+    const titleRows = titleIds.length
+      ? await prisma.codeListValue.findMany({ where: { id: { in: titleIds } }, select: { id: true, label: true } })
+      : [];
+    const titleById = new Map(titleRows.map(t => [String(t.id), t.label]));
+
+    const p = planPcCodes(emps, titleById);
+
+    if (excludedCount) log(`Excluded (${EXCLUDED_PREFIXES.join(', ')} staff codes): ${excludedCount}`);
+    log(`Employees              : ${emps.length}`);
+    log(`  root occupant        : ${p.rootOccupantId ? p.label(p.rootOccupantId) + '  → ' + ROOT_CODE : '(none — no self-supervising employee)'}`);
+    log(`  roots (under root)   : ${p.rootCount}`);
+    log(`  RM (has reports)     : ${p.rmCount}`);
+    log(`  RO (leaf)            : ${emps.length - p.rmCount}`);
+    log(`Codes generated        : ${p.codeFor.size}`);
+    if (p.demotedSelfRoots.length) {
+      log('⚠ Multiple self-supervising employees — only the first occupies the root; these were placed under it:');
+      p.demotedSelfRoots.forEach(id => log(`   - ${p.label(id)}`));
+    }
+    if (p.skipped.length) {
+      log(`Skipped (supervisor cycle): ${p.skipped.length}`);
+      p.skipped.forEach(e => log(`   - ${e.firstName} ${e.lastName} (#${e.id})`));
+    }
+    if (p.errors.length) {
+      const msg = `${p.errors.length} employees do not fit the PC-code scheme (e.g. ${p.errors[0]}) — nothing was written`;
+      log(`\n❌ ${msg}`);
+      p.errors.slice(0, 20).forEach(e => log('   - ' + e));
+      throw new Error(msg);
+    }
+    log('✔ All employees fit the code scheme.');
+    log('\nSample (first 8):');
+    p.order.slice(0, 8).forEach(id => log(`   ${p.codeFor.get(id)}  ${p.tagOf(id).padEnd(2)}  ${p.label(id)}`));
+
+    const result = {
+      employees: emps.length, excluded: excludedCount, excludedPrefixes: EXCLUDED_PREFIXES,
+      rm: p.rmCount, ro: emps.length - p.rmCount,
+      skippedCycle: p.skipped.length, tagsSet: 0, codesCreated: 0, assignmentsCreated: 0,
+      alreadyAssigned: 0, note: null,
+    };
+    if (dryRun) { log('\n[dry-run] No changes written.'); return result; }
+
+    // ── Apply ──
+    // Existing open assignments: those employees keep their placement, and their seat is reused as
+    // the parent for any of their reports that still need one.
+    const openRows = await prisma.pccodeassignments.findMany({
+      where: { endDate: null }, select: { employeeId: true, pcCodeId: true },
+    });
+    const seatOf = new Map(openRows.map(a => [a.employeeId.toString(), a.pcCodeId]));
+    const todo = p.order.filter(id => !seatOf.has(id));
+    result.alreadyAssigned = p.order.length - todo.length;
+
+    // RM/RO tags — only where unset. Two statements, not one per employee.
+    for (const tag of ['RM', 'RO']) {
+      const ids = p.order.filter(id => p.tagOf(id) === tag && !p.byId.get(id).rmRoType).map(BigInt);
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const r = await prisma.employee.updateMany({
+          where: { id: { in: ids.slice(i, i + BATCH) }, rmRoType: null }, data: { rmRoType: tag },
+        });
+        result.tagsSet += r.count;
+      }
+    }
+    if (!todo.length) { log('\nEvery employee already holds a PC code — nothing to create.'); return result; }
+
+    // The generated codes assume a tree built from scratch. If some codes already exist (staff placed
+    // by hand, or a partial earlier run) new ones could collide with seats someone else holds, so
+    // stop rather than guess — those employees can be placed from the PC Codes screen.
+    const wanted = todo.filter(id => id !== p.rootOccupantId).map(id => p.codeFor.get(id));
+    const clashes = wanted.length
+      ? await prisma.pccodes.findMany({ where: { code: { in: wanted } }, select: { code: true } })
+      : [];
+    if (clashes.length) {
+      result.note = `${todo.length} employees still need a PC code, but ${clashes.length} of the generated codes already exist ` +
+        `(e.g. ${clashes[0].code}) — not created automatically; assign them from the PC Codes screen`;
+      log(`\n⚠ ${result.note}`);
+      return result;
+    }
+
+    // The root seat. Seeded by the pccodes manual migration, but created here if missing so a fresh
+    // database still gets a complete tree.
+    let rootRow = await prisma.pccodes.findFirst({ where: { reportsToId: null } });
+    if (!rootRow) {
+      rootRow = await prisma.pccodes.create({ data: { code: ROOT_CODE, name: 'Root', reportsToId: null, isActive: true } });
+    }
+
+    // The root occupant takes over the EXISTING root row rather than getting a new code.
+    if (p.rootOccupantId && todo.includes(p.rootOccupantId)) {
+      await prisma.pccodes.update({
+        where: { id: rootRow.id },
+        data:  { name: p.seatName(p.byId.get(p.rootOccupantId), ROOT_CODE), isActive: true },
+      });
+      seatOf.set(p.rootOccupantId, rootRow.id);
+    }
+
+    // 1. Create every new seat in bulk (parents linked in step 2, once all ids exist).
+    const newSeats = todo.filter(id => id !== p.rootOccupantId)
+      .map(id => ({ code: p.codeFor.get(id), name: p.seatName(p.byId.get(id), p.codeFor.get(id)), isActive: true }));
+    for (let i = 0; i < newSeats.length; i += BATCH) {
+      const r = await prisma.pccodes.createMany({ data: newSeats.slice(i, i + BATCH) });
+      result.codesCreated += r.count;
+    }
+    const created = await prisma.pccodes.findMany({
+      where: { code: { in: newSeats.map(s => s.code) } }, select: { id: true, code: true },
+    });
+    const rowByCode = new Map(created.map(r => [r.code, r.id]));
+    for (const id of todo) if (id !== p.rootOccupantId) seatOf.set(id, rowByCode.get(p.codeFor.get(id)));
+
+    // 2. Link each new seat to its supervisor's seat (or the root) — one UPDATE per batch.
+    const links = todo.filter(id => id !== p.rootOccupantId).map(id => {
+      const parentEmp = p.parentOf.get(id);
+      return { seat: seatOf.get(id), parent: (parentEmp && seatOf.get(parentEmp)) || rootRow.id };
+    });
+    for (let i = 0; i < links.length; i += BATCH) {
+      const chunk = links.slice(i, i + BATCH);
+      const vals = chunk.map((_, j) => `($${j * 2 + 1}::bigint, $${j * 2 + 2}::bigint)`).join(',');
+      await prisma.$executeRawUnsafe(
+        `UPDATE pccodes c SET reportstoid = v.parent FROM (VALUES ${vals}) AS v(seat, parent) WHERE c.id = v.seat`,
+        ...chunk.flatMap(l => [l.seat, l.parent]));
+    }
+
+    // 3. Seat each employee.
+    const now = new Date();
+    const assignments = todo.map(id => ({ pcCodeId: seatOf.get(id), employeeId: BigInt(id), startDate: now, endDate: null }));
+    for (let i = 0; i < assignments.length; i += BATCH) {
+      const r = await prisma.pccodeassignments.createMany({ data: assignments.slice(i, i + BATCH) });
+      result.assignmentsCreated += r.count;
+    }
+
+    log('\n✅ Backfill complete:');
+    log(`   RM/RO tags set      : ${result.tagsSet}`);
+    log(`   PC codes created    : ${result.codesCreated}`);
+    log(`   assignments created : ${result.assignmentsCreated}`);
+    return result;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+module.exports = { backfillPcCodes, planPcCodes };
+
+// CLI
+if (require.main === module) {
+  backfillPcCodes({ dryRun: process.argv.includes('--dry-run') })
+    .catch(e => { console.error('❌ backfill failed:', e.message); process.exit(1); });
+}

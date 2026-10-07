@@ -2399,6 +2399,34 @@ class MigrationRun {
     this.done(e);
   }
 
+  /* ── 4c. PC codes (positions) ─────────────────────────────────────────── */
+  // The legacy system has no positions, but it does have the supervisor tree (loaded above), which
+  // is exactly what the app derives PC codes from. This runs the same backfill an operator would run
+  // by hand (scripts/backfillPcCodes.js): one seat per active employee, mirroring who reports to
+  // whom, plus the RM/RO tag. Idempotent — employees who already hold a seat keep it.
+  //
+  // Not fatal: a problem here (e.g. the pccodes tables were never created on this database) is
+  // reported on the step, and the payroll and medical load carries on — positions can be backfilled
+  // afterwards with `node src/scripts/backfillPcCodes.js`.
+  async loadPcCodes() {
+    const e = this.step('pccodes', 'PC codes (positions)');
+    const { backfillPcCodes } = require('../../scripts/backfillPcCodes');
+    try {
+      const r = await backfillPcCodes({ url: this.targetUrl, quiet: true });
+      e.inserted += r.assignmentsCreated;
+      e.notes.push(`${r.codesCreated} positions created and ${r.assignmentsCreated} employees seated` +
+        (r.alreadyAssigned ? `, ${r.alreadyAssigned} already held a position` : ''));
+      e.notes.push(`${r.rm} RM (supervise someone) · ${r.ro} RO · ${r.tagsSet} RM/RO tags set`);
+      if (r.excluded) e.notes.push(`${r.excluded} ${r.excludedPrefixes.join('/')} staff left out by design — their positions are set up separately`);
+      if (r.skippedCycle) e.notes.push(`${r.skippedCycle} employees in a supervisor loop were not placed — assign them from the PC Codes screen`);
+      if (r.note) e.notes.push(r.note);
+    } catch (err) {
+      e.skipped++;
+      e.notes.push(`Not assigned: ${err.message || err.code} — run node src/scripts/backfillPcCodes.js after fixing`);
+    }
+    this.done(e);
+  }
+
   /* ── orchestration ────────────────────────────────────────────────────── */
   async run() {
     const started = Date.now();
@@ -2411,6 +2439,8 @@ class MigrationRun {
       await this.loadEmployees();
       // After employees, so the admin login can be linked to its migrated employee record.
       await this.loadAccessControl();
+      // Needs employees, their supervisor links and job titles — all loaded above.
+      await this.loadPcCodes();
       // Components must exist before employeesalary and notch amounts can reference them.
       await this.loadSalaryComponents();
       if (this.scopes.payroll?.enabled) {
