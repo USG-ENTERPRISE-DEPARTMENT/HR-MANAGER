@@ -672,15 +672,25 @@ const updateUser = asyncHandler(async (req, res) => {
   // ───────────────────────────
   if (Array.isArray(roles)) {
 
-    // Validate roles exist
+    // Validate roles exist. Bound as BigInt — role ids arrive from JSON as strings, `roles.id` is
+    // bigint, and Postgres rejects `bigint = text`; that error came back as an empty result, so every
+    // role looked invalid (the same bug registerUser had). Deduplicated so a repeated id isn't a
+    // count mismatch.
     if (roles.length > 0) {
-      const placeholders = roles.map(() => '?').join(',');
+      const roleIdsBig = [...new Map(helper.sanitizeIds(roles).map(b => [String(b), b])).values()];
+      if (roleIdsBig.length !== new Set(roles.map(String)).size) {
+        return res.status(400).json({ status: '400', message: 'One or more role IDs are invalid' });
+      }
+      const placeholders = roleIdsBig.map(() => '?').join(',');
       const roleCheck = await helper.selectRecordsWithQuery(
         `SELECT id FROM roles WHERE id IN (${placeholders})`,
-        roles
+        roleIdsBig
       );
-
-      if (!roleCheck.data || roleCheck.data.length !== roles.length) {
+      if (roleCheck.status === 'error') {
+        console.error('[updateUser] role lookup failed:', roleCheck.error);
+        return res.status(500).json({ status: '500', message: 'Could not verify the selected roles' });
+      }
+      if (!roleCheck.data || roleCheck.data.length !== roleIdsBig.length) {
         return res.status(400).json({
           status: '400',
           message: 'One or more role IDs are invalid'
@@ -709,13 +719,22 @@ const updateUser = asyncHandler(async (req, res) => {
   if (Array.isArray(permissions)) {
 
     if (permissions.length > 0) {
-      const placeholders = permissions.map(() => '?').join(',');
+      // Same BigInt binding and dedupe as the roles check above.
+      const permIdsBig = [...new Map(helper.sanitizeIds(permissions).map(b => [String(b), b])).values()];
+      if (permIdsBig.length !== new Set(permissions.map(String)).size) {
+        return res.status(400).json({ status: '400', message: 'One or more permission IDs are invalid' });
+      }
+      const placeholders = permIdsBig.map(() => '?').join(',');
       const permCheck = await helper.selectRecordsWithQuery(
         `SELECT id FROM permissions WHERE id IN (${placeholders})`,
-        permissions
+        permIdsBig
       );
+      if (permCheck.status === 'error') {
+        console.error('[updateUser] permission lookup failed:', permCheck.error);
+        return res.status(500).json({ status: '500', message: 'Could not verify the selected permissions' });
+      }
 
-      if (!permCheck.data || permCheck.data.length !== permissions.length) {
+      if (!permCheck.data || permCheck.data.length !== permIdsBig.length) {
         return res.status(400).json({
           status: '400',
           message: 'One or more permission IDs are invalid'
@@ -748,7 +767,7 @@ const updateUser = asyncHandler(async (req, res) => {
     JOIN employee e ON e.id = u.employeeId
     WHERE u.id = ?
     LIMIT 1
-  `, [id]);
+  `, [helper.safeBigInt(id)]);   // bigint column: a string bind fails on Postgres and reads as "not found"
 
   if (!updatedUser.data?.length) {
     return res.status(404).json({ status: '404', message: 'User not found after update' });
