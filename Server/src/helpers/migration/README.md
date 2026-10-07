@@ -81,6 +81,25 @@ runs and migrated employees, so rows entered in the target by other means are un
 
 Verify idempotency by running the migration **twice** and comparing counts; do not assume it.
 
+## Creating the rehearsal database
+
+```bash
+npm run rehearsal:create     # create it if missing, then set up the schema
+npm run rehearsal:reset      # DESTROY it and rebuild from scratch
+node scripts/create-rehearsal-db.js --dry-run   # report what it would do
+```
+
+Creates the database named in `MIGRATION_REHEARSAL_URL`, pushes the Postgres schema into it and
+applies the `*.postgres.sql` manual migrations — 254 tables, ready for a migration run. Takes about
+three and a half minutes, nearly all of it the schema push against the remote server.
+
+`--drop` refuses to run when the resolved URL is not `MIGRATION_REHEARSAL_URL`, or when that URL
+equals `PG_URL`. Dropping is irreversible and the two URLs differ only by database name, so a typo
+in `.env` must not be able to destroy production.
+
+One manual migration reports `n/a` on a fresh database: `codelist_cuid_to_int` converts existing
+cuid keys to int, and the schema already creates them as int, so there is nothing to convert.
+
 ## Three databases, three settings — keep them distinct
 
 ```

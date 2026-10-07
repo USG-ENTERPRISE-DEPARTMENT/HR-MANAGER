@@ -11,7 +11,9 @@
     "cert:generate": "node scripts/generate-cert.js",
     "db:use-mysql": "prisma generate --schema=src/prisma/schema.prisma && echo Client now on MYSQL - reads DATABASE_URL. Restart the server.",
     "db:use-pg": "prisma generate --schema=src/prisma/schema.postgres.prisma && echo Client now on POSTGRES - reads PG_URL. Restart the server.",
-    "db:which": "node -e \"const{prisma}=require('./src/helpers/dbQueryHelper');console.log('Active Prisma client provider:',prisma._activeProvider)\""
+    "db:which": "node -e \"const{prisma}=require('./src/helpers/dbQueryHelper');console.log('Active Prisma client provider:',prisma._activeProvider)\"",
+    "rehearsal:create": "node scripts/create-rehearsal-db.js",
+    "rehearsal:reset": "node scripts/create-rehearsal-db.js --drop"
   },
   "prisma": {
     "schema": "src/prisma/schema.prisma",
