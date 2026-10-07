@@ -150,6 +150,7 @@ let job = null;
 
 /** Steps in the order the loader runs them, with the row counts the dry run predicts. */
 const STEP_ORDER = [
+  { key: 'seed',             label: 'Reference code lists' },
   { key: 'codelists',        label: 'Code lists' },
   { key: 'structures',       label: 'Company structures' },
   { key: 'grades',           label: 'Pay grades and notches' },

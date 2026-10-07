@@ -190,17 +190,32 @@ class MigrationRun {
   }
 
   async connect() {
-    this.my = await mysql.createConnection({
+    // Each connection is labelled on failure: a bare "ECONNREFUSED" does not say whether the source
+    // MySQL or the target Postgres refused, or which host was tried (the source defaults to localhost).
+    const src = {
       host: this.sourceCfg.host ?? process.env.MIGRATION_SOURCE_HOST ?? 'localhost',
       port: Number(this.sourceCfg.port ?? process.env.MIGRATION_SOURCE_PORT ?? 3306),
-      user: this.sourceCfg.user ?? process.env.MIGRATION_SOURCE_USER ?? 'root',
-      password: this.sourceCfg.password ?? process.env.MIGRATION_SOURCE_PASSWORD ?? '',
       database: this.sourceCfg.database ?? process.env.MIGRATION_SOURCE_DB ?? 'hrmdata_rcb',
-      supportBigNumbers: true,
-      bigNumberStrings: true,
-    });
-    this.pg = new Client({ connectionString: this.targetUrl });
-    await this.pg.connect();
+    };
+    try {
+      this.my = await mysql.createConnection({
+        ...src,
+        user: this.sourceCfg.user ?? process.env.MIGRATION_SOURCE_USER ?? 'root',
+        password: this.sourceCfg.password ?? process.env.MIGRATION_SOURCE_PASSWORD ?? '',
+        supportBigNumbers: true,
+        bigNumberStrings: true,
+      });
+    } catch (err) {
+      throw new Error(`Cannot connect to the SOURCE MySQL at ${src.host}:${src.port}/${src.database} — ${err.message || err.code}`);
+    }
+    try {
+      this.pg = new Client({ connectionString: this.targetUrl });
+      await this.pg.connect();
+    } catch (err) {
+      let where = 'the target';
+      try { const u = new URL(this.targetUrl); where = `${u.hostname}:${u.port || 5432}${u.pathname}`; } catch {}
+      throw new Error(`Cannot connect to the TARGET Postgres at ${where} — ${err.message || err.code}`);
+    }
   }
 
   async close() {
@@ -2366,11 +2381,30 @@ class MigrationRun {
     this.done(e);
   }
 
+  /* ── 0. Reference code lists ──────────────────────────────────────────── */
+  // Every legacy lookup (title, gender, job title, staff level, structure type…) is matched BY LABEL
+  // onto a code list the target must already have. On an unseeded database none exist, so every
+  // employee would import with those links NULL and the employee form's dropdowns would be empty.
+  // Seeding is idempotent (existing ids are kept), so it is safe on a database that is already seeded.
+  async seedReferenceData() {
+    const e = this.step('seed', 'Reference code lists');
+    const { seedCodeLists } = require('../../prisma/seedCodeLists');
+    try {
+      const { lists, values } = await seedCodeLists({ url: this.targetUrl, quiet: true });
+      e.notes.push(`${lists} code lists checked (${values} values) — missing ones created, existing ids kept`);
+    } catch (err) {
+      // Stop here: loading on top of missing code lists silently writes NULL lookups.
+      throw new Error(`Seeding code lists into the target failed — ${err.message || err.code}`);
+    }
+    this.done(e);
+  }
+
   /* ── orchestration ────────────────────────────────────────────────────── */
   async run() {
     const started = Date.now();
     await this.connect();
     try {
+      await this.seedReferenceData();
       await this.loadCodelists();
       await this.loadStructures();
       await this.loadGrades();

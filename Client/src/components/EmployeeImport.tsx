@@ -130,20 +130,25 @@ export function EmployeeImport({ onClose, onImported }: Props) {
   const [result, setResult] = useState<{ created: number; errors: string[] } | null>(null);
 
   useEffect(() => {
+    // Per-request fallback: one missing code list must not reject the batch and blank every lookup.
+    const get = (url: string) => api.get(url).catch(() => {
+      console.warn('[employee import] option list failed to load:', url);
+      return { data: { data: [] } };
+    });
     Promise.all([
-      api.get('/system/code-lists/TIT/values'),
-      api.get('/system/code-lists/GEN/values'),
-      api.get('/system/code-lists/NAT/values'),
-      api.get('/system/code-lists/REG/values'),
-      api.get('/system/code-lists/EMPS/values'),
-      api.get('/system/code-lists/JOBT/values'),
-      api.get('/system/code-lists/STAFL/values'),
-      api.get('/system/code-lists/STAFR/values'),
-      api.get('/system/code-lists/CT/values'),
-      api.get('/company/structures'),
-      api.get('/employees/active'),
-      api.get('/employees/paygrades'),
-      api.get('/employees/notches'),
+      get('/system/code-lists/TIT/values'),
+      get('/system/code-lists/GEN/values'),
+      get('/system/code-lists/NAT/values'),
+      get('/system/code-lists/REG/values'),
+      get('/system/code-lists/EMPS/values'),
+      get('/system/code-lists/JOBT/values'),
+      get('/system/code-lists/STAFL/values'),
+      get('/system/code-lists/STAFR/values'),
+      get('/system/code-lists/CT/values'),
+      get('/company/structures'),
+      get('/employees/active'),
+      get('/employees/paygrades'),
+      get('/employees/notches'),
     ]).then(([tit, gen, nat, reg, emps, jobt, stafl, stafr, ct, struct, sup, pg, nc]) => {
       setLists({
         cl: {

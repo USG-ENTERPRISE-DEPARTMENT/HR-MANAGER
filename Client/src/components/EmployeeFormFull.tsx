@@ -198,22 +198,27 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
   const [vacantPcCodes, setVacantPcCodes] = useState<any[]>([]);
 
   useEffect(() => {
+    // Each list fails on its own: one missing code list (404) used to reject the whole Promise.all,
+    // and the swallowed error left EVERY dropdown on the form empty. Failures are logged by URL.
+    const failed: string[] = [];
+    const get = (url: string) => api.get(url).catch(() => { failed.push(url); return { data: { data: [] } }; });
     Promise.all([
-      api.get('/system/code-lists/TIT/values'),
-      api.get('/system/code-lists/GEN/values'),
-      api.get('/system/code-lists/NAT/values'),
-      api.get('/system/code-lists/REG/values'),
-      api.get('/system/code-lists/EMPS/values'),
-      api.get('/system/code-lists/JOBT/values'),
-      api.get('/system/code-lists/STAFL/values'),
-      api.get('/system/code-lists/STAFR/values'),
-      api.get('/company/structures'),
-      api.get('/employees/active'),
-      api.get('/employees/paygrades'),
-      api.get('/employees/notches'),
-      api.get('/system/code-lists/CT/values'),
-      api.get('/pc-codes?vacant=1').catch(() => ({ data: { data: [] } })),
+      get('/system/code-lists/TIT/values'),
+      get('/system/code-lists/GEN/values'),
+      get('/system/code-lists/NAT/values'),
+      get('/system/code-lists/REG/values'),
+      get('/system/code-lists/EMPS/values'),
+      get('/system/code-lists/JOBT/values'),
+      get('/system/code-lists/STAFL/values'),
+      get('/system/code-lists/STAFR/values'),
+      get('/company/structures'),
+      get('/employees/active'),
+      get('/employees/paygrades'),
+      get('/employees/notches'),
+      get('/system/code-lists/CT/values'),
+      get('/pc-codes?vacant=1'),
     ]).then(([t, g, n, r, e, j, sl, sr, s, sup, pg, nc, ct, pc]) => {
+      if (failed.length) console.warn('[employee form] option lists that failed to load:', failed);
       setCl({
         titles:       t.data.data  ?? [],
         genders:      g.data.data  ?? [],

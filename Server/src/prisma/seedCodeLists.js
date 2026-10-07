@@ -24,10 +24,19 @@
  *
  * Run with:
  *   node Server/src/prisma/seedCodeLists.js
+ *
+ * Also called by the migration loader (helpers/migration/migrationLoader.js) before it loads any
+ * data, against whichever database it targets — the loader maps legacy lookups onto these lists by
+ * label, so on an unseeded database every title/gender/job title would otherwise import as NULL.
  */
 
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+
+// Set per run by seedCodeLists(): the CLI uses the app's own database, the migration passes its
+// target URL (which may be the rehearsal database).
+let prisma;
+let log  = console.log;
+let warn = console.warn;
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -82,7 +91,7 @@ async function seedList({ code, name, description = null, values }) {
     // 2. No label match. If the code is already used (by a differently-labelled row), just skip
     //    setting it to avoid a collision; otherwise create the new value.
     if (await codeTaken(list.id, v.code, null)) {
-      console.warn(`   ⚠ ${code}: code "${v.code}" already used by another value — skipping "${v.label}"`);
+      warn(`   ⚠ ${code}: code "${v.code}" already used by another value — skipping "${v.label}"`);
       continue;
     }
     await prisma.codeListValue.create({
@@ -97,7 +106,7 @@ async function seedList({ code, name, description = null, values }) {
     });
   }
 
-  console.log(`   ✔ ${code} — ${name} (${values.length} values)`);
+  log(`   ✔ ${code} — ${name} (${values.length} values)`);
   return list;
 }
 
@@ -670,21 +679,38 @@ const CODE_LISTS = [
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-async function main() {
-  console.log('🌱 Seeding code lists...\n');
-
-  for (const list of CODE_LISTS) {
-    await seedList(list);
+/**
+ * Seed every code list into a database. Idempotent — existing ids and values are preserved.
+ *
+ * @param {object}   [opts]
+ * @param {string}   [opts.url]   connection string; omitted → the app's own database (PG_URL)
+ * @param {boolean}  [opts.quiet] suppress per-list output (the migration reports its own progress)
+ * @returns {Promise<{ lists: number, values: number }>}
+ */
+async function seedCodeLists({ url, quiet = false } = {}) {
+  prisma = url ? new PrismaClient({ datasources: { db: { url } } }) : new PrismaClient();
+  log  = quiet ? () => {} : console.log;
+  warn = quiet ? () => {} : console.warn;
+  try {
+    log('🌱 Seeding code lists...\n');
+    for (const list of CODE_LISTS) {
+      await seedList(list);
+    }
+    const totalValues = CODE_LISTS.reduce((sum, l) => sum + l.values.length, 0);
+    log(`\n✅ Code list seed complete!`);
+    log(`   ${CODE_LISTS.length} lists · ${totalValues} values — all upserted (existing values untouched)`);
+    return { lists: CODE_LISTS.length, values: totalValues };
+  } finally {
+    await prisma.$disconnect();
   }
-
-  const totalValues = CODE_LISTS.reduce((sum, l) => sum + l.values.length, 0);
-  console.log(`\n✅ Code list seed complete!`);
-  console.log(`   ${CODE_LISTS.length} lists · ${totalValues} values — all upserted (existing values untouched)`);
 }
 
-main()
-  .catch(e => {
+module.exports = { seedCodeLists };
+
+// CLI: `npm run seed` / `node src/prisma/seedCodeLists.js`
+if (require.main === module) {
+  seedCodeLists().catch(e => {
     console.error('❌ seedCodeLists failed:', e);
     process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+  });
+}
