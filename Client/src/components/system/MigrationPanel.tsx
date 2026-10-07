@@ -301,7 +301,12 @@ export function MigrationPanel() {
       const data = await pollJob();
       if (data && !data.running) {
         setLoading(false);
-        if (data.error) toast.error(`Migration failed: ${data.error}`);
+        const failedStep = data.steps.find(x => x.state === 'failed');
+        const anyDone    = data.steps.some(x => x.state === 'done');
+        if (data.error || failedStep) toast.error(`Migration failed${failedStep ? ` at "${failedStep.label}"` : ''}: ${data.error || 'no error message — check the server log'}`);
+        // No step finished and no error: the run never reached the loader, or this poll was answered
+        // by a different server process (e.g. PM2 cluster mode) that knows nothing about the run.
+        else if (!anyDone) toast.error('Migration did not run any steps — check the server log. If the backend runs as several processes (PM2 cluster), run it as a single instance.');
         else {
           const rows = data.steps.reduce((s, x) => s + x.inserted, 0);
           toast.success(`Migration complete — ${rows.toLocaleString()} rows into ${data.target}`);

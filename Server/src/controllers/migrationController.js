@@ -169,6 +169,18 @@ const STEP_ORDER = [
   { key: 'medical',          label: 'Medical records' },
 ];
 
+/**
+ * A non-empty description of a failure. `err.message` alone is not enough: Node's AggregateError
+ * (e.g. ECONNREFUSED on both IPv4 and IPv6 for "localhost") has an EMPTY message, which the UI read
+ * as "no error" and reported a failed run as "Migration complete — 0 rows".
+ */
+function describeError(err) {
+  if (!err) return 'Unknown error';
+  const inner = Array.isArray(err.errors) && err.errors.length
+    ? ` (${err.errors.map(e => e?.message || e?.code || String(e)).join('; ')})` : '';
+  return (err.message || err.code || err.name || String(err)) + inner || 'Unknown error';
+}
+
 const postExecute = asyncHandler(async (req, res) => {
   const which = String(req.body?.target ?? '').toLowerCase();
   if (which !== 'rehearsal' && which !== 'live') {
@@ -237,8 +249,9 @@ const postExecute = asyncHandler(async (req, res) => {
       }});
     })
     .catch((err) => {
+      console.error('[migration] execute failed:', err);
       job.running = false;
-      job.error = err.message;
+      job.error = describeError(err);
       job.finishedAt = new Date().toISOString();
       if (job.currentStep) touch(job.currentStep, { state: 'failed' });
       logActivity({ module: 'Migration', action: 'execute_failed', ...fromReq(req),
