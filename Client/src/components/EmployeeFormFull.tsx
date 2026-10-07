@@ -243,11 +243,20 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
   const units       = useMemo(() => structures.filter(s => s.typeLabel === 'Unit'),   [structures]);
   const outlets     = useMemo(() => structures.filter(s => s.typeLabel === 'Outlet'), [structures]);
 
-  const filteredNotches    = useMemo(() =>
-    form.paygradeId
-      ? notches.filter(n => String(n.paygradeId) === String(form.paygradeId))
-      : [],
-  [notches, form.paygradeId]);
+  // The employee's SAVED notch is always offered, even when it belongs to a different grade:
+  // migrated legacy data has such pairs, and filtering it out made the field look empty, so a save
+  // would silently drop a real assignment. It is offered only until the grade is changed.
+  const savedNotchId = initialData?.notcheId != null ? String(initialData.notcheId) : '';
+  const filteredNotches    = useMemo(() => {
+    if (!form.paygradeId) return [];
+    const list = notches.filter(n => String(n.paygradeId) === String(form.paygradeId));
+    const gradeUnchanged = String(form.paygradeId) === String(initialData?.paygradeId ?? '');
+    if (savedNotchId && gradeUnchanged && !list.some(n => String(n.id) === savedNotchId)) {
+      const saved = notches.find(n => String(n.id) === savedNotchId);
+      if (saved) list.push({ ...saved, name: `${saved.name} (other pay grade)` });
+    }
+    return list;
+  }, [notches, form.paygradeId, savedNotchId, initialData?.paygradeId]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const set = (name: string, value: string) => setForm((p: any) => ({ ...p, [name]: value }));
@@ -525,12 +534,21 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
             {fieldShown('supervisorId') && (
             <Field label="Supervisor" required={isRequired('supervisorId')}>
               <Combobox
-                options={supervisors
-                  .filter(s => !initialData || s.id !== initialData.id?.toString())
-                  .map(s => {
-                    const name = (s.name ?? `${s.firstName ?? ''} ${s.lastName ?? ''}`).trim();
-                    return { id: String(s.id), label: (name || 'Employee') + (s.employee_id ? ` (${s.employee_id})` : '') };
-                  })}
+                options={(() => {
+                  const opts = supervisors
+                    .filter(s => !initialData || s.id !== initialData.id?.toString())
+                    .map(s => {
+                      const name = (s.name ?? `${s.firstName ?? ''} ${s.lastName ?? ''}`).trim();
+                      return { id: String(s.id), label: (name || 'Employee') + (s.employee_id ? ` (${s.employee_id})` : '') };
+                    });
+                  // The picker lists ACTIVE staff only. A saved supervisor who has since left (common in
+                  // migrated data) must still be shown, or the field looks empty and a save would clear it.
+                  const cur = initialData?.supervisor;
+                  if (cur?.id && !opts.some(o => o.id === String(cur.id))) {
+                    opts.push({ id: String(cur.id), label: `${cur.name ?? 'Employee'}${cur.employee_id ? ` (${cur.employee_id})` : ''} — no longer active` });
+                  }
+                  return opts;
+                })()}
                 value={form.supervisorId}
                 onChange={id => set('supervisorId', id)}
                 placeholder="Search supervisor..."
