@@ -337,11 +337,11 @@ const RUNS_SELECT = Prisma.sql`
 
 // GET /payroll/runs — list all payroll runs with frequency, deduction group, payment type, and approval status.
 const getPayrollRuns = asyncHandler(async (_req, res) => {
-  // Newest PAY PERIOD first, not newest row. The 211 migrated runs were all inserted in one load and
-  // share a single created_at, so ordering by it alone listed history in arbitrary order. Within a
-  // period, the most recently created run comes first; id breaks any remaining tie deterministically.
-  const rows = await query`${RUNS_SELECT}
-    ORDER BY pr.date_start DESC NULLS LAST, pr.date_end DESC NULLS LAST, pr.created_at DESC, pr.id DESC`;
+  // Newest-created first, for old and new runs alike. The 211 migrated runs were inserted in one load
+  // and share a single created_at, so created_at alone listed them in arbitrary order. The loader
+  // inserts them in legacy-id order (= the order they were created in the old system), so `id DESC`
+  // as the tie-break restores their original creation order beneath the runs created since.
+  const rows = await query`${RUNS_SELECT} ORDER BY pr.created_at DESC, pr.id DESC`;
   respond.ok(res, 'Payroll runs retrieved', rows);
 });
 
