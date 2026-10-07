@@ -2323,7 +2323,12 @@ class MigrationRun {
         'total_credit_amount', 'comment', 'posted_by',
         ...(hasPostedDate ? ['posted_date'] : []),
         'status', 'approved_date', 'approved_by', 'reference_no', 'response'];
-      const n = await this.insertMany(table, cols, rows, 'ON CONFLICT (id) DO NOTHING', 'medical');
+      // `hospitalclaims_hist` has NO primary key or unique constraint at all — the same quirk as
+      // staffmedical_hist — so `ON CONFLICT (id)` is rejected outright ("no unique or exclusion
+      // constraint matching the ON CONFLICT specification"). Both tables are cleared above, so no
+      // conflict clause is needed; hospitalclaims keeps one because it does have a primary key.
+      const conflict = table === 'hospitalclaims' ? 'ON CONFLICT (id) DO NOTHING' : '';
+      const n = await this.insertMany(table, cols, rows, conflict, 'medical');
       await this.tgt(
         `SELECT setval(pg_get_serial_sequence('${table}','id'), GREATEST((SELECT MAX(id) FROM ${table}), 1))`)
         .catch(() => {});
