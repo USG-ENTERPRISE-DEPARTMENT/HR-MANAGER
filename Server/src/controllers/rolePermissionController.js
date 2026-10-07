@@ -326,7 +326,7 @@ const addRole = asyncHandler(async (req, res) => {
       `SELECT p.id, p.name FROM permissions p
        INNER JOIN role_has_permissions rhp ON rhp.permission_id = p.id
        WHERE rhp.role_id = ?`,
-      [newRoleId]
+      [helper.safeBigInt(newRoleId)]
     ),
   ]);
 
@@ -391,36 +391,28 @@ const updateRole = asyncHandler(async (req, res) => {
   }
 
   // ── 2. Sync permissions if permission_ids was supplied ───────────────────
+  // The role ends up with EXACTLY the submitted set. This used to diff against the current set, but
+  // that read bound the role id as a string — on Postgres `bigint = text` fails, the error came back
+  // as "no current permissions", so nothing was ever revoked and every save only ADDED. Replacing
+  // the set in one transaction needs no diff and cannot half-apply.
   if (Array.isArray(permission_ids)) {
-    const currentPermsResult = await helper.selectRecordsWithQuery(
-      `SELECT permission_id FROM role_has_permissions WHERE role_id = ?`,
-      [id]
-    );
-
-    const currentIds = (currentPermsResult.data ?? []).map((r) => String(r.permission_id));
     // Accept permission names or IDs from the client and resolve to numeric IDs
     const incomingIds = await resolvePermissionIds(permission_ids);
+    const permIdsBig = helper.sanitizeIds(incomingIds);
 
-    const toAssign = incomingIds.filter((pid) => !currentIds.includes(pid));
-    const toRevoke = currentIds.filter((pid) => !incomingIds.includes(pid));
+    // Names that resolved to nothing must not be read as "clear the role".
+    if (permission_ids.length > 0 && permIdsBig.length === 0) {
+      return res.status(400).json({ status: '400', message: 'None of the selected permissions exist' });
+    }
 
-    await Promise.all([
-      ...toAssign.map((permissionId) => {
-        const permIdBig = helper.safeBigInt(permissionId);
-        if (!permIdBig) return Promise.resolve(); // skip invalid
-        return helper.dynamicInsert('role_has_permissions', {
-          role_id: roleIdBig,
-          permission_id: permIdBig,
-        });
-      }),
-      ...toRevoke.map((permissionId) => {
-        const permIdBig = helper.safeBigInt(permissionId);
-        if (!permIdBig) return Promise.resolve(); // skip invalid
-        return helper.deleteRecordsWithCondition('role_has_permissions', {
-          role_id: roleIdBig,
-          permission_id: permIdBig,
-        });
-      }),
+    await helper.prisma.$transaction([
+      helper.prisma.role_has_permissions.deleteMany({ where: { role_id: roleIdBig } }),
+      ...(permIdsBig.length
+        ? [helper.prisma.role_has_permissions.createMany({
+            data: permIdsBig.map(pid => ({ role_id: roleIdBig, permission_id: pid })),
+            skipDuplicates: true,
+          })]
+        : []),
     ]);
   }
 
@@ -431,7 +423,7 @@ const updateRole = asyncHandler(async (req, res) => {
       `SELECT p.id, p.name FROM permissions p
        INNER JOIN role_has_permissions rhp ON rhp.permission_id = p.id
        WHERE rhp.role_id = ?`,
-      [id]
+      [roleIdBig]   // bigint bind — a string fails on Postgres and returns no permissions
     ),
   ]);
 
