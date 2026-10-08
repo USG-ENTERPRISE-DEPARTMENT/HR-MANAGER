@@ -243,6 +243,16 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
   const units       = useMemo(() => structures.filter(s => s.typeLabel === 'Unit'),   [structures]);
   const outlets     = useMemo(() => structures.filter(s => s.typeLabel === 'Outlet'), [structures]);
 
+  // Client-specific rule (Settings → Controls → Employee Form → "Departments only at Head Office"):
+  // staff at any branch other than Head Office have no department. So once a branch is chosen and it
+  // is NOT Head Office, the Department field is hidden (and not required). With no branch chosen —
+  // or before structures load — it stays visible rather than guessing. Off → no effect at all.
+  const headOfficeOnlyDepts = useMemo(() => getSettings().employeeForm.departmentHeadOfficeOnly, []);
+  const branchType = (id: any) => structures.find(s => String(s.id) === String(id ?? ''))?.typeLabel ?? null;
+  const isNonHeadOfficeBranch = (id: any) => headOfficeOnlyDepts && !!id && branchType(id) !== null && branchType(id) !== 'Head Office';
+  const departmentHiddenByBranch = isNonHeadOfficeBranch(form.branchId);
+  const initialBranchId = String(initialData?.branch?.id ?? '');
+
   // The employee's SAVED notch is always offered, even when it belongs to a different grade:
   // migrated legacy data has such pairs, and filtering it out made the field look empty, so a save
   // would silently drop a real assignment. It is offered only until the grade is changed.
@@ -279,7 +289,11 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
       <Combobox
         options={list.map(s => ({ id: String(s.id), label: s.title }))}
         value={form[name] != null ? String(form[name]) : ''}
-        onChange={v => set(name, v)}
+        onChange={v => {
+          set(name, v);
+          // Moving to a non-Head-Office branch drops the department (branches have none).
+          if (name === 'branchId' && isNonHeadOfficeBranch(v)) set('departmentId', '');
+        }}
         placeholder={placeholder}
       />
     </Field>
@@ -301,11 +315,13 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
     };
   const isLocked   = (key: string) => !!EMPLOYEE_FORM_FIELDS_BY_KEY[key]?.locked;
   const isRequired = (key: string) => isLocked(key) || (fcfg(key).visible && fcfg(key).required);
-  // A field shows when config-visible (locked always) — plus the spouse-name marriage rule.
+  // A field shows when config-visible (locked always) — plus the spouse-name marriage rule and the
+  // branch rule below.
   const fieldShown = (key: string) => {
     if (transferProtected(key)) return false;
     if (!(isLocked(key) || fcfg(key).visible)) return false;
     if (key === 'spouse_name') return form.marital_status === 'Married';
+    if (key === 'departmentId') return !departmentHiddenByBranch;
     return true;
   };
   const sectionShown = (keys: string[]) => keys.some(k => fieldShown(k));
@@ -366,6 +382,12 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
      'departmentId', 'branchId', 'unitId', 'outletId', 'supervisorId'].forEach(k => {
       if (!payload[k]) payload[k] = null;
     });
+    // Department hidden by the branch rule: on an edit where the branch was NOT changed, leave the
+    // stored department alone (a few legacy branch staff do have one) rather than silently clearing
+    // it on an unrelated save. A changed branch, or a new employee, sends null.
+    if (departmentHiddenByBranch && isEdit && 'departmentId' in payload && String(form.branchId) === initialBranchId) {
+      delete payload.departmentId;
+    }
     ['dateOfBirth', 'hireDate', 'confirmationDate',
      'nationalIdExpiry', 'passportExpiry', 'driverLicenseExp'].forEach(k => {
       if (!payload[k]) payload[k] = null;

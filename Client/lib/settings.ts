@@ -42,6 +42,9 @@ export interface AppSettings {
   employeeForm: {
     fields: EmployeeFieldConfig;
     transferFields: EmployeeTransferFieldConfig;
+    // Departments exist only at Head Office: hide/clear Department for any other branch.
+    // Client-specific rule, so off by default (Settings → Controls → Employee Form).
+    departmentHeadOfficeOnly: boolean;
   };
 }
 
@@ -81,6 +84,7 @@ const DEFAULTS: AppSettings = {
   employeeForm: {
     fields: defaultFieldConfig(),
     transferFields: defaultTransferFieldConfig(),
+    departmentHeadOfficeOnly: false,
   },
 };
 
@@ -119,6 +123,7 @@ export function getSettings(): AppSettings {
     employeeForm:     {
       fields: structuredClone(cache.employeeForm.fields),
       transferFields: structuredClone(cache.employeeForm.transferFields),
+      departmentHeadOfficeOnly: !!cache.employeeForm.departmentHeadOfficeOnly,
     },
   };
 }
@@ -179,13 +184,19 @@ export async function initControlSettings(): Promise<void> {
       merged.employeeForm = {
         fields: raw ? { ...defaultFieldConfig(), ...JSON.parse(raw) } : defaultFieldConfig(),
         transferFields: defaultTransferFieldConfig(),
+        departmentHeadOfficeOnly: flat['department_head_office_only'] === '1',
       };
       const transferRaw = flat['employee_transfer_fields'];
       const savedTransfer = transferRaw ? JSON.parse(transferRaw) : {};
       merged.employeeForm.transferFields = Array.isArray(savedTransfer)
         ? { ...defaultTransferFieldConfig(), ...Object.fromEntries(savedTransfer.map((key: string) => [key, true])) }
         : { ...defaultTransferFieldConfig(), ...savedTransfer };
-    } catch { merged.employeeForm = { fields: defaultFieldConfig(), transferFields: defaultTransferFieldConfig() }; }
+    } catch {
+      merged.employeeForm = {
+        fields: defaultFieldConfig(), transferFields: defaultTransferFieldConfig(),
+        departmentHeadOfficeOnly: flat['department_head_office_only'] === '1',
+      };
+    }
     writeCache(merged);
   } catch { /* offline — keep cached/default values */ }
 }
@@ -208,6 +219,7 @@ export function saveSetting<K extends keyof AppSettings>(
     api.put('/settings/controls', {
       employee_form_fields: JSON.stringify(cfg),
       employee_transfer_fields: JSON.stringify(transferFields),
+      department_head_office_only: updated.employeeForm.departmentHeadOfficeOnly ? '1' : '0',
     })
       .catch(() => { /* cache still holds the value locally */ });
     return;

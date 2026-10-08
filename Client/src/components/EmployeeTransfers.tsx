@@ -98,6 +98,20 @@ function TransferForm({ initial, onClose, onSaved }: { initial?: Transfer | null
     return map[key] ? codeOptions(map[key]) : [];
   };
 
+  // Client-specific rule (Settings → Controls → Employee Form → "Departments only at Head Office").
+  // The branch that counts is the PROPOSED one when chosen, otherwise the employee's current branch;
+  // when that is a non-Head-Office branch the Department field is hidden. Unknown branch (none, or
+  // structures not loaded) → keep the field visible. Off → no effect at all.
+  const headOfficeOnlyDepts = useMemo(() => getSettings().employeeForm.departmentHeadOfficeOnly, []);
+  const branchType = (id: string | null | undefined) =>
+    (refs.structures || []).find(s => String(s.id) === String(id ?? ''))?.typeLabel ?? null;
+  const currentBranchId = (refs.employees || []).find(e => String(e.id) === form.employee)?.branchId ?? null;
+  const proposedBranchId = form['field:branchId'] || '';
+  const effectiveBranchType = branchType(proposedBranchId || currentBranchId);
+  const departmentHidden = headOfficeOnlyDepts && !!effectiveBranchType && effectiveBranchType !== 'Head Office';
+  // A move TO a non-Head-Office branch must also clear the department, not just hide it.
+  const clearsDepartment = !!proposedBranchId && departmentHidden && configuredKeys.includes('departmentId');
+
   const save = async () => {
     if (!form.employee) return toast.error('Employee is required');
     if (!form.effective_date) return toast.error('Effective date is required');
@@ -107,6 +121,9 @@ function TransferForm({ initial, onClose, onSaved }: { initial?: Transfer | null
       payload.proposed_values = Object.fromEntries(configuredKeys
         .filter(key => initial || form[`field:${key}`] !== '')
         .map(key => [key, form[`field:${key}`] === '' ? null : form[`field:${key}`]]));
+      if (clearsDepartment) payload.proposed_values.departmentId = null;
+      // Hidden without a branch move (employee already at a branch): never send a department change.
+      else if (departmentHidden) delete payload.proposed_values.departmentId;
       if (initial) await api.put(`/employee-transfers/${initial.id}`, payload);
       else await api.post('/employee-transfers', payload);
       toast.success(initial ? 'Transfer draft updated' : 'Transfer draft created');
@@ -126,8 +143,11 @@ function TransferForm({ initial, onClose, onSaved }: { initial?: Transfer | null
       <div className="my-5 border-t border-[var(--border)] pt-4">
         <h4 className="mb-3 text-sm font-bold text-[var(--text-primary)]">Proposed employee changes</h4>
         <p className="mb-4 text-xs text-[var(--text-muted)]">Select only the fields that should change. Unselected fields remain as they are.</p>
+        {clearsDepartment && (
+          <p className="mb-4 text-xs text-[var(--warning)]">Moving to a branch other than Head Office — the employee's department will be cleared.</p>
+        )}
         {!transferFields.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No transfer fields are enabled in Control Setup.</div> : (
-          <div className="grid gap-4 sm:grid-cols-2">{transferFields.map(field => {
+          <div className="grid gap-4 sm:grid-cols-2">{transferFields.filter(field => !(field.key === 'departmentId' && departmentHidden)).map(field => {
             const key = `field:${field.key}`;
             const opts = fieldOptions(field.key);
             return <FormField key={field.key} label={field.label}>

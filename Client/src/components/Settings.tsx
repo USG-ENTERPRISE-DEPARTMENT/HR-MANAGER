@@ -166,6 +166,28 @@ function MaybeToggle({ checked, disabled, onChange }: { checked: boolean; disabl
   );
 }
 
+// Client-specific organisation rule: departments exist only at Head Office. When on, Department is
+// hidden (and cleared on a branch change) for staff at any other branch — in the employee form,
+// Employee Transfers and the bulk import.
+function DepartmentHeadOfficeRule() {
+  const [on, setOn] = useState<boolean>(() => getSettings().employeeForm.departmentHeadOfficeOnly);
+  const toggle = (v: boolean) => { setOn(v); saveSetting('employeeForm', { departmentHeadOfficeOnly: v }); };
+  return (
+    <SectionCard icon={<Users size={13} />} title="Organisation rules">
+      <div className="flex items-center gap-4 px-5 py-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">Departments only at Head Office</p>
+          <p className="text-[12px] text-[var(--text-muted)] mt-0.5">
+            When an employee's branch is anything other than Head Office, the Department field is hidden and cleared —
+            on Add/Edit Employee, Employee Transfers and Employee Import. Leave off if branches have departments.
+          </p>
+        </div>
+        <MaybeToggle checked={on} onChange={toggle} />
+      </div>
+    </SectionCard>
+  );
+}
+
 // Settings → Controls → Employee Form: per-field visibility + required for the Add Employee form.
 function EmployeeCreationFieldsSection() {
   const [fields, setFields] = useState<EmployeeFieldConfig>(() => getSettings().employeeForm.fields);
@@ -205,6 +227,8 @@ function EmployeeCreationFieldsSection() {
           <RefreshCw size={13} /> Reset to defaults
         </button>
       </div>
+
+      <DepartmentHeadOfficeRule />
 
       {EMPLOYEE_FORM_STEPS.map((stepDef) => {
         const stepFields = EMPLOYEE_FORM_FIELDS.filter((f) => f.step === stepDef.id);

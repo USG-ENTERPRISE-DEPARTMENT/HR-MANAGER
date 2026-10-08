@@ -158,6 +158,9 @@ const CONTROL_KEYS = [
   'general_currency',
   'employee_form_fields', // JSON: per-field {visible,required} config for the employee-creation form
   'employee_transfer_fields', // JSON: fields that must use the Employee Transfer workflow
+  // '1' = departments exist only at Head Office: Department is hidden/cleared for staff at any other
+  // branch (employee form, transfers, import). Client-specific, so off unless switched on.
+  'department_head_office_only',
   'employee_id_format',   // template for auto-generated employee IDs, e.g. EMP-{YYYY}-{SEQ4}
   // Master payment/GL-posting switches per module. '0' = record-only (skip all GL postings).
   'leave_payments_enabled', 'medical_payments_enabled', 'payroll_payments_enabled',

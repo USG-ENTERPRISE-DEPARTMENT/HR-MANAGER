@@ -688,7 +688,7 @@ const getActiveEmployees = asyncHandler(async (req, res) => {
     where,
     select: {
       id: true, employee_id: true, firstName: true, lastName: true,
-      jobTitleId: true, departmentId: true,
+      jobTitleId: true, departmentId: true, branchId: true,
     },
     orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     take: 2000, // searchable picker filters client-side — must return the full active roster
@@ -720,6 +720,8 @@ const getActiveEmployees = asyncHandler(async (req, res) => {
     name:        `${e.firstName} ${e.lastName}`.trim(),
     jobTitle:    e.jobTitleId   ? (jtMap[e.jobTitleId]              ?? null) : null,
     department:  e.departmentId ? (deptMap[e.departmentId.toString()] ?? null) : null,
+    // Raw id: the transfer form needs the CURRENT branch to apply the Head-Office-only department rule.
+    branchId:    e.branchId ? e.branchId.toString() : null,
   })));
 });
 

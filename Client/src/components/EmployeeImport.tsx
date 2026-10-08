@@ -389,6 +389,13 @@ export function EmployeeImport({ onClose, onImported }: Props) {
     for (const col of COLUMNS) colIndex[col.key] = headerRow.indexOf(col.header.toLowerCase());
 
     const autoGenEmpNum = getSettings().employees.autoGenerateNumber;
+    // Client-specific rule (Settings → Controls → Employee Form → "Departments only at Head Office"):
+    // a row whose branch is not Head Office is imported WITHOUT its department — not rejected, since
+    // the rest of the row is valid. Counted and reported after the import.
+    const headOfficeOnlyDepts = getSettings().employeeForm.departmentHeadOfficeOnly;
+    const structTypeById = new Map<string, string>(
+      (lists?.structures ?? []).map((s: any) => [String(s.id), s.typeLabel]));
+    let deptsDropped = 0;
     const errors: string[] = [];
     const payloads: any[] = [];
 
@@ -401,6 +408,10 @@ export function EmployeeImport({ onClose, onImported }: Props) {
         const idx = colIndex[col.key];
         const cell = idx >= 0 ? row[idx] : '';
         payload[col.key] = resolve(col, cell, rowNum, rowErrors);
+      }
+      if (headOfficeOnlyDepts && payload.branchId && payload.departmentId) {
+        const type = structTypeById.get(String(payload.branchId));
+        if (type && type !== 'Head Office') { payload.departmentId = null; deptsDropped++; }
       }
 
       // Employee ID is required only when auto-generate is off (matches the form)
@@ -447,6 +458,9 @@ export function EmployeeImport({ onClose, onImported }: Props) {
     setResult({ created, errors });
     if (created) { toast.success(`${created} employee${created !== 1 ? 's' : ''} imported`); onImported(); }
     if (errors.length) toast.error(`${errors.length} row(s) skipped`);
+    if (deptsDropped) {
+      toast.info(`${deptsDropped} row${deptsDropped !== 1 ? 's' : ''} imported without a department — the branch is not Head Office`);
+    }
   }
 
   return createPortal(
