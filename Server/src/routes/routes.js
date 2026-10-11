@@ -387,6 +387,8 @@ router.get   ('/payroll/approval-flow',           run.getApprovalFlow);
 router.put   ('/payroll/approval-flow',           permissionGuard('process_payroll'), run.saveApprovalFlow);
 router.get   ('/payroll/runs/:id/data',           run.getPayrollData);
 router.get   ('/payroll/runs/:id/nassit-report',  run.getNassitReport);
+router.get   ('/payroll/runs/:id/paye-report',    run.getPayeReport);
+router.get   ('/payroll/runs/:id/gl-summary',     run.getGlSummary);
 router.get   ('/payroll/runs/:id/debug',          run.debugPayrollRun);
 router.put   ('/payroll/runs/:id/data/:itemId',   permissionGuard('process_payroll'), run.updatePayrollDataItem);
 
@@ -458,6 +460,7 @@ router.delete('/payroll/payslip-templates/:id',               permissionGuard('m
 const payslip = require('../controllers/payslipController');
 router.get   ('/payroll/my-payslips',                         payslip.getMyPayslips);
 router.get   ('/payroll/my-tax-summary',                      payslip.getMyTaxSummary);
+router.get   ('/payroll/my-nassit',                           run.getMyNassit);
 router.get   ('/payroll/runs/:id/employees/:empId/payslip.pdf', payslip.downloadPayslip);
 
 // ─────────────────────────────────────────────

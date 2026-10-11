@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type ComponentType } from 'react';
-import { Download, FileText, Users, Receipt, Stethoscope, FileSpreadsheet, X, TrendingUp } from 'lucide-react';
+import { Download, FileText, Users, Receipt, Stethoscope, FileSpreadsheet, X, TrendingUp, UserCheck, UserPlus, UserMinus, CalendarDays, Briefcase, Clock, Landmark, Database, Calculator, Table } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -13,6 +13,26 @@ import { SearchSelect } from './ui/SearchSelect';
 import api from '../../lib/api';
 import { useCan } from '@/hooks/useCan';
 import { PageHeader } from './ui/PageHeader';
+import { ActiveEmployeesReport, NewHiresReport, TerminatedEmployeesReport } from './reports/EmployeeReports';
+import { EmployeeLeavesReport, LeaveEntitlementReport } from './reports/LeaveReports';
+import { GeneralPayrollReport, PayeReport, GlSummaryReport, PayrollMetaExport } from './reports/PayrollReports';
+import { JobPositionsReport, AttendanceReport } from './reports/OtherReports';
+
+// Reports carried over from the legacy IceHRM system. Each is self-contained; only one is open at a time.
+const LEGACY_REPORTS = {
+  active:      ActiveEmployeesReport,
+  newHires:    NewHiresReport,
+  terminated:  TerminatedEmployeesReport,
+  leaves:      EmployeeLeavesReport,
+  entitlement: LeaveEntitlementReport,
+  general:     GeneralPayrollReport,
+  paye:        PayeReport,
+  gl:          GlSummaryReport,
+  meta:        PayrollMetaExport,
+  jobs:        JobPositionsReport,
+  attendance:  AttendanceReport,
+};
+type LegacyReportKey = keyof typeof LEGACY_REPORTS;
 
 interface Report {
   id: number;
@@ -28,6 +48,8 @@ export function AdminReports() {
   const { can } = useCan();
   const canExport = can('export_reports');   // gates all Excel / PDF export actions
   const [searchQuery, setSearchQuery] = useState('');
+  const [legacyOpen, setLegacyOpen] = useState<LegacyReportKey | null>(null);
+  const LegacyReport = legacyOpen ? LEGACY_REPORTS[legacyOpen] : null;
 
   // Medical utilisation modal state
   const [medOpen,    setMedOpen]    = useState(false);
@@ -629,6 +651,17 @@ export function AdminReports() {
       action: openPerformanceReport,
       actionLabel: 'View Report',
     },
+    { id: 9,  name: 'Active Employee Report', description: 'Employees currently in service, based on joined and termination dates.', icon: UserCheck, action: () => setLegacyOpen('active') },
+    { id: 10, name: 'New Hires Employee Report', description: 'Employees who joined between two dates.', icon: UserPlus, action: () => setLegacyOpen('newHires') },
+    { id: 11, name: 'Terminated Employee Report', description: 'Employees who were terminated or resigned between two dates, with the reason.', icon: UserMinus, action: () => setLegacyOpen('terminated') },
+    { id: 12, name: 'Employee Leaves Report', description: 'Every leave application by employee, date range and status.', icon: CalendarDays, action: () => setLegacyOpen('leaves') },
+    { id: 13, name: 'Employee Leave Entitlement', description: 'Leave entitlement, days taken and balance for the active period, by department or employee.', icon: CalendarDays, action: () => setLegacyOpen('entitlement') },
+    { id: 14, name: 'General Payroll Report', description: 'Every report column per employee for a payroll run, with pay grade, account and NASSIT numbers.', icon: Table, action: () => setLegacyOpen('general') },
+    { id: 15, name: 'PAYE Report', description: 'PAYE return per employee for a payroll run, in the statutory column layout.', icon: Calculator, action: () => setLegacyOpen('paye') },
+    { id: 16, name: 'GL Summary Report', description: 'The payroll journal by GL account, component and branch — what finalising the run posts.', icon: Landmark, action: () => setLegacyOpen('gl') },
+    { id: 17, name: 'Payroll Meta Data Export', description: 'Payroll column configuration (formulas, components, links) for a calculation group.', icon: Database, action: () => setLegacyOpen('meta'), exportOnly: true },
+    { id: 18, name: 'Job Positions Report', description: 'All vacancies in the company with their status and number of applications.', icon: Briefcase, action: () => setLegacyOpen('jobs') },
+    { id: 19, name: 'Employee Attendance Report', description: 'Attendance entries by employee and date range, with hours, lateness and overtime.', icon: Clock, action: () => setLegacyOpen('attendance') },
   ];
 
   const filtered = reports.filter(r =>
@@ -705,6 +738,10 @@ export function AdminReports() {
           <TablePagination total={reports.length} filtered={filtered.length} />
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {LegacyReport && <LegacyReport key={legacyOpen} onClose={() => setLegacyOpen(null)} canExport={canExport} />}
+      </AnimatePresence>
 
       {/* Employee Details Report modal */}
       <AnimatePresence>

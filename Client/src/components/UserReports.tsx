@@ -12,6 +12,7 @@ import { printDocument } from './ui/printDocument';
 import api from '../../lib/api';
 import { getCurrentUser } from '../../lib/auth';
 import { PageHeader } from './ui/PageHeader';
+import { MyNassitReport } from './reports/MyNassitReport';
 
 interface PayslipRun {
   run_id: string;
@@ -50,6 +51,8 @@ export function UserReports() {
   useEffect(() => {
     api.get('/settings/app-setup').then(r => setAppSetup(r.data?.data ?? r.data)).catch(() => {});
   }, []);
+
+  const [nassitOpen, setNassitOpen] = useState(false);
 
   // Medical statement modal state
   const [medOpen,    setMedOpen]    = useState(false);
@@ -243,6 +246,14 @@ export function UserReports() {
       action: openPerfReport,
       actionLabel: 'Generate',
     },
+    {
+      id: 5,
+      name: 'My NASSIT Contributions',
+      description: 'Your employee and employer NASSIT contributions per payroll run for a period.',
+      icon: FileSpreadsheet,
+      action: () => setNassitOpen(true),
+      actionLabel: 'Generate',
+    },
   ];
 
   const filtered = reports.filter(r =>
@@ -326,6 +337,10 @@ export function UserReports() {
           <TablePagination total={reports.length} filtered={filtered.length} />
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {nassitOpen && <MyNassitReport onClose={() => setNassitOpen(false)} />}
+      </AnimatePresence>
 
       {/* My Leave Statement modal */}
       <AnimatePresence>

@@ -90,6 +90,13 @@ async function getWorkingDays(dateStart, dateEnd) {
   return days;
 }
 
+// Postgres folds unquoted camelCase columns to lowercase, so `SELECT paygradeId` comes back as
+// `paygradeid` and `row.paygradeId` is undefined — every paygrade/department/service-days check then
+// fails. Employee profile queries alias these to snake_case; this restores the keys the checks read.
+function withProfileKeys(row) {
+  return row ? { ...row, departmentId: row.department_id, paygradeId: row.paygrade_id, hireDate: row.hire_date } : row;
+}
+
 // ── Leave balance calculator ──────────────────────────────────────────────────
 
 async function calcBalance(employeeId, leaveTypeId, leavePeriodId, empProfile) {
@@ -99,9 +106,10 @@ async function calcBalance(employeeId, leaveTypeId, leavePeriodId, empProfile) {
   ]);
 
   // Find matching rule for this employee + leave type (raw SQL — avoids stale Prisma client types)
-  const emp = empProfile ?? (await prisma.$queryRaw`
-    SELECT jobTitleId AS job_title_id, departmentId, employmentStatusId AS emp_status_id, paygradeId, hireDate
-     FROM employee WHERE id=${toBigInt(employeeId)}`.catch(() => []))[0] ?? {};
+  const emp = empProfile ?? withProfileKeys((await prisma.$queryRaw`
+    SELECT jobTitleId AS job_title_id, departmentId AS department_id, employmentStatusId AS emp_status_id,
+           paygradeId AS paygrade_id, hireDate AS hire_date
+     FROM employee WHERE id=${toBigInt(employeeId)}`.catch(() => []))[0]) ?? {};
   const allRules = await prisma.leaverules.findMany({ where: { leave_type: toBigInt(leaveTypeId) } }).catch(() => []);
   const ruleMatch = allRules.find(r => {
     if (r.employee          && String(r.employee)          !== String(employeeId        ?? '')) return false;
@@ -806,11 +814,11 @@ exports.getLeaveTypes = asyncHandler(async (req, res) => {
       const empId = toBigInt(userRow?.employeeId);
       if (empId) {
         const empRow = await prisma.$queryRaw`
-          SELECT e.paygradeId, UPPER(LEFT(clv.label,1)) AS gender_code
+          SELECT e.paygradeId AS paygrade_id, UPPER(LEFT(clv.label,1)) AS gender_code
            FROM employee e
            LEFT JOIN CodeListValue clv ON clv.id = e.genderId
            WHERE e.id=${empId}`.catch(() => []);
-        empPaygradeId = empRow[0]?.paygradeId != null ? String(empRow[0].paygradeId) : null;
+        empPaygradeId = empRow[0]?.paygrade_id != null ? String(empRow[0].paygrade_id) : null;
         empGenderCode = empRow[0]?.gender_code ?? null;
       }
     }
@@ -992,9 +1000,10 @@ async function processCarryForward(oldPeriod, newPeriodId) {
     rulesByType[key].push(r);
   }
 
-  const employees = await prisma.$queryRaw`
-    SELECT id, jobTitleId AS job_title_id, departmentId, employmentStatusId AS emp_status_id, paygradeId, hireDate
-     FROM employee WHERE status='Active' OR status='active'`.catch(() => []);
+  const employees = (await prisma.$queryRaw`
+    SELECT id, jobTitleId AS job_title_id, departmentId AS department_id, employmentStatusId AS emp_status_id,
+           paygradeId AS paygrade_id, hireDate AS hire_date
+     FROM employee WHERE status='Active' OR status='active'`.catch(() => [])).map(withProfileKeys);
 
   for (const lt of allTypes) {
     const typeRules = rulesByType[String(lt.id)] || [];
@@ -1650,13 +1659,13 @@ exports.applyLeave = asyncHandler(async (req, res) => {
 
   // ── Fetch employee details (needed for rule matching + exp_days) ──────────
   const empRows = await prisma.$queryRaw`
-    SELECT e.id, e.status, e.hireDate, e.jobTitleId AS job_title_id, e.departmentId,
-            e.employmentStatusId AS emp_status_id, e.paygradeId,
+    SELECT e.id, e.status, e.hireDate AS hire_date, e.jobTitleId AS job_title_id, e.departmentId AS department_id,
+            e.employmentStatusId AS emp_status_id, e.paygradeId AS paygrade_id,
             UPPER(LEFT(clv.label,1)) AS gender_code
      FROM employee e
      LEFT JOIN CodeListValue clv ON clv.id = e.genderId
      WHERE e.id=${toBigInt(employee)}`.catch(() => []);
-  const emp = empRows[0] ?? {};
+  const emp = withProfileKeys(empRows[0]) ?? {};
   if (!emp.id) return respond.badReq(res, 'Employee not found');
   if (emp.status !== '1') return respond.badReq(res, 'Cannot apply leave for an inactive employee');
 
@@ -1710,7 +1719,17 @@ exports.applyLeave = asyncHandler(async (req, res) => {
     if (typeGroupRows.length > 0) {
       const allowedPaygrades = typeGroupRows.map(g => String(g.leave_group_id));
       if (!emp.paygradeId || !allowedPaygrades.includes(String(emp.paygradeId))) {
-        return respond.badReq(res, 'Employee is not eligible for this leave type based on their pay grade');
+        // Name both sides. A bare "not eligible" hid the two real causes: the employee has NO pay grade
+        // on record, or the leave type is linked to a different pay-grade row than the one the employee
+        // holds (e.g. two grades sharing a name, or links saved before the grades were re-imported).
+        const ids = [...new Set([...allowedPaygrades, String(emp.paygradeId ?? '')].filter(Boolean))].map(toBigInt);
+        const names = new Map((await prisma.paygrades.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+          .catch(() => [])).map(p => [String(p.id), p.name]));
+        const label = id => `${names.get(String(id)) ?? 'missing pay grade'} (#${id})`;
+        const allowed = allowedPaygrades.map(label).join(', ');
+        return respond.badReq(res, emp.paygradeId
+          ? `Employee is not eligible for this leave type based on their pay grade — they are on ${label(emp.paygradeId)}; this leave type allows ${allowed}`
+          : `Employee is not eligible for this leave type — they have no pay grade on record; this leave type allows ${allowed}`);
       }
     }
   }
@@ -2067,12 +2086,13 @@ exports.getLeaveBalance = asyncHandler(async (req, res) => {
 
   // Employee profile for rule matching
   const empRows = await prisma.$queryRaw`
-    SELECT e.id, e.jobTitleId AS job_title_id, e.departmentId, e.employmentStatusId AS emp_status_id, e.paygradeId, e.hireDate,
+    SELECT e.id, e.jobTitleId AS job_title_id, e.departmentId AS department_id, e.employmentStatusId AS emp_status_id,
+            e.paygradeId AS paygrade_id, e.hireDate AS hire_date,
             UPPER(LEFT(clv.label,1)) AS gender_code
      FROM employee e
      LEFT JOIN CodeListValue clv ON clv.id = e.genderId
      WHERE e.id=${toBigInt(employeeId)}`.catch(() => []);
-  const emp = empRows[0] ?? {};
+  const emp = withProfileKeys(empRows[0]) ?? {};
 
   const [allTypes, rules, groupAssignments] = await Promise.all([
     prisma.$queryRaw`SELECT * FROM leavetypes ORDER BY name`.catch(() => []),

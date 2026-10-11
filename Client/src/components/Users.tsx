@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { FileEdit, Trash2, Plus, KeyRound, ShieldOff, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck, Users as UsersIcon } from 'lucide-react';
+import { FileEdit, Trash2, Plus, KeyRound, ShieldOff, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck, Users as UsersIcon, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ConfirmAlert } from './ConfirmAlert';
 import { UserCreationForm } from './UserCreationForm';
@@ -53,7 +53,13 @@ export function Users() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
 
+  // Fetch-in-progress flags for the two lists. Separate from `loading` (which tracks a save), so the
+  // table shows a spinner — not "No users found." — while the first load is still on its way.
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [rolesLoading, setRolesLoading] = useState(true);
+
   const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
     try {
       const r = await api.get('/users');
       const raw = r.data.data ?? [];
@@ -64,9 +70,11 @@ export function Users() {
         roles: parseJsonField(u.roles),
       })));
     } catch (e) { console.error(e); }
+    finally { setUsersLoading(false); }
   }, []);
 
   const loadRoles = useCallback(async () => {
+    setRolesLoading(true);
     try {
       const r = await api.get('/roles');
       setRoles((r.data.data ?? []).map((role: any) => ({
@@ -74,6 +82,7 @@ export function Users() {
         permissionsCount: (role.permissions ?? []).length,
       })));
     } catch (e) { console.error(e); }
+    finally { setRolesLoading(false); }
   }, []);
 
   useEffect(() => { loadUsers(); loadRoles(); }, [loadUsers, loadRoles]);
@@ -282,7 +291,9 @@ export function Users() {
                             <PermissionTooltip permission={perm} />
                           </span>
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            {assignedRoles.length === 0 ? (
+                            {rolesLoading && roles.length === 0 ? (
+                              <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" />
+                            ) : assignedRoles.length === 0 ? (
                               <span className="text-[11px] text-[var(--text-muted)] italic">No roles assigned</span>
                             ) : (
                               assignedRoles.map(role => (
@@ -399,8 +410,10 @@ export function Users() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={isUsers ? 6 : 4} className="td text-center py-10">
-                    {loading ? 'Loading...' : filtered.length === 0 ? `No ${isUsers ? 'users' : 'roles'} found.` : 'No results on this page.'}
+                  <td colSpan={isUsers ? 6 : 4} className="td text-center py-10 text-[13px] text-[var(--text-muted)]">
+                    {loading || (isUsers ? usersLoading : rolesLoading)
+                      ? <span className="inline-flex items-center gap-2"><Loader2 size={15} className="animate-spin text-[var(--accent)]" />Loading {isUsers ? 'users' : 'roles'}…</span>
+                      : filtered.length === 0 ? `No ${isUsers ? 'users' : 'roles'} found.` : 'No results on this page.'}
                   </td>
                 </tr>
               )}

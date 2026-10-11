@@ -956,10 +956,10 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
   });
 });
 
-// ── GL posting helper (shared by finalize + retry) ───────────────────────────
-// `runName` feeds the GL payload's top-level `description`; both callers already have the run row
-// loaded, so it is passed in rather than re-queried here.
-async function buildAndPostGL(id, req, runName) {
+// ── GL journal builder (shared by posting + the GL Summary report) ───────────
+// Builds the exact debit/credit lines a run would post, without sending anything. The GL Summary
+// report reads the same lines, so what it shows is what the bank receives.
+async function buildGLJournal(id) {
   const apiCfg = await getApiConfig();
   let glExtra  = {};
   try { glExtra = JSON.parse(apiCfg.gl_extra || '{}'); } catch {}
@@ -985,8 +985,6 @@ async function buildAndPostGL(id, req, runName) {
 
   const debitAccounts  = [];
   const creditAccounts = [];
-  const approvedBy  = req.user?.username || req.user?.email || 'System';
-  const referenceNo = `PR${id}${String(Date.now()).slice(-7)}`;
 
   const fallbackExpenseGL   = (process.env.PAYROLL_EXPENSE_GL   || '').trim();
   const fallbackDeductionGL = (process.env.PAYROLL_DEDUCTION_GL || '').trim();
@@ -1062,13 +1060,28 @@ async function buildAndPostGL(id, req, runName) {
     });
   }
 
-  // ── Balance gate ─────────────────────────────────────────────────────────────
-  // An unbalanced batch must never reach the bank: the GL accepts what we send without checking, so a
-  // bad payload posts silently and has to be unwound by hand. Fail loudly instead, naming the cause.
   const totalDr = round2(debitAccounts.reduce((s, e) => s + e.debitAmount, 0));
   const totalCr = round2(creditAccounts.reduce((s, e) => s + e.creditAmount, 0));
   const diff    = round2(totalDr - totalCr);
 
+  return {
+    debitAccounts, creditAccounts, totalDr, totalCr, diff, missingNetAccount, unmapped,
+    defaultBranch, systemCurrency, fallbackNetGL,
+  };
+}
+
+// ── GL posting helper (shared by finalize + retry) ───────────────────────────
+// `runName` feeds the GL payload's top-level `description`; both callers already have the run row
+// loaded, so it is passed in rather than re-queried here.
+async function buildAndPostGL(id, req, runName) {
+  const { debitAccounts, creditAccounts, totalDr, totalCr, diff, missingNetAccount, unmapped, defaultBranch } =
+    await buildGLJournal(id);
+  const approvedBy  = req.user?.username || req.user?.email || 'System';
+  const referenceNo = `PR${id}${String(Date.now()).slice(-7)}`;
+
+  // ── Balance gate ─────────────────────────────────────────────────────────────
+  // An unbalanced batch must never reach the bank: the GL accepts what we send without checking, so a
+  // bad payload posts silently and has to be unwound by hand. Fail loudly instead, naming the cause.
   if (Math.abs(diff) > 0.01) {
     const reasons = [];
     if (missingNetAccount.length) reasons.push(`no bank account or PAYROLL_NET_PAYABLE_GL fallback for: ${missingNetAccount.join(', ')}`);
@@ -1777,8 +1790,209 @@ const getNassitReport = asyncHandler(async (req, res) => {
   });
 });
 
+// PAYE return columns, in the order of the legacy PAYE Report (the NRA monthly return layout). Each key
+// maps to the payroll columns summed into it. Names follow the legacy vw_final_salaries sources across
+// the staff groups (Perm / Contract / MGT / SNR MGT / UTB); back-log (BL) and 13th-month columns are
+// deliberately excluded, as they were in legacy. Keys with no pattern always report 0, as in legacy.
+const PAYE_COLUMNS = [
+  { key: 'basic',     label: 'BASIC SALARY',            re: /^(basic salary|basic utb|casual labour( utb)?)$/i },
+  { key: 'rent',      label: 'RENT ALLOWANCE',          re: /^(rent allowance( 25)?|monthly rent utb)$/i },
+  { key: 'overtime',  label: 'OVERTIME',                re: /^overtime allowance( - (mgt|snr mgt))?$/i },
+  { key: 'commission', label: 'COMMISSION' },
+  { key: 'notice',    label: 'PAYMENT IN LIEU OF NOTICE' },
+  { key: 'other',     label: 'OTHER ALLOWANCES',
+    re: /^(duty|duty allowance- ?(mgt|snr mgt)|lunch allowance( - (mgt|snr mgt))?|lunch utb|stewards allowance( - (mgt|snr mgt))?|displacement|displacement allowance - (mgt|snr mgt)|audit allowance( - (mgt|snr mgt))?|word proc allowance|car allowance( - (mgt|snr mgt)| utb)?|allowances - contract|special allowance( - mgt)?|acting allowance utb|domestic utb)$/i },
+  { key: 'passage',   label: 'LEAVE PASSAGE ALLOWANCE' },
+  { key: 'bonus',     label: 'BONUS',                   re: /^bonus$/i },
+  { key: 'leaveExcess', label: 'LEAVE ALLOWANCE IN EXCESS OF BASIC SALARY' },
+  { key: 'bik',       label: 'BENEFIT IN KIND' },
+  { key: 'transport', label: 'TRANSPORT',               re: /^transport allowance( - (mgt|snr mgt)| utb)?$/i },
+  { key: 'clothing',  label: 'CLOTHING ALLOWANCE',      re: /^cloth allowance$/i },
+  { key: 'stipend',   label: 'STIPEND' },
+  { key: 'otherIncome', label: 'OTHER INCOME' },
+  { key: 'nassit',    label: 'NASSIT CONTRIBUTION',     re: /^nassit\s*\(5%\)/i },
+  { key: 'gross',     label: 'GROSS INCOME',            re: /^gross salary( - (contract|mgt|snr mgt)| utb)?$/i },
+  { key: 'taxable',   label: 'TAXABLE INCOME',          re: /^taxable income( - (mgt|perm|snr mgt)| utb)$/i },
+  { key: 'paye',      label: 'PAYE',                    re: /^(paye( - (mgt|perm|snr mgt)| utb)|witholding tax( - permanent utb)?)$/i },
+];
+// Contract staff have no Taxable Income column; legacy used their Gross After NASSIT instead. Only a
+// fallback: added when the employee has no Taxable Income column, never on top of one.
+const PAYE_TAXABLE_FALLBACK = /^gross after nassit - contract$/i;
+
+// GET /payroll/runs/:id/paye-report — per-employee PAYE return for a generated run. The TIN column is
+// the employee's NASSIT number: no separate TIN is held on the employee record.
+const getPayeReport = asyncHandler(async (req, res) => {
+  const id = BigInt(req.params.id);
+  const [run] = await query`SELECT id, name, status, date_start, date_end FROM payrollruns WHERE id = ${id} LIMIT 1`;
+  if (!run) return respond.notFound(res, 'Payroll run not found');
+  if (run.status === 'Draft') return respond.badReq(res, 'Generate the payroll before running the PAYE report');
+
+  // Lowercase aliases throughout — Postgres folds unquoted mixed-case names (see getNassitReport).
+  const cells = await query`
+    SELECT pd.employee, pd.amount, pc.name AS col,
+           e.employee_id AS staff_code, e.firstName AS first_name, e.middleName AS middle_name,
+           e.lastName AS last_name, e.nassit_num, e.hireDate AS hire_date, e.dateOfBirth AS birth_date,
+           g.label AS gender, jt.label AS job_title
+    FROM   payrolldata pd
+    JOIN   payrollcolumns pc ON pc.id = pd.payroll_item
+    JOIN   employee e        ON e.id  = pd.employee
+    LEFT JOIN CodeListValue g  ON g.id  = e.genderId
+    LEFT JOIN CodeListValue jt ON jt.id = e.jobTitleId
+    WHERE  pd.payroll = ${id}`;
+
+  const mapped = PAYE_COLUMNS.filter(c => c.re);
+  const used = Object.fromEntries(mapped.map(c => [c.key, new Set()]));
+  const clean = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+  const day = v => (v ? new Date(v).toISOString().slice(0, 10) : '');
+  const byEmp = new Map();
+  const fallbackUsed = new Set();
+  for (const c of cells) {
+    const fallback = PAYE_TAXABLE_FALLBACK.test(clean(c.col));
+    const kind = fallback ? null : mapped.find(m => m.re.test(clean(c.col)));
+    if (!kind && !fallback) continue;
+    const key = String(c.employee);
+    if (!byEmp.has(key)) {
+      byEmp.set(key, {
+        tin: clean(c.nassit_num), staff_id: c.staff_code ?? '',
+        name: [c.first_name, c.middle_name, c.last_name].map(clean).filter(Boolean).join(' '),
+        date_of_entry: day(c.hire_date), date_of_birth: day(c.birth_date),
+        gender: c.gender ?? '', designation: c.job_title ?? '',
+        amounts: Object.fromEntries(PAYE_COLUMNS.map(p => [p.key, 0])),
+        hasTaxable: false, taxableFallback: 0, fallbackCols: new Set(),
+      });
+    }
+    const emp = byEmp.get(key);
+    const amt = parseFloat(c.amount ?? '0') || 0;
+    if (fallback) { emp.taxableFallback += amt; emp.fallbackCols.add(c.col); continue; }
+    used[kind.key].add(c.col);
+    if (kind.key === 'taxable') emp.hasTaxable = true;
+    emp.amounts[kind.key] += amt;
+  }
+  for (const emp of byEmp.values()) {
+    if (!emp.hasTaxable && emp.taxableFallback) {
+      emp.amounts.taxable += emp.taxableFallback;
+      emp.fallbackCols.forEach(col => fallbackUsed.add(col));
+    }
+  }
+  fallbackUsed.forEach(col => used.taxable.add(col));
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const rows = [...byEmp.values()]
+    .map(({ hasTaxable, taxableFallback, fallbackCols, ...r }) => r)
+    .filter(r => r.amounts.gross || r.amounts.paye || r.amounts.basic)
+    .map(r => ({ ...r, amounts: Object.fromEntries(Object.entries(r.amounts).map(([k, v]) => [k, r2(v)])) }))
+    .sort((a, b) => String(a.staff_id).localeCompare(String(b.staff_id), undefined, { numeric: true }));
+
+  const totals = Object.fromEntries(PAYE_COLUMNS.map(p => [p.key, r2(rows.reduce((s, r) => s + r.amounts[p.key], 0))]));
+
+  respond.ok(res, 'PAYE report', {
+    run: { id: String(run.id), name: run.name, status: run.status, date_start: run.date_start, date_end: run.date_end },
+    columns: PAYE_COLUMNS.map(p => ({ key: p.key, label: p.label, sources: p.re ? [...used[p.key]] : [] })),
+    rows,
+    totals,
+    missingTin: rows.filter(r => !r.tin).length,
+  });
+});
+
+// GET /payroll/runs/:id/gl-summary — the run's journal summarised by side, GL account, column and branch.
+// Read-only: built by the same buildGLJournal that finalize posts, so the figures match the posting.
+// Net pay credits go to each employee's own bank account, so they are shown as one line.
+const getGlSummary = asyncHandler(async (req, res) => {
+  const id = BigInt(req.params.id);
+  const [run] = await query`SELECT id, name, status FROM payrollruns WHERE id = ${id} LIMIT 1`;
+  if (!run) return respond.notFound(res, 'Payroll run not found');
+  if (run.status === 'Draft') return respond.badReq(res, 'Generate the payroll before running the GL summary');
+
+  const j = await buildGLJournal(id);
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const groups = new Map();
+  const add = (side, account, column, branch, amount) => {
+    const k = [side, account, column, branch].join('|');
+    if (!groups.has(k)) groups.set(k, { side, account, column, branch, lines: 0, amount: 0 });
+    const g = groups.get(k);
+    g.lines += 1;
+    g.amount += amount;
+  };
+  for (const d of j.debitAccounts) add('Debit', d.debitAccount, d.payrollColumn, d.debitBranch, d.debitAmount);
+  for (const c of j.creditAccounts) {
+    const net = c.payrollColumn === 'Net Pay';
+    // Net pay lands on per-employee bank accounts (or the net-payable GL fallback): one summary line.
+    add('Credit', net ? (c.creditAccount === j.fallbackNetGL ? c.creditAccount : 'Employee bank accounts') : c.creditAccount,
+      c.payrollColumn, net ? '' : c.creditBranch, c.creditAmount);
+  }
+
+  const lines = [...groups.values()]
+    .map(g => ({ ...g, amount: r2(g.amount) }))
+    .sort((a, b) => (a.side === b.side
+      ? String(a.account).localeCompare(String(b.account)) || String(a.column).localeCompare(String(b.column))
+      : a.side === 'Debit' ? -1 : 1));
+
+  respond.ok(res, 'GL summary', {
+    run: { id: String(run.id), name: run.name, status: run.status },
+    currency: j.systemCurrency,
+    lines,
+    totals: { debit: j.totalDr, credit: j.totalCr, difference: j.diff },
+    balanced: Math.abs(j.diff) <= 0.01,
+    missingNetAccount: j.missingNetAccount,
+    unmapped: j.unmapped,
+  });
+});
+
+// GET /payroll/my-nassit?from=YYYY-MM-DD&to=YYYY-MM-DD — the signed-in employee's own NASSIT contributions
+// per completed run, using the same columns as the admin NASSIT report.
+const getMyNassit = asyncHandler(async (req, res) => {
+  let empId = req.user?.employeeId ? String(req.user.employeeId) : null;
+  if (!empId) {
+    const [self] = await query`SELECT id FROM employee WHERE email = ${req.user?.email || ''} OR work_email = ${req.user?.email || ''} OR employee_id = ${req.user?.username || ''} LIMIT 1`;
+    empId = self ? String(self.id) : null;
+  }
+  if (!empId) return respond.notFound(res, 'Employee record not found for this user');
+
+  const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''));
+  const from = isDate(req.query.from) ? new Date(req.query.from) : new Date('1900-01-01');
+  const to   = isDate(req.query.to)   ? new Date(req.query.to)   : new Date('2999-12-31');
+
+  const [emp] = await query`SELECT employee_id AS staff_code, nassit_num FROM employee WHERE id = ${BigInt(empId)} LIMIT 1`;
+  const cells = await query`
+    SELECT pr.id AS run_id, pr.name AS run_name, pr.date_start, pr.date_end, pd.amount, pc.name AS col
+    FROM   payrolldata pd
+    JOIN   payrollruns pr    ON pr.id = pd.payroll
+    JOIN   payrollcolumns pc ON pc.id = pd.payroll_item
+    WHERE  pd.employee = ${BigInt(empId)} AND pr.status IN ('Completed','Approved')
+      AND  pr.date_start BETWEEN ${from} AND ${to}
+    ORDER  BY pr.date_start ASC, pr.id ASC`;
+
+  const kindOf = (name) => Object.keys(NASSIT_COLUMNS).find(k => NASSIT_COLUMNS[k].test(String(name ?? '').trim()));
+  const byRun = new Map();
+  for (const c of cells) {
+    const kind = kindOf(c.col);
+    if (!kind) continue;
+    const k = String(c.run_id);
+    if (!byRun.has(k)) {
+      byRun.set(k, {
+        run: c.run_name,
+        period: c.date_start ? `${new Date(c.date_start).toISOString().slice(0, 10)} → ${c.date_end ? new Date(c.date_end).toISOString().slice(0, 10) : ''}` : '',
+        basic: 0, employee: 0, employer: 0,
+      });
+    }
+    byRun.get(k)[kind] += parseFloat(c.amount ?? '0') || 0;
+  }
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const rows = [...byRun.values()]
+    .filter(r => r.basic || r.employee || r.employer)
+    .map(r => ({ ...r, basic: r2(r.basic), employee: r2(r.employee), employer: r2(r.employer), total: r2(r.employee + r.employer) }));
+  const totals = rows.reduce((t, r) => ({
+    basic: r2(t.basic + r.basic), employee: r2(t.employee + r.employee), employer: r2(t.employer + r.employer), total: r2(t.total + r.total),
+  }), { basic: 0, employee: 0, employer: 0, total: 0 });
+
+  respond.ok(res, 'My NASSIT contributions', {
+    staff_id: emp?.staff_code ?? '', nassit_num: (emp?.nassit_num ?? '').trim(), rows, totals,
+  });
+});
+
 module.exports = {
-  getNassitReport,
+  getNassitReport, getPayeReport, getGlSummary, getMyNassit,
   getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
   getPayrollByReference, rejectPayrollFromBank, confirmPayrollFromBank, confirmPayrollManually,

@@ -84,11 +84,14 @@ export function LeaveSetup() {
 
   // ── Leave Types ──────────────────────────────────────────────────────────────
   const [leaveTypes, setLeaveTypes]       = useState<any[]>([]);
+  const [ltLoading, setLtLoading]         = useState(true);
   const [showTypeForm, setShowTypeForm]   = useState(false);
   const [editType, setEditType]           = useState<any>(null);
 
   const fetchLeaveTypes = useCallback(() => {
-    api.get('/leave/types?all=1').then(r => setLeaveTypes(r.data.data ?? [])).catch(() => {});
+    setLtLoading(true);
+    api.get('/leave/types?all=1').then(r => setLeaveTypes(r.data.data ?? [])).catch(() => {})
+      .finally(() => setLtLoading(false));
   }, []);
 
   useEffect(() => { if (activeTab === 'Leave Types') fetchLeaveTypes(); }, [activeTab, fetchLeaveTypes]);
@@ -143,10 +146,12 @@ export function LeaveSetup() {
 
   // ── Leave Periods ────────────────────────────────────────────────────────────
   const [leavePeriods, setLeavePeriods]     = useState<any[]>([]);
+  const [lpLoading, setLpLoading]           = useState(true);
   const [showPeriodForm, setShowPeriodForm] = useState(false);
   const [editPeriod, setEditPeriod]         = useState<any>(null);
 
   const fetchPeriods = useCallback(async () => {
+    setLpLoading(true);
     try {
       const r = await api.get('/leave/periods');
       const periods: any[] = r.data.data ?? [];
@@ -170,6 +175,7 @@ export function LeaveSetup() {
         toast.success(`${year} leave period created automatically`);
       }
     } catch {}
+    finally { setLpLoading(false); }
   }, []);
 
   useEffect(() => { if (activeTab === 'Leave Period') fetchPeriods(); }, [activeTab, fetchPeriods]);
@@ -216,8 +222,11 @@ export function LeaveSetup() {
   const [showHolidayForm, setShowHolidayForm] = useState(false);
   const [editHoliday, setEditHoliday]   = useState<any>(null);
 
+  const [holLoading, setHolLoading] = useState(true);
   const fetchHolidays = useCallback(() => {
-    api.get('/leave/holidays').then(r => setHolidays(r.data.data ?? [])).catch(() => {});
+    setHolLoading(true);
+    api.get('/leave/holidays').then(r => setHolidays(r.data.data ?? [])).catch(() => {})
+      .finally(() => setHolLoading(false));
   }, []);
 
   useEffect(() => { if (activeTab === 'Holidays') fetchHolidays(); }, [activeTab, fetchHolidays]);
@@ -325,8 +334,11 @@ export function LeaveSetup() {
   };
   const [ruleForm, setRuleForm] = useState<any>(RULE_DEFAULTS);
 
+  const [ruleLoading, setRuleLoading] = useState(true);
   const fetchRules = useCallback(() => {
-    api.get('/leave/rules').then(r => setLeaveRules(r.data.data ?? [])).catch(() => {});
+    setRuleLoading(true);
+    api.get('/leave/rules').then(r => setLeaveRules(r.data.data ?? [])).catch(() => {})
+      .finally(() => setRuleLoading(false));
   }, []);
 
   useEffect(() => {
