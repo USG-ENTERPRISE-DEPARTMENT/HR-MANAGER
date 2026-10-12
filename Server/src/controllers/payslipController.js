@@ -121,12 +121,22 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     SELECT e.id, e.employee_id, e.firstName, e.lastName, e.email,
            e.bankAccount,
            COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS designation,
-           COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department
+           COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department,
+           br.title AS branch_name, CONCAT(br.type, '') AS branch_type
     FROM employee e
     LEFT JOIN codelistvalue jt ON jt.id = e.jobTitleId
     LEFT JOIN companystructures dept ON dept.id = e.departmentId
+    LEFT JOIN companystructures br   ON br.id   = e.branchId
     WHERE e.id = ${BigInt(empId)} LIMIT 1`;
   if (!emp) return respond.notFound(res, 'Employee not found');
+
+  // Client-specific rule (Settings → Controls → Employee Form → "Departments only at Head Office"):
+  // departments exist only at Head Office, so staff at any other branch show their BRANCH on the
+  // payslip in place of a department. Off → the payslip shows the department as before.
+  const headOfficeOnlyDepts = await prisma.settings.findFirst({
+    where: { name: 'department_head_office_only', category: 'app_controls' }, select: { value: true },
+  }).then(r => r?.value === '1').catch(() => false);
+  const atBranch = headOfficeOnlyDepts && !!emp.branch_name && emp.branch_type !== 'Head Office';
 
   const payrollData = await query`
     SELECT pc.id AS payroll_item_id,
@@ -325,7 +335,12 @@ const downloadPayslip = asyncHandler(async (req, res) => {
 
   const infoItems = [['Name', empName]];
   if (s.show_emp_id && emp.employee_id)  infoItems.push(['Employee ID', emp.employee_id]);
-  if (s.show_department && emp.department) infoItems.push(['Department', emp.department]);
+  // The template's "Department" switch governs this slot: Branch for branch staff (see atBranch),
+  // Department for Head Office staff — and for everyone when the Head-Office rule is off.
+  if (s.show_department) {
+    if (atBranch) infoItems.push(['Branch', emp.branch_name]);
+    else if (emp.department) infoItems.push(['Department', emp.department]);
+  }
   if (s.show_position && emp.designation) infoItems.push(['Position', emp.designation]);
   if (s.show_bank_account && emp.bankAccount) infoItems.push(['Bank Account', emp.bankAccount]);
   if (run.freq_name) infoItems.push(['Pay Frequency', run.freq_name]);
