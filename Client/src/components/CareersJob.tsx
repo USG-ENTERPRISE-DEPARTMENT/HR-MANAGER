@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { publicApi, BRAND_BLUE as BLUE, resolveLogoUrl } from '@/lib/publicApi';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // Social icons (lucide dropped these)
 const IconFacebook = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -249,7 +250,7 @@ export function CareersJob({ code, onBack }: Props) {
             {job.closingDate && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-[12px] text-amber-700 font-medium">
                 <Calendar size={11} className="text-amber-400 shrink-0" />
-                Closes {new Date(job.closingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Closes {formatDmy(job.closingDate)}
               </span>
             )}
           </div>

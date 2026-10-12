@@ -14,6 +14,8 @@ import { getSettings } from '../../lib/settings';
 import { EMPLOYEE_FORM_FIELDS, EMPLOYEE_FORM_FIELDS_BY_KEY } from '../config/employeeFormFields';
 import { downloadTransferPdf } from './ui/transferPdf';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 type Transfer = {
   id: string; transfer_number: string; employee: string; employee_name: string; employee_code?: string;
   transfer_type: string; effective_date: string; status: string; reason?: string; supporting_document?: string;
@@ -137,7 +139,7 @@ function TransferForm({ initial, onClose, onSaved }: { initial?: Transfer | null
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Employee" required><SearchSelect value={form.employee} onChange={value => set('employee', value)} options={options(refs.employees, item => item.name || `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.employee_id)} placeholder="Select employee…" disabled={!!initial} /></FormField>
         <FormField label="Transfer Type" required><select className={inputClass} value={form.transfer_type} onChange={event => set('transfer_type', event.target.value)}><option>Permanent Transfer</option><option>Temporary Transfer</option><option>Secondment</option><option>Promotion Transfer</option><option>Demotion Transfer</option></select></FormField>
-        <FormField label="Effective Date" required><input type="date" className={inputClass} value={form.effective_date} onChange={event => set('effective_date', event.target.value)} /></FormField>
+        <FormField label="Effective Date" required><DateInput className={inputClass} value={form.effective_date} onChange={event => set('effective_date', event.target.value)} /></FormField>
         <FormField label="Supporting Document Reference"><input className={inputClass} value={form.supporting_document} onChange={event => set('supporting_document', event.target.value)} placeholder="Filename, document ID, or reference" /></FormField>
       </div>
       <div className="my-5 border-t border-[var(--border)] pt-4">
@@ -154,7 +156,9 @@ function TransferForm({ initial, onClose, onSaved }: { initial?: Transfer | null
               {field.type === 'select' ? (
                 <SearchSelect value={form[key] || ''} onChange={value => set(key, value)} options={opts} placeholder={`Keep current ${field.label.toLowerCase()}`} />
               ) : (
-                <input type={field.type === 'date' ? 'date' : 'text'} className={inputClass} value={form[key] || ''} onChange={event => set(key, event.target.value)} placeholder={`Keep current ${field.label.toLowerCase()}`} />
+                field.type === 'date'
+                  ? <DateInput className={inputClass} value={form[key] || ''} onChange={event => set(key, event.target.value)} />
+                  : <input type="text" className={inputClass} value={form[key] || ''} onChange={event => set(key, event.target.value)} placeholder={`Keep current ${field.label.toLowerCase()}`} />
               )}
             </FormField>;
           })}</div>
@@ -172,7 +176,7 @@ function TransferDetails({ transfer, onClose }: { transfer: Transfer; onClose: (
         <button type="button" className="secondary-btn" onClick={() => downloadTransferPdf(transfer)}><Download size={14} /> Download PDF</button>
       </div>
       <div className="grid grid-cols-2 gap-4 rounded-xl bg-[var(--bg)] p-4 sm:grid-cols-4">
-        {[['Employee ID', transfer.employee_code || '—'], ['Effective date', String(transfer.effective_date).slice(0, 10)], ['Status', transfer.status], ['Transfer type', transfer.transfer_type]].map(([label, value]) => <div key={label}><p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{label}</p><p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{value}</p></div>)}
+        {[['Employee ID', transfer.employee_code || '—'], ['Effective date', formatDmy(transfer.effective_date, '')], ['Status', transfer.status], ['Transfer type', transfer.transfer_type]].map(([label, value]) => <div key={label}><p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{label}</p><p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{value}</p></div>)}
       </div>
       <div><h4 className="mb-2 text-sm font-bold">Assignment changes</h4><TransferChangeComparison changes={transfer.changes || []} /></div>
       {transfer.reason && <div><h4 className="mb-1 text-xs font-bold uppercase text-[var(--text-muted)]">Reason</h4><p className="text-sm">{transfer.reason}</p></div>}
@@ -237,7 +241,7 @@ export function EmployeeTransfers() {
                   <td className="px-4 py-3 text-sm font-bold text-[var(--accent)]">{row.transfer_number}</td>
                   <td className="px-4 py-3"><p className="text-sm font-semibold">{row.employee_name}</p><p className="text-xs text-[var(--text-muted)]">{row.employee_code || '—'}</p></td>
                   <td className="px-4 py-3 text-sm">{row.transfer_type}</td>
-                  <td className="px-4 py-3 text-sm">{String(row.effective_date).slice(0, 10)}</td>
+                  <td className="px-4 py-3 text-sm">{formatDmy(row.effective_date, '')}</td>
                   <td className="px-4 py-3 text-sm">{row.changes?.length || 0}</td>
                   <td className="px-4 py-3"><span className={`pill text-[11px] ${statusClass(row.status)}`}>{row.status}</span></td>
                   <td className="px-4 py-3">

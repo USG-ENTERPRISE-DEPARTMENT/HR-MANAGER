@@ -16,6 +16,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useCan } from '@/hooks/useCan';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // share_departments / share_employees are stored as comma-joined IDs.
 // Resolve them to names so the column reads "Emps: John Doe" rather than "Emps: 8".
 const fmtSharing = (doc: any, empMap: Record<string, string> = {}, deptMap: Record<string, string> = {}) => {
@@ -28,7 +29,7 @@ const fmtSharing = (doc: any, empMap: Record<string, string> = {}, deptMap: Reco
   return parts.join(' | ') || '—';
 };
 
-const fmtDate = (d: any) => d ? String(d).substring(0, 10) : '—';
+const fmtDate = (d: any) => formatDmy(d);
 
 type DocTab = 'Company Documents' | 'Employee Documents';
 const TABS: DocTab[] = ['Company Documents', 'Employee Documents'];

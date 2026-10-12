@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { codeLists, CodeList, CodeListValue } from '../../lib/codeLists';
 import { TablePagination } from './ui/TablePagination';
+import { TableStateRow } from './ui/TableStateRow';
 import { SearchSelect } from './ui/SearchSelect';
 import { RowActions } from './ui/RowActions';
 import { Search, FileEdit, Trash2, Filter, Plus, Download, X, Building2, Tag, List, ChevronDown, RefreshCw, CheckCircle } from 'lucide-react';
@@ -88,6 +89,9 @@ export function System() {
   const [codeValues, setCodeValues]     = useState<CodeListValue[]>([]);
   const [loading, setLoading]           = useState(false);
   const [valuesLoaded, setValuesLoaded] = useState(false);
+  // Code values load separately (one request per list) after the lists themselves; tracked on its
+  // own so the Code Values table shows a spinner instead of "No code values found." meanwhile.
+  const [valuesLoading, setValuesLoading] = useState(false);
 
   /* ── Search / filter ─────────────────────────────────────────────────── */
   const [searchQuery, setSearchQuery]   = useState('');
@@ -149,6 +153,7 @@ export function System() {
 
   const fetchAllValues = useCallback(async (currentCodes: CodeList[]) => {
     if (currentCodes.length === 0) return;
+    setValuesLoading(true);
     try {
       const results = await Promise.all(
         currentCodes.map((c) => codeLists.getById(c.id))
@@ -160,6 +165,8 @@ export function System() {
       setValuesLoaded(true);
     } catch {
       toast.error('Failed to load code values');
+    } finally {
+      setValuesLoading(false);
     }
   }, []);
 
@@ -781,11 +788,7 @@ export function System() {
                       </motion.tr>
                     ))
                   ) : (
-                    <tr>
-                      <td colSpan={6} className="td text-center py-10 text-[var(--text-muted)]">
-                        No code values found.
-                      </td>
-                    </tr>
+                    <TableStateRow cols={6} loading={valuesLoading} empty="No code values found." />
                   )
                 )}
               </tbody>

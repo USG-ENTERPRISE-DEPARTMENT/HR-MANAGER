@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Clock, ChevronRight, X, Briefcase, Loader2, Building2 } from 'lucide-react';
 import { publicApi, BRAND_BLUE as BLUE, resolveLogoUrl } from '@/lib/publicApi';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 interface OrgSettings { company_name?: string; company_logo_url?: string; accent_color?: string }
 interface Props { onSelectJob: (code: string) => void }
 
@@ -303,7 +304,7 @@ export function CareersHome({ onSelectJob }: Props) {
                           )}
                           {job.closingDate && (
                             <span className="text-[11px] text-slate-400">
-                              Closes {new Date(job.closingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              Closes {formatDmy(job.closingDate)}
                             </span>
                           )}
                         </div>

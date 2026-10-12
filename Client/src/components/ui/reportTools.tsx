@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
+import { fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 
 export const fmtAmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -10,7 +11,7 @@ export const uniqOpts = (vals: (string | undefined | null)[]) =>
 
 // Excel export with a title / timestamp / filter-summary header block
 export function exportReportExcel(title: string, summary: string, headers: string[], rows: (string | number)[][]) {
-  const aoa = [[title], [`Generated ${new Date().toLocaleString()}`], [summary], [], headers, ...rows];
+  const aoa = [[title], [`Generated ${formatDmyTime(new Date())}`], [summary], [], headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = headers.map((h, c) => ({
     wch: Math.max(h.length, ...rows.slice(0, 100).map(r => String(r[c] ?? '').length)) + 2,

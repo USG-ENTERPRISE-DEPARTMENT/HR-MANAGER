@@ -5,6 +5,7 @@ import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { DocUploadField } from './ui/DocUploadField';
 
+import { DateInput } from './ui/DateInput';
 export function CandidateForm({ onClose, initialData, onSave, jobs = [] }: any) {
   const { formData, handleChange } = useFormState(
     {
@@ -86,7 +87,7 @@ export function CandidateForm({ onClose, initialData, onSave, jobs = [] }: any) 
         </FormField>
 
         <FormField label="Date of Birth">
-          <input type="date" name="birthday" value={formData.birthday} onChange={handleChange} className={inputClass} />
+          <DateInput name="birthday" value={formData.birthday} onChange={handleChange} className={inputClass} />
         </FormField>
 
         <FormField label="Address">

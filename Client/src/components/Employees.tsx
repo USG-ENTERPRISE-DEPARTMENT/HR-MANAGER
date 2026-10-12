@@ -16,6 +16,7 @@ import { FilterSelect as UIFilterSelect } from './ui/FilterSelect';
 import api from '../../lib/api';
 import { useCan } from '@/hooks/useCan';
 
+import { DateInput } from './ui/DateInput';
 const ICON_TABS = [
   { label: 'Employees',          icon: Users      },
   { label: 'Skills',             icon: Award      },
@@ -271,12 +272,12 @@ export function Employees() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Hired From</label>
-          <input type="date" value={filters.hireFrom} onChange={e => setFilter('hireFrom', e.target.value)}
+          <DateInput wrapperClassName="w-[140px]" value={filters.hireFrom} onChange={e => setFilter('hireFrom', e.target.value)}
             className="text-[12px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Hired To</label>
-          <input type="date" value={filters.hireTo} onChange={e => setFilter('hireTo', e.target.value)}
+          <DateInput wrapperClassName="w-[140px]" value={filters.hireTo} onChange={e => setFilter('hireTo', e.target.value)}
             className="text-[12px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
         </div>
         {activeFilterCount > 0 && (

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { X, FileText, Loader2, AlertCircle, Download, Printer } from 'lucide-react';
 import api from '../../lib/api';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 export function DocumentViewer({ document, onClose, allowDownload = false }: any) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [mimeType,  setMimeType]  = useState('');
@@ -152,7 +153,7 @@ export function DocumentViewer({ document, onClose, allowDownload = false }: any
               <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4">
                 <div>
                   <h1 className="text-3xl font-bold text-slate-900 syne">{document.name || document.documentType || 'COMPANY DOCUMENT'}</h1>
-                  <p className="text-slate-500 mt-2 font-medium">Issue Date: {document.dateOfIssue || new Date().toLocaleDateString()}</p>
+                  <p className="text-slate-500 mt-2 font-medium">Issue Date: {formatDmy(document.dateOfIssue || new Date())}</p>
                   {document.expiryDate && <p className="text-slate-500 font-medium">Expiry Date: {document.expiryDate}</p>}
                 </div>
               </div>

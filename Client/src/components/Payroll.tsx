@@ -25,6 +25,8 @@ import { toast } from 'sonner';
 import { getSettings } from '../../lib/settings';
 import { PageHeader } from './ui/PageHeader';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CalcGroup  { id: string; name: string; details: string | null; }
@@ -1013,7 +1015,7 @@ function PayrollGrid({
             </h2>
             <p className="text-[12px] text-[var(--text-muted)] mt-0.5">
               {activeRun.freq_name ?? '—'}
-              {activeRun.date_start && ` · ${activeRun.date_start.slice(0, 10)} → ${activeRun.date_end?.slice(0, 10) ?? '—'}`}
+              {activeRun.date_start && ` · ${formatDmy(activeRun.date_start, '')} → ${formatDmy(activeRun.date_end)}`}
             </p>
           </div>
         </div>
@@ -1245,7 +1247,7 @@ function PayrollGrid({
             })()}
             {activeRun.finalized_at && (
               <span className="text-[var(--text-muted)] ml-auto text-[11px]">
-                {new Date(activeRun.finalized_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false })}
+                {formatDmyTime(activeRun.finalized_at)}
               </span>
             )}
             {/* Spell out what the state actually means. For a confirmed run, distinguish a signal
@@ -1255,7 +1257,7 @@ function PayrollGrid({
               {isBankPending
                 ? 'The core banking system accepted the journal. Staff are not paid until it completes its own approval.'
                 : activeRun.bank_confirmed_at
-                  ? `${activeRun.bank_confirmed_by ? 'Manually marked as paid' : 'Confirmed by core banking'} on ${new Date(activeRun.bank_confirmed_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false })}`
+                  ? `${activeRun.bank_confirmed_by ? 'Manually marked as paid' : 'Confirmed by core banking'} on ${formatDmyTime(activeRun.bank_confirmed_at)}`
                   : ''}
             </span>
             {/* Fallback for when the bank's confirmation callback never arrives. This asserts that
@@ -1286,7 +1288,7 @@ function PayrollGrid({
                 <span className="font-semibold text-[var(--danger)]">GL Posting Failed</span>
                 {activeRun.finalized_at && (
                   <span className="text-[var(--text-muted)] ml-auto text-[11px]">
-                    {new Date(activeRun.finalized_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false })}
+                    {formatDmyTime(activeRun.finalized_at)}
                   </span>
                 )}
               </div>
@@ -1589,7 +1591,7 @@ function PayrollGrid({
         colLabelMap={colLabelMap}
         runName={activeRun.name}
         runPeriod={activeRun.date_start
-          ? `${activeRun.date_start.slice(0, 10)} → ${(activeRun.date_end ?? '').slice(0, 10)}`
+          ? `${formatDmy(activeRun.date_start, '')} → ${formatDmy(activeRun.date_end ?? '', '')}`
           : activeRun.name}
         settings={payslipSettings}
         onClose={() => setPayslipId(null)}
@@ -1640,7 +1642,7 @@ function PayrollGrid({
                     <div className="min-w-0">
                       <p className={`text-[13px] font-semibold leading-tight ${m.color}`}>{m.label}</p>
                       {entry.user_name && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">by {entry.user_name}</p>}
-                      <p className="text-[11px] text-[var(--text-muted)]">{new Date(entry.created_at).toLocaleString()}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{formatDmyTime(entry.created_at)}</p>
                       {details?.reason && <p className="text-[11px] text-[var(--danger)] mt-0.5 italic">"{details.reason}"</p>}
                       {details?.employees != null && (
                         <p className="text-[11px] text-[var(--text-muted)]">{details.employees} employees × {details.columns} columns</p>
@@ -3749,8 +3751,8 @@ export function Payroll() {
                           : <span className="text-[var(--text-muted)] opacity-50">All groups</span>}
                       </td>
                       <td className="td text-[var(--text-muted)]">
-                        {run.date_start ? run.date_start.slice(0, 10) : '—'}
-                        {run.date_end   ? ` → ${run.date_end.slice(0, 10)}` : ''}
+                        {run.date_start ? formatDmy(run.date_start, '') : '—'}
+                        {run.date_end   ? ` → ${formatDmy(run.date_end, '')}` : ''}
                       </td>
                       <td className="td">
                         {run.type_name
@@ -3847,11 +3849,11 @@ export function Payroll() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Start Date">
-                    <input className={inputClass} type="date" value={runForm.date_start}
+                    <DateInput className={inputClass} value={runForm.date_start}
                       onChange={e => setRunForm(f => ({ ...f, date_start: e.target.value }))} />
                   </FormField>
                   <FormField label="End Date">
-                    <input className={inputClass} type="date" value={runForm.date_end}
+                    <DateInput className={inputClass} value={runForm.date_end}
                       onChange={e => setRunForm(f => ({ ...f, date_end: e.target.value }))} />
                   </FormField>
                 </div>

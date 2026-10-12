@@ -6,6 +6,7 @@ import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { SearchSelect, MultiSearchSelect } from './ui/SearchSelect';
 
+import { DateInput } from './ui/DateInput';
 export function InterviewForm({ onClose, initialData, onSave, candidates = [], jobs = [], interviews = [], employees = [] }: any) {
   const { formData, handleChange } = useFormState(
     { job: '', candidate: '', level: '', location: '', notes: '', interviewers: '', status: 'Scheduled', outcome: '', feedback: '' },
@@ -204,8 +205,7 @@ export function InterviewForm({ onClose, initialData, onSave, candidates = [], j
           <FormField label="Date & Time" required>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-3 sm:col-span-1">
-                <input
-                  type="date"
+                <DateInput
                   value={interviewDate}
                   onChange={e => setInterviewDate(e.target.value)}
                   className={inputClass}
@@ -297,8 +297,7 @@ export function InterviewForm({ onClose, initialData, onSave, candidates = [], j
                 {slots.map((slot, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1">
-                      <input
-                        type="date"
+                      <DateInput
                         value={slot.date}
                         onChange={e => updateSlot(i, 'date', e.target.value)}
                         className={inputClass}

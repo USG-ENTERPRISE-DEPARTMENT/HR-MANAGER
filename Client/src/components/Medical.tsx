@@ -27,6 +27,8 @@ import { getSettings } from '../../lib/settings';
 import { currencyCode } from '../../lib/currency';
 import { useCan } from '@/hooks/useCan';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ADMISSION_TYPES    = ['Outpatient', 'Inpatient', 'Emergency', 'Day Case'];
@@ -498,7 +500,7 @@ function MedicalDetailPanel({ record: initialRecord, type, adminMode, onClose, o
               <DetailRow label="Employee">{record.employee_name}</DetailRow>
               <DetailRow label="Dependent">{record.dependent_name}</DetailRow>
               <DetailRow label="Relationship">{record.relationship}</DetailRow>
-              <DetailRow label="Date of Birth">{record.dob ? String(record.dob).slice(0, 10) : undefined}</DetailRow>
+              <DetailRow label="Date of Birth">{record.dob ? formatDmy(record.dob, '') : undefined}</DetailRow>
             </div>
           ) : (
             <DetailRow label="Employee">{record.employee_name}</DetailRow>
@@ -842,8 +844,8 @@ function StaffMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean; cur
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td">{row.employee_name}</td>
-            <td className="td">{row.admission_date?.slice(0, 10)}</td>
-            <td className="td">{row.discharged_date?.slice(0, 10)}</td>
+            <td className="td">{formatDmy(row.admission_date, '')}</td>
+            <td className="td">{formatDmy(row.discharged_date, '')}</td>
             <td className="td">{row.illness_type}</td>
             <td className="td">{parseFloat(String(row.cost ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
             <td className="td"><StatusPill status={row.status} /></td>
@@ -890,10 +892,10 @@ function StaffMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean; cur
             </F>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <F label="Admission Date" required>
-                <input type="date" className={inputClass} value={f.admission_date} onChange={e => set('admission_date', e.target.value)} />
+                <DateInput className={inputClass} value={f.admission_date} onChange={e => set('admission_date', e.target.value)} />
               </F>
               <F label="Discharged Date" required>
-                <input type="date" className={inputClass} value={f.discharged_date} onChange={e => set('discharged_date', e.target.value)} />
+                <DateInput className={inputClass} value={f.discharged_date} onChange={e => set('discharged_date', e.target.value)} />
               </F>
               <F label="Admission Type">
                 <select className={inputClass} value={f.admission_type} onChange={e => set('admission_type', e.target.value)}>
@@ -1096,7 +1098,7 @@ function DependentMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean;
             <td className="td">{row.employee_name}</td>
             <td className="td">{row.dependent_name}</td>
             <td className="td">{row.relationship}</td>
-            <td className="td">{row.date_attended?.slice(0, 10)}</td>
+            <td className="td">{formatDmy(row.date_attended, '')}</td>
             <td className="td">{row.illness_type}</td>
             <td className="td">{parseFloat(String(row.cost ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
             <td className="td"><StatusPill status={row.status} /></td>
@@ -1147,16 +1149,16 @@ function DependentMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean;
                   value={f.relationship} readOnly placeholder="Auto-filled when dependent is selected" />
               </F>
               <F label="Date of Birth">
-                <input type="date" className={`${inputClass} bg-[var(--surface-hover)] opacity-70 cursor-not-allowed`}
+                <DateInput className={`${inputClass} bg-[var(--surface-hover)] opacity-70 cursor-not-allowed`}
                   value={f.dob} readOnly />
               </F>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <F label="Date Attended" required>
-                <input type="date" className={inputClass} value={f.date_attended} onChange={e => set('date_attended', e.target.value)} />
+                <DateInput className={inputClass} value={f.date_attended} onChange={e => set('date_attended', e.target.value)} />
               </F>
               <F label="Date Discharged" required>
-                <input type="date" className={inputClass} value={f.date_discharged} onChange={e => set('date_discharged', e.target.value)} />
+                <DateInput className={inputClass} value={f.date_discharged} onChange={e => set('date_discharged', e.target.value)} />
               </F>
               <F label="Admission Type">
                 <select className={inputClass} value={f.admission_type} onChange={e => set('admission_type', e.target.value)}>
@@ -1824,7 +1826,7 @@ function UtilizationHistoryModal({ onClose }: { onClose: () => void }) {
                   <td className="td text-right font-semibold">{histMoney(r.total_utilized ?? 0, r.currency)}</td>
                   <td className="td text-right">{r.limit_balance != null ? histMoney(r.limit_balance, r.currency) : '—'}</td>
                   <td className="td text-[12px] text-[var(--text-muted)]">
-                    {r.closed_at ? String(r.closed_at).slice(0, 10) : '—'}
+                    {r.closed_at ? formatDmy(r.closed_at, '') : '—'}
                   </td>
                 </tr>
               )) : (
@@ -2722,7 +2724,7 @@ function MyMedicalEnquiryTab() {
               </tr></thead>
               <tbody>{data.staff_records.map((r: any, i: number) => (
                 <tr key={i} className="tr">
-                  <td className="td">{r.admission_date?.slice(0, 10)}</td>
+                  <td className="td">{formatDmy(r.admission_date, '')}</td>
                   <td className="td">{r.illness_type}</td>
                   <td className="td">{r.hospital}</td>
                   <td className="td">{fmt(r.cost)}</td>
@@ -2753,7 +2755,7 @@ function MyMedicalEnquiryTab() {
               <tbody>{data.dependent_records.map((r: any, i: number) => (
                 <tr key={i} className="tr">
                   <td className="td">{r.dependent_name}</td>
-                  <td className="td">{r.date_attended?.slice(0, 10)}</td>
+                  <td className="td">{formatDmy(r.date_attended, '')}</td>
                   <td className="td">{r.illness_type}</td>
                   <td className="td">{fmt(r.cost)}</td>
                   <td className="td"><StatusPill status={r.status} /></td>

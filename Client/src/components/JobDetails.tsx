@@ -3,6 +3,7 @@ import { FileEdit, Facebook, Twitter, Linkedin, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
@@ -124,7 +125,7 @@ export function JobDetails({ job, candidateCount, onClose, onEdit }: Props) {
           <DetailRow label="Job Code"      value={job.code} />
           <DetailRow label="Company"       value={job.companyName} />
           <DetailRow label="Job Function"  value={job.jobFunction} />
-          <DetailRow label="Closing Date"  value={job.closingDate ? new Date(job.closingDate).toLocaleDateString() : null} />
+          <DetailRow label="Closing Date"  value={job.closingDate ? formatDmy(job.closingDate) : null} />
           <DetailRow label="Position Reason" value={job.positionReason} />
           <DetailRow label="Keywords"      value={job.keywords} />
           {(job.salaryMin || job.salaryMax) && (

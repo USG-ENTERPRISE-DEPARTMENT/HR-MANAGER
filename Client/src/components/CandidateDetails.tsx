@@ -8,6 +8,7 @@ import { DetailSlideOver } from './ui/DetailSlideOver';
 import api from '../../lib/api';
 import { useCan } from '@/hooks/useCan';
 
+import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 // ── Stage helpers ─────────────────────────────────────────────────────────────
 
 const STAGE_COLORS: Record<string, string> = {
@@ -313,7 +314,7 @@ export function CandidateDetails({ candidateId, onClose, onHired, onRefresh }: P
                   <div className="grid grid-cols-2 gap-x-6 gap-y-4 p-4">
                     <ProfileRow label="Gender"         value={data?.gender} />
                     <ProfileRow label="Marital Status" value={data?.marital_status} />
-                    <ProfileRow label="Date of Birth"  value={data?.birthday ? new Date(data.birthday).toLocaleDateString() : null} />
+                    <ProfileRow label="Date of Birth"  value={data?.birthday ? formatDmy(data.birthday) : null} />
                     <ProfileRow label="Country"        value={data?.country} />
                     <ProfileRow label="City"           value={data?.city} />
                     <ProfileRow label="Address"        value={data?.address1} />
@@ -357,7 +358,7 @@ export function CandidateDetails({ candidateId, onClose, onHired, onRefresh }: P
                     {app.notes && <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">{app.notes}</p>}
                   </div>
                   <span className="text-[11px] text-[var(--text-muted)] shrink-0">
-                    {app.created ? new Date(app.created).toLocaleDateString() : 'N/A'}
+                    {formatDmy(app.created, 'N/A')}
                   </span>
                 </div>
               ))}
@@ -408,7 +409,7 @@ export function CandidateDetails({ candidateId, onClose, onHired, onRefresh }: P
                       {iv.scheduled && (
                         <p className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] mb-2">
                           <CalendarClock size={12} className="text-[var(--accent)]" />
-                          {new Date(iv.scheduled).toLocaleString()}
+                          {formatDmyTime(iv.scheduled)}
                         </p>
                       )}
 

@@ -7,6 +7,7 @@ import { formatEmployeeId, EMPLOYEE_ID_MAX_LENGTH } from '../../lib/employeeIdFo
 import { Combobox } from './EmployeeTabs';
 import { EMPLOYEE_FORM_FIELDS, EMPLOYEE_FORM_FIELDS_BY_KEY } from '../config/employeeFormFields';
 
+import { DateInput } from './ui/DateInput';
 interface Props {
   onClose: () => void;
   onSave: (data: any, id?: string) => void;
@@ -444,7 +445,7 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
               {fieldShown('genderId') && clSelect('genderId', cl.genders, 'Select Gender', isRequired('genderId'), 'Gender')}
               {fieldShown('dateOfBirth') && (
               <Field label="Date of Birth" required={isRequired('dateOfBirth')}>
-                <input type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} />
+                <DateInput name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} />
               </Field>)}
               {fieldShown('place_of_birth') && (
               <Field label="Place of Birth" required={isRequired('place_of_birth')}>
@@ -615,11 +616,11 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
             </Field>)}
             {fieldShown('hireDate') && (
             <Field label="Hire Date" required={isRequired('hireDate')}>
-              <input type="date" name="hireDate" value={form.hireDate} onChange={handleChange} />
+              <DateInput name="hireDate" value={form.hireDate} onChange={handleChange} />
             </Field>)}
             {fieldShown('confirmationDate') && (
             <Field label="Confirmation Date" required={isRequired('confirmationDate')}>
-              <input type="date" name="confirmationDate" value={form.confirmationDate} onChange={handleChange} />
+              <DateInput name="confirmationDate" value={form.confirmationDate} onChange={handleChange} />
             </Field>)}
           </div>
         </div>
@@ -697,7 +698,7 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
               </Field>)}
               {fieldShown('nationalIdExpiry') && (
               <Field label="National ID Expiry" required={isRequired('nationalIdExpiry')}>
-                <input type="date" name="nationalIdExpiry" value={form.nationalIdExpiry} onChange={handleChange} />
+                <DateInput name="nationalIdExpiry" value={form.nationalIdExpiry} onChange={handleChange} />
               </Field>)}
               {fieldShown('passportNumber') && (
               <Field label="Passport Number" required={isRequired('passportNumber')}>
@@ -705,7 +706,7 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
               </Field>)}
               {fieldShown('passportExpiry') && (
               <Field label="Passport Expiry" required={isRequired('passportExpiry')}>
-                <input type="date" name="passportExpiry" value={form.passportExpiry} onChange={handleChange} />
+                <DateInput name="passportExpiry" value={form.passportExpiry} onChange={handleChange} />
               </Field>)}
               {fieldShown('driverLicenseNum') && (
               <Field label="Driver's License Number" required={isRequired('driverLicenseNum')}>
@@ -713,7 +714,7 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
               </Field>)}
               {fieldShown('driverLicenseExp') && (
               <Field label="Driver's License Expiry" required={isRequired('driverLicenseExp')}>
-                <input type="date" name="driverLicenseExp" value={form.driverLicenseExp} onChange={handleChange} />
+                <DateInput name="driverLicenseExp" value={form.driverLicenseExp} onChange={handleChange} />
               </Field>)}
             </div>
           </div>)}

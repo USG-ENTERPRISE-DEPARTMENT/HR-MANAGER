@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
 import { inputClass } from '../ui/FormField';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 
 /* ── Types mirroring the analyzer's report ──────────────────────────────── */
 type Preflight = {
@@ -429,7 +430,7 @@ export function MigrationPanel() {
             <Stat label="Payroll rows" value={n(pay?.payrolldata.wouldImport)} tone="good"
                   hint={`of ${n(pay?.payrolldata.total)}`} />
             <Stat label="Payroll runs" value={n(pay?.runs.total)}
-                  hint={pay ? `${String(pay.runs.from).slice(0, 10)} → ${String(pay.runs.to).slice(0, 10)}` : ''} />
+                  hint={pay ? `${formatDmy(pay.runs.from, '')} → ${formatDmy(pay.runs.to, '')}` : ''} />
             <Stat
               label="Rows excluded"
               value={n((pay?.payrolldata.total ?? 0) - (pay?.payrolldata.wouldImport ?? 0))}

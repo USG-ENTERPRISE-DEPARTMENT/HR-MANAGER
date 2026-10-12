@@ -9,6 +9,7 @@ import { TableToolbar } from './ui/TableToolbar';
 import { RowActions } from './ui/RowActions';
 import { money } from '../../lib/currency';
 import { TablePagination } from './ui/TablePagination';
+import { TableStateRow } from './ui/TableStateRow';
 import { FormModal } from './ui/FormModal';
 import { DetailSlideOver, DetailGrid, DetailField, DetailSection } from './ui/DetailSlideOver';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -19,6 +20,7 @@ import { toast } from 'sonner';
 import { getCurrentUser } from '../../lib/auth';
 import { PERMISSIONS } from '../../lib/permissionKeys';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 const ALL_TABS = ['Leave Types', 'Leave Period', 'Work Week', 'Holidays', 'Leave Rules', 'Leave Groups'] as const;
 const TAB_PERMISSION: Record<string, string> = {
   'Leave Types':  PERMISSIONS.MANAGE_LEAVE_TYPES,
@@ -463,10 +465,7 @@ export function LeaveSetup() {
     return arr.slice((page - 1) * size, page * size);
   }
 
-  const fmtDate = (v: string) => {
-    if (!v) return '—';
-    return v.substring(0, 10);
-  };
+  const fmtDate = (v: string) => formatDmy(v);
 
   return (
     <div className="p-4 sm:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full relative">
@@ -520,7 +519,7 @@ export function LeaveSetup() {
                 </thead>
                 <tbody>
                   {ltRows.length === 0 ? (
-                    <tr><td colSpan={6} className="td text-center text-[var(--text-muted)] py-8">No leave types found.</td></tr>
+                    <TableStateRow cols={6} loading={ltLoading} empty="No leave types found." className="py-8" />
                   ) : ltRows.map((type, i) => (
                     <motion.tr key={type.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * i }}>
                       <td className="td font-medium text-[var(--text-primary)]">
@@ -603,7 +602,7 @@ export function LeaveSetup() {
                 </thead>
                 <tbody>
                   {lpRows.length === 0 ? (
-                    <tr><td colSpan={5} className="td text-center text-[var(--text-muted)] py-8">No leave periods found.</td></tr>
+                    <TableStateRow cols={5} loading={lpLoading} empty="No leave periods found." className="py-8" />
                   ) : lpRows.map((period, i) => (
                     <motion.tr key={period.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * i }}>
                       <td className="td font-medium text-[var(--text-primary)]">{period.name || '—'}</td>
@@ -704,7 +703,7 @@ export function LeaveSetup() {
                 </thead>
                 <tbody>
                   {holRows.length === 0 ? (
-                    <tr><td colSpan={4} className="td text-center text-[var(--text-muted)] py-8">No holidays found.</td></tr>
+                    <TableStateRow cols={4} loading={holLoading} empty="No holidays found." className="py-8" />
                   ) : holRows.map((holiday, i) => (
                     <motion.tr key={holiday.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * i }}>
                       <td className="td font-medium text-[var(--text-primary)]">{holiday.name}</td>
@@ -768,7 +767,7 @@ export function LeaveSetup() {
                 </thead>
                 <tbody>
                   {ruleRows.length === 0 ? (
-                    <tr><td colSpan={6} className="td text-center text-[var(--text-muted)] py-8">No leave rules configured.</td></tr>
+                    <TableStateRow cols={6} loading={ruleLoading} empty="No leave rules configured." className="py-8" />
                   ) : ruleRows.map((rule, i) => (
                     <motion.tr key={rule.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * i }}>
                       <td className="td font-medium text-[var(--text-primary)]">

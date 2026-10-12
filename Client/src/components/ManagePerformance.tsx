@@ -22,12 +22,12 @@ import { FilterSelect } from './ui/FilterSelect';
 import { ReviewDetailSlideOver } from './ReviewDetailSlideOver';
 import { CountedTextarea } from './ui/CountedTextarea';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(v: string | null | undefined) {
-  if (!v) return '—';
-  try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return String(v).substring(0, 10); }
+  return formatDmy(v);
 }
 
 const CYCLE_TYPES    = ['Annual', 'Semi-Annual', 'Quarterly', 'Probation'];
@@ -330,19 +330,19 @@ function CycleFormModal({ cycle, onClose, onSaved }: { cycle: any | null; onClos
         </FormField>
         <div />
         <FormField label="Period Start" required>
-          <input type="date" className={inputClass} value={form.period_start} onChange={e => set('period_start', e.target.value)} />
+          <DateInput className={inputClass} value={form.period_start} onChange={e => set('period_start', e.target.value)} />
         </FormField>
         <FormField label="Period End" required>
-          <input type="date" className={inputClass} value={form.period_end} onChange={e => set('period_end', e.target.value)} />
+          <DateInput className={inputClass} value={form.period_end} onChange={e => set('period_end', e.target.value)} />
         </FormField>
         <FormField label="Self-Assessment Due">
-          <input type="date" className={inputClass} value={form.self_due} onChange={e => set('self_due', e.target.value)} />
+          <DateInput className={inputClass} value={form.self_due} onChange={e => set('self_due', e.target.value)} />
         </FormField>
         <FormField label="Supervisor Review Due">
-          <input type="date" className={inputClass} value={form.supervisor_due} onChange={e => set('supervisor_due', e.target.value)} />
+          <DateInput className={inputClass} value={form.supervisor_due} onChange={e => set('supervisor_due', e.target.value)} />
         </FormField>
         <FormField label="HR Sign-off Due">
-          <input type="date" className={inputClass} value={form.hr_due} onChange={e => set('hr_due', e.target.value)} />
+          <DateInput className={inputClass} value={form.hr_due} onChange={e => set('hr_due', e.target.value)} />
         </FormField>
         <div />
         <FormField label="Notes" className="col-span-2">
@@ -512,7 +512,7 @@ function GoalFormModal({ goal, cycles, employees, onClose, onSaved }: {
           <input className={inputClass} value={form.target} onChange={e => set('target', e.target.value)} placeholder="e.g. Score ≥ 90% in quarterly survey" />
         </FormField>
         <FormField label="Due Date">
-          <input type="date" className={inputClass} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+          <DateInput className={inputClass} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
         </FormField>
         <FormField label="Status">
           <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>

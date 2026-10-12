@@ -10,6 +10,7 @@ import { DraftWithAI } from './ai/DraftWithAI';
 import api from '../../lib/api';
 import { getSettings } from '../../lib/settings';
 
+import { DateInput } from './ui/DateInput';
 const EXPERIENCE_LEVELS = ['Entry Level', 'Mid Level', 'Senior Level', 'Lead', 'Executive'];
 const EDUCATION_LEVELS  = ['High School', 'Diploma', "Bachelor's Degree", "Master's Degree", 'PhD'];
 
@@ -261,7 +262,7 @@ export function JobForm({ onClose, initialData, onSave, isDuplicate = false }: a
             </FormField>
 
             <FormField label="Closing Date">
-              <input type="date" name="closingDate" value={formData.closingDate} onChange={handleChange} className={inputClass} />
+              <DateInput name="closingDate" value={formData.closingDate} onChange={handleChange} className={inputClass} />
             </FormField>
           </div>
         </div>

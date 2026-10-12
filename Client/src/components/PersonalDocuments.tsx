@@ -9,10 +9,11 @@ import { RowActions } from './ui/RowActions';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 type PersonalTab = 'Shared with Me' | 'My Documents';
 const TABS: PersonalTab[] = ['Shared with Me', 'My Documents'];
 
-const fmtDate = (v: string | null | undefined) => v ? String(v).substring(0, 10) : '—';
+const fmtDate = (v: string | null | undefined) => formatDmy(v);
 
 export function PersonalDocuments() {
   const [activeTab, setActiveTab]       = useState<PersonalTab>('Shared with Me');

@@ -6,6 +6,8 @@ import { PageHeader } from './ui/PageHeader';
 import { TablePagination } from './ui/TablePagination';
 import { inputClass } from './ui/FormField';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDateTime as formatDmyTime, fmtDateTimeSec } from '@/lib/dateFormat';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuditEntry {
@@ -87,8 +89,7 @@ function DetailsTip({ raw }: { raw: string | null }) {
 // ── Detail slide-over ───────────────────────────────────────────────────────────
 
 function fmtDateTime(iso: string) {
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  return fmtDateTimeSec(iso, iso);
 }
 
 function formatVal(v: unknown): string {
@@ -96,7 +97,7 @@ function formatVal(v: unknown): string {
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
   const s = String(v);
-  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) { const d = new Date(s); if (!isNaN(d.getTime())) return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }); }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) { const d = new Date(s); if (!isNaN(d.getTime())) return formatDmyTime(d); }
   return s;
 }
 
@@ -249,8 +250,7 @@ export function AuditLogs() {
   }
 
   function fmt(iso: string) {
-    const d = new Date(iso);
-    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    return formatDmyTime(iso, iso);
   }
 
   return (
@@ -324,10 +324,10 @@ export function AuditLogs() {
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-widest">Date Range</span>
               <div className="flex items-center gap-2">
-                <input type="date" className={inputClass + ' py-1.5 text-[12px] w-[140px]'}
+                <DateInput className={inputClass + ' py-1.5 text-[12px] w-full'} wrapperClassName="w-[140px]"
                   value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
                 <span className="text-[var(--text-muted)] text-[12px]">to</span>
-                <input type="date" className={inputClass + ' py-1.5 text-[12px] w-[140px]'}
+                <DateInput className={inputClass + ' py-1.5 text-[12px] w-full'} wrapperClassName="w-[140px]"
                   value={dateTo} onChange={e => setDateTo(e.target.value)} />
               </div>
             </div>

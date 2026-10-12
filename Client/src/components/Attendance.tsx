@@ -11,6 +11,7 @@ import { RowActions }      from './ui/RowActions';
 import { TabBar }          from './ui/TabBar';
 import { TableToolbar }    from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { TableStateRow }   from './ui/TableStateRow';
 import { FormModal }       from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
 import { DetailSlideOver } from './ui/DetailSlideOver';
@@ -20,6 +21,8 @@ import api                 from '../../lib/api';
 import { toast }           from 'sonner';
 import { useCan }          from '@/hooks/useCan';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ── Shared bits ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<string, string> = {
@@ -361,11 +364,11 @@ function TimesheetView({ employee, employeeOptions }: { employee?: string; emplo
         )}
         <div>
           <label className="label">From</label>
-          <input type="date" className={inputClass} value={from} onChange={e => setFrom(e.target.value)} />
+          <DateInput className={inputClass} value={from} onChange={e => setFrom(e.target.value)} />
         </div>
         <div>
           <label className="label">To</label>
-          <input type="date" className={inputClass} value={to} onChange={e => setTo(e.target.value)} />
+          <DateInput className={inputClass} value={to} onChange={e => setTo(e.target.value)} />
         </div>
         {data && (
           <button className="secondary-btn ml-auto" onClick={exportTimesheet}>
@@ -429,13 +432,16 @@ function SubordinateAttendanceTab() {
   const [from, setFrom]     = useState(dateNow());
   const [to, setTo]         = useState(dateNow());
   const [statusFilter, setStatusFilter] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     const params = new URLSearchParams({ date_from: from, date_to: to });
     if (statusFilter) params.set('status', statusFilter);
+    setLoading(true);
     api.get(`/attendance/subordinates?${params}`)
       .then(r => setRows(r.data?.data ?? []))
-      .catch(() => toast.error('Failed to load subordinate attendance'));
+      .catch(() => toast.error('Failed to load subordinate attendance'))
+      .finally(() => setLoading(false));
   }, [from, to, statusFilter]);
   useEffect(() => { load(); }, [load]);
 
@@ -453,8 +459,8 @@ function SubordinateAttendanceTab() {
         showFilters={showFilters}
         filterBar={showFilters ? (
           <div className="flex flex-wrap items-end gap-3 py-1">
-            <div><label className="label">From</label><input type="date" className={inputClass} value={from} onChange={e => setFrom(e.target.value)} /></div>
-            <div><label className="label">To</label><input type="date" className={inputClass} value={to} onChange={e => setTo(e.target.value)} /></div>
+            <div><label className="label">From</label><DateInput className={inputClass} value={from} onChange={e => setFrom(e.target.value)} /></div>
+            <div><label className="label">To</label><DateInput className={inputClass} value={to} onChange={e => setTo(e.target.value)} /></div>
             <div className="w-44"><label className="label">Status</label><SearchSelect value={statusFilter} onChange={setStatusFilter} options={[{ id: '', label: 'All statuses' }, ...STATUS_OPTIONS.map(s => ({ id: s, label: s.replace(/_/g, ' ') }))]} placeholder="All statuses" /></div>
             {statusFilter && (
               <button onClick={() => setStatusFilter('')} className="flex items-center gap-1 text-[12px] text-[var(--danger)] hover:underline h-8 self-end">
@@ -499,9 +505,8 @@ function SubordinateAttendanceTab() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">
-                {rows.length === 0 ? 'No direct reports or no attendance records for this range' : 'No records match the selected filter'}
-              </td></tr>
+              <TableStateRow cols={8} loading={loading}
+                empty={rows.length === 0 ? 'No direct reports or no attendance records for this range' : 'No records match the selected filter'} />
             ) : filtered.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td tabular-nums">{row.date}</td>
@@ -566,6 +571,7 @@ function DailyLogTab() {
   const [pendingVoid, setPendingVoid] = useState<any>(null);
   const [f, setF]             = useState(blankManual);
   const [saving, setSaving]   = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const employees   = useEmployees();
   const departments = useDepartments();
@@ -576,9 +582,11 @@ function DailyLogTab() {
     if (empFilter)    params.set('employee', empFilter);
     if (deptFilter)   params.set('department', deptFilter);
     if (statusFilter) params.set('status', statusFilter);
+    setLoading(true);
     api.get(`/attendance?${params}`)
       .then(r => setRows(r.data?.data ?? []))
-      .catch(() => toast.error('Failed to load attendance'));
+      .catch(() => toast.error('Failed to load attendance'))
+      .finally(() => setLoading(false));
   }, [from, to, empFilter, deptFilter, statusFilter]);
   useEffect(() => { load(); }, [load]);
 
@@ -660,8 +668,8 @@ function DailyLogTab() {
 
   const filterBar = (
     <div className="flex flex-wrap items-end gap-3 py-1">
-      <div><label className="label">From</label><input type="date" className={inputClass} value={from} onChange={e => setFrom(e.target.value)} /></div>
-      <div><label className="label">To</label><input type="date" className={inputClass} value={to} onChange={e => setTo(e.target.value)} /></div>
+      <div><label className="label">From</label><DateInput className={inputClass} value={from} onChange={e => setFrom(e.target.value)} /></div>
+      <div><label className="label">To</label><DateInput className={inputClass} value={to} onChange={e => setTo(e.target.value)} /></div>
       <div className="w-56"><label className="label">Employee</label><SearchSelect value={empFilter} onChange={setEmpFilter} options={[{ id: '', label: 'All employees' }, ...employees]} placeholder="All employees" /></div>
       <div className="w-48"><label className="label">Department</label><SearchSelect value={deptFilter} onChange={setDeptFilter} options={[{ id: '', label: 'All departments' }, ...departments]} placeholder="All departments" /></div>
       <div className="w-44"><label className="label">Status</label><SearchSelect value={statusFilter} onChange={setStatusFilter} options={[{ id: '', label: 'All statuses' }, ...STATUS_OPTIONS.map(s => ({ id: s, label: s.replace(/_/g, ' ') }))]} placeholder="All statuses" /></div>
@@ -711,7 +719,7 @@ function DailyLogTab() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="td text-center text-[var(--text-muted)] py-10">No attendance records for this range</td></tr>
+              <TableStateRow cols={9} loading={loading} empty="No attendance records for this range" />
             ) : filtered.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td tabular-nums">{row.date}</td>
@@ -756,7 +764,7 @@ function DailyLogTab() {
                   </FormField>
                 </div>
                 <FormField label="Date" required>
-                  <input type="date" className={inputClass} value={f.date} onChange={e => set('date', e.target.value)} />
+                  <DateInput className={inputClass} value={f.date} onChange={e => set('date', e.target.value)} />
                 </FormField>
                 <div />
               </>
@@ -926,10 +934,13 @@ function ImportsTab() {
   const canManage = can('manage_attendance');
   const [batches, setBatches] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
-    api.get('/attendance/import/batches').then(r => setBatches(r.data?.data ?? [])).catch(() => {});
+    setLoading(true);
+    api.get('/attendance/import/batches').then(r => setBatches(r.data?.data ?? [])).catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -976,7 +987,7 @@ function ImportsTab() {
           </thead>
           <tbody>
             {batches.length === 0 ? (
-              <tr><td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">No imports yet</td></tr>
+              <TableStateRow cols={8} loading={loading} empty="No imports yet" />
             ) : batches.map(b => (
               <tr key={b.id} className="tr">
                 <td className="td tabular-nums">{b.imported_at}</td>
@@ -1004,11 +1015,14 @@ function ReportsTab() {
   const [from, setFrom] = useState(dateNow());
   const [to, setTo]     = useState(dateNow());
   const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
+    setLoading(true);
     api.get(`/attendance/summary?date_from=${from}&date_to=${to}`)
       .then(r => setData(r.data?.data ?? null))
-      .catch(() => toast.error('Failed to load summary'));
+      .catch(() => toast.error('Failed to load summary'))
+      .finally(() => setLoading(false));
   }, [from, to]);
   useEffect(() => { load(); }, [load]);
 
@@ -1055,8 +1069,8 @@ function ReportsTab() {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div><label className="label">From</label><input type="date" className={inputClass} value={from} onChange={e => setFrom(e.target.value)} /></div>
-        <div><label className="label">To</label><input type="date" className={inputClass} value={to} onChange={e => setTo(e.target.value)} /></div>
+        <div><label className="label">From</label><DateInput className={inputClass} value={from} onChange={e => setFrom(e.target.value)} /></div>
+        <div><label className="label">To</label><DateInput className={inputClass} value={to} onChange={e => setTo(e.target.value)} /></div>
         <div className="flex items-center gap-2 ml-auto">
           <button className="secondary-btn" onClick={exportSummary}><Download size={14} className="inline mr-1.5" />Export Summary</button>
           <button className="secondary-btn" onClick={exportDetailed}><Download size={14} className="inline mr-1.5" />Export Detailed Report</button>
@@ -1084,7 +1098,7 @@ function ReportsTab() {
           </thead>
           <tbody>
             {Object.keys(data?.days ?? {}).length === 0 ? (
-              <tr><td colSpan={9} className="td text-center text-[var(--text-muted)] py-10">No data for this range</td></tr>
+              <TableStateRow cols={9} loading={loading} empty="No data for this range" />
             ) : Object.entries(data.days).sort(([a], [b]) => b.localeCompare(a)).map(([d, counts]: any) => (
               <tr key={d} className="tr">
                 <td className="td font-medium tabular-nums">{d}</td>
@@ -1115,12 +1129,15 @@ function NightShiftTab() {
   const [selection, setSelection] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const employees = useEmployees();
 
   const load = useCallback(() => {
+    setLoading(true);
     api.get('/attendance/night-shift')
       .then(r => setAssigned(r.data?.data ?? []))
-      .catch(() => toast.error('Failed to load night shift assignments'));
+      .catch(() => toast.error('Failed to load night shift assignments'))
+      .finally(() => setLoading(false));
     api.get('/attendance/settings').then(r => {
       const d = r.data?.data ?? {};
       setPolicy({ start: d.attendance_night_start ?? '21:00', end: d.attendance_night_end ?? '06:00' });
@@ -1190,8 +1207,8 @@ function NightShiftTab() {
           showFilters={showFilters}
           filterBar={showFilters ? (
             <div className="flex flex-wrap items-end gap-3 py-1">
-              <div><label className="label">Assigned From</label><input type="date" className={inputClass} value={assignedFrom} onChange={e => setAssignedFrom(e.target.value)} /></div>
-              <div><label className="label">Assigned To</label><input type="date" className={inputClass} value={assignedTo} onChange={e => setAssignedTo(e.target.value)} /></div>
+              <div><label className="label">Assigned From</label><DateInput className={inputClass} value={assignedFrom} onChange={e => setAssignedFrom(e.target.value)} /></div>
+              <div><label className="label">Assigned To</label><DateInput className={inputClass} value={assignedTo} onChange={e => setAssignedTo(e.target.value)} /></div>
               {activeFilterCount > 0 && (
                 <button onClick={() => { setAssignedFrom(''); setAssignedTo(''); }} className="flex items-center gap-1 text-[12px] text-[var(--danger)] hover:underline h-8 self-end">
                   <X size={12} /> Clear all ({activeFilterCount})
@@ -1228,14 +1245,13 @@ function NightShiftTab() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={4} className="td text-center text-[var(--text-muted)] py-10">
-                  {assigned.length === 0 ? 'No employees on the night shift — everyone follows the day schedule' : 'No records match the selected filter'}
-                </td></tr>
+                <TableStateRow cols={4} loading={loading}
+                  empty={assigned.length === 0 ? 'No employees on the night shift — everyone follows the day schedule' : 'No records match the selected filter'} />
               ) : filtered.map(a => (
                 <tr key={a.employee} className="tr">
                   <td className="td font-medium">{a.name || '—'}</td>
                   <td className="td text-[var(--text-muted)]">{a.employee_no || '—'}</td>
-                  <td className="td tabular-nums">{a.assigned_at ? String(a.assigned_at).slice(0, 10) : '—'}</td>
+                  <td className="td tabular-nums">{a.assigned_at ? formatDmy(a.assigned_at, '') : '—'}</td>
                   <td className="td">
                     <div className="flex items-center justify-end gap-1">
                       {canManage

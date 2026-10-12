@@ -9,6 +9,8 @@ import api from '../../lib/api';
 import { ConfirmAlert } from './ConfirmAlert';
 import { useCan } from '@/hooks/useCan';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 type Option = { id: string; label: string };
 
 // ── CLV hook ──────────────────────────────────────────────────────────────────
@@ -183,9 +185,7 @@ function FL({ children }: { children: ReactNode }) {
 }
 
 function fmtDate(d: string | null | undefined) {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return '—'; }
+  return formatDmy(d);
 }
 
 function profLabel(key: string | null | undefined) {
@@ -521,11 +521,11 @@ function CertificationsTab({ employees, canManage = true }: { employees: any[]; 
             </div>
             <div>
               <FL>Granted On</FL>
-              <input type="date" value={form.date_start} onChange={e => setForm(f => ({ ...f, date_start: e.target.value }))} className={inputCls()} />
+              <DateInput value={form.date_start} onChange={e => setForm(f => ({ ...f, date_start: e.target.value }))} className={inputCls()} />
             </div>
             <div>
               <FL>Valid Thru</FL>
-              <input type="date" value={form.date_end} onChange={e => setForm(f => ({ ...f, date_end: e.target.value }))} className={inputCls()} />
+              <DateInput value={form.date_end} onChange={e => setForm(f => ({ ...f, date_end: e.target.value }))} className={inputCls()} />
             </div>
           </Modal>
         )}
@@ -647,11 +647,11 @@ function EducationTab({ employees, canManage = true }: { employees: any[]; canMa
             </div>
             <div>
               <FL>Start Date</FL>
-              <input type="date" value={form.date_start} onChange={e => setForm(f => ({ ...f, date_start: e.target.value }))} className={inputCls()} />
+              <DateInput value={form.date_start} onChange={e => setForm(f => ({ ...f, date_start: e.target.value }))} className={inputCls()} />
             </div>
             <div>
               <FL>Completed On</FL>
-              <input type="date" value={form.date_end} onChange={e => setForm(f => ({ ...f, date_end: e.target.value }))} className={inputCls()} />
+              <DateInput value={form.date_end} onChange={e => setForm(f => ({ ...f, date_end: e.target.value }))} className={inputCls()} />
             </div>
           </Modal>
         )}
@@ -900,7 +900,7 @@ function DependentsTab({ employees, canManage = true }: { employees: any[]; canM
             </div>
             <div>
               <FL>Date of Birth</FL>
-              <input type="date" value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} className={inputCls()} />
+              <DateInput value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} className={inputCls()} />
             </div>
             <div>
               <FL>Place of Birth</FL>

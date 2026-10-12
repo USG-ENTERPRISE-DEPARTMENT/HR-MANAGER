@@ -23,6 +23,8 @@ import { EmployeeChangeComparison } from './ui/EmployeeChangeComparison';
 import { TransferChangeComparison } from './ui/TransferChangeComparison';
 import { downloadTransferPdf } from './ui/transferPdf';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 interface EmployeeDetailsProps {
   isOpen: boolean;
   onClose: () => void;
@@ -35,11 +37,8 @@ type TabId = 'Personal' | 'Employment' | 'Qualifications' | 'Relationships' | 'D
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmt = (v: any) => v || null;
-const fmtDate = (v: string | null | undefined) => {
-  if (!v) return null;
-  try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return v; }
-};
+// null (not '—') when empty: callers render their own placeholder.
+const fmtDate = (v: string | null | undefined) => (v ? formatDmy(v, v) : null);
 
 /**
  * Turn a failed sync result into a short phrase a non-technical user can act on.
@@ -416,9 +415,7 @@ function profLabel(key: string | null | undefined) {
 }
 
 function fmtDateLocal(d: string | null | undefined) {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return '—'; }
+  return formatDmy(d);
 }
 
 function MiniTable({ cols, rows, empty }: { cols: string[]; rows: React.ReactNode[][]; empty: string }) {
@@ -744,13 +741,7 @@ const ACTION_META: Record<string, { label: string; dot: string; Icon: React.Elem
   reject_lifecycle:  { label: 'Action Rejected',         dot: 'bg-rose-500',    Icon: XCircle,       iconColor: 'text-rose-500'    },
 };
 
-const fmtDateTime = (ts: string) => {
-  try {
-    return new Date(ts).toLocaleString('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  } catch { return ts; }
-};
+const fmtDateTime = (ts: string) => formatDmyTime(ts, ts);
 
 const ActivityTab: React.FC<{ employeeId: string }> = ({ employeeId }) => {
   const [entries,  setEntries]  = useState<any[]>([]);
@@ -1021,11 +1012,7 @@ const EmployeeDisciplinaryTab: React.FC<{ employeeId: string }> = ({ employeeId 
     }
   };
 
-  const fmtD = (v: string | null | undefined) => {
-    if (!v) return '—';
-    try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-    catch { return v; }
-  };
+  const fmtD = (v: string | null | undefined) => formatDmy(v);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const setF = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -1123,7 +1110,7 @@ const EmployeeDisciplinaryTab: React.FC<{ employeeId: string }> = ({ employeeId 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Incident Date *</label>
-                    <input type="date" value={form.incident_date} onChange={e => setF('incident_date', e.target.value)}
+                    <DateInput value={form.incident_date} onChange={e => setF('incident_date', e.target.value)}
                       className="h-9 px-3 text-[12.5px] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300" />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -1181,7 +1168,7 @@ const EmployeeDisciplinaryTab: React.FC<{ employeeId: string }> = ({ employeeId 
                 {form.status === 'Resolved' && (
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Resolved Date</label>
-                    <input type="date" value={form.resolved_date} onChange={e => setF('resolved_date', e.target.value)}
+                    <DateInput value={form.resolved_date} onChange={e => setF('resolved_date', e.target.value)}
                       className="h-9 px-3 text-[12.5px] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300" />
                   </div>
                 )}
@@ -1954,7 +1941,7 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Effective Date
                 </label>
-                <input type="date" value={resignDate} onChange={e => setResignDate(e.target.value)}
+                <DateInput value={resignDate} onChange={e => setResignDate(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 transition-all" />
               </div>
               <div className="mb-4">

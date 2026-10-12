@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 
 /** One figure in the summary strip above the table (e.g. Medical Limit / Utilised / Balance). */
 export interface PrintSummary {
@@ -84,9 +85,7 @@ export function printDocument(
       }).join('')}</tr>`).join('')
     : `<tr><td class="empty" colspan="${headers.length}">No records to display.</td></tr>`;
 
-  const printedOn = new Date().toLocaleString(undefined, {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  const printedOn = formatDmyTime(new Date());
   const countLabel = rows.length
     ? `${rows.length} record${rows.length === 1 ? '' : 's'}`
     : 'No records';

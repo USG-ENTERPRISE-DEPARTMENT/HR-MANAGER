@@ -3,6 +3,7 @@ import { CalendarClock, CheckCircle2, Loader2, Clock } from 'lucide-react';
 import { publicApi } from '@/lib/publicApi';
 import { appPath } from '@/lib/basePath';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 function getToken(): string | null {
   const match = appPath().match(/^\/schedule\/(.+)$/);
   return match ? match[1] : null;
@@ -16,7 +17,7 @@ function normalizeSlot(raw: any): { start: string; end: string | null } {
 function formatSlot(raw: any) {
   const { start, end } = normalizeSlot(raw);
   const d = new Date(start);
-  const date = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const date = `${d.toLocaleDateString('en-GB', { weekday: 'long' })}, ${formatDmy(d)}`;
   const startTime = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   const endTime = end ? new Date(end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null;
   return { date, time: endTime ? `${startTime} – ${endTime}` : startTime };

@@ -2,6 +2,7 @@ import { useFormState } from '../hooks/useFormState';
 import { FormModal } from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
 
+import { DateInput } from './ui/DateInput';
 export function HolidayForm({ onClose, onSave, initialData }: any) {
   const { formData, handleChange } = useFormState({ name: '', date: '', status: 'Full_Day' }, initialData);
 
@@ -20,7 +21,7 @@ export function HolidayForm({ onClose, onSave, initialData }: any) {
         </FormField>
 
         <FormField label="Date" required>
-          <input type="date" name="date" value={formData.date} onChange={handleChange} className={inputClass} />
+          <DateInput name="date" value={formData.date} onChange={handleChange} className={inputClass} />
         </FormField>
 
         <FormField label="Status">

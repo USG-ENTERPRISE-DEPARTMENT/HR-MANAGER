@@ -15,6 +15,8 @@ import { FilterSelect } from './ui/FilterSelect';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { useCan } from '@/hooks/useCan';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 // Action permission required to manage each salary tab
 const SALARY_TAB_PERM: Record<string, string> = {
   'Components':           'manage_salary_components',
@@ -805,7 +807,7 @@ export function Salary() {
             />
             <div className="mb-4"><label className="label">Operation</label><select value={form.operation} onChange={(e) => set('operation', e.target.value)}><option>Increment</option><option>Decrement</option></select></div>
             <div className="mb-4"><label className="label">Change % <span className="text-[var(--danger)]">*</span></label><input type="number" value={form.percentage} onChange={(e) => set('percentage', e.target.value)} placeholder="0.00" /></div>
-            <div className="mb-4"><label className="label">Date</label><input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} /></div>
+            <div className="mb-4"><label className="label">Date</label><DateInput value={form.date} onChange={(e) => set('date', e.target.value)} /></div>
           </>
         );
       default: return null;
@@ -841,7 +843,7 @@ export function Salary() {
       </span>,
       row.description ?? '-',
     ];
-    return [row.date ? new Date(row.date).toLocaleDateString() : '-', row.employees, row.no_notches];
+    return [formatDmy(row.date, '-'), row.employees, row.no_notches];
   };
 
   const canEditDelete = activeTab !== 'Increment/Decrement';
@@ -1181,7 +1183,7 @@ export function Salary() {
                             </p>
                           )}
                           <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                            {h.changed_by ? `By ${h.changed_by} · ` : ''}{new Date(h.created_at).toLocaleString()}
+                            {h.changed_by ? `By ${h.changed_by} · ` : ''}{formatDmyTime(h.created_at)}
                           </p>
                         </li>
                       );

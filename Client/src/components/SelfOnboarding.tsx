@@ -12,6 +12,7 @@ import { PageHeader } from './ui/PageHeader';
 import { TabBar } from './ui/TabBar';
 import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { TableStateRow } from './ui/TableStateRow';
 import { DetailSlideOver, DetailGrid, DetailField, DetailSection } from './ui/DetailSlideOver';
 import { EmployeeFormFull } from './EmployeeFormFull';
 import {
@@ -19,6 +20,7 @@ import {
 } from '@/lib/onboardingFields';
 import { employeeFieldVisible } from '@/lib/settings';
 
+import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 const TABS = ['Form Builder', 'Share Link', 'Submissions'];
 const DOC_BASE = '/v1/api/hr/documents';
 
@@ -397,9 +399,8 @@ export function SelfOnboarding() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="td text-center py-12 text-[var(--text-muted)]">
-                    {search ? 'No submissions match your search.' : 'No submissions yet.'}
-                  </td></tr>
+                  <TableStateRow cols={7} loading={loading} className="py-12"
+                    empty={search ? 'No submissions match your search.' : 'No submissions yet.'} />
                 ) : paginate(filtered).map((sub, i) => (
                   <motion.tr key={sub.id} className="tr"
                     initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
@@ -413,7 +414,7 @@ export function SelfOnboarding() {
                     <td className="td font-medium text-[var(--text-primary)]">{subName(sub)}</td>
                     <td className="td text-[var(--text-muted)]">{sub.data.work_email ?? '—'}</td>
                     <td className="td text-[var(--text-muted)]">{sub.data.mobilePhone ?? '—'}</td>
-                    <td className="td text-[var(--text-muted)]">{new Date(sub.created).toLocaleDateString()}</td>
+                    <td className="td text-[var(--text-muted)]">{formatDmy(sub.created)}</td>
                     <td className="td">{statusPill(sub.status)}</td>
                     <td className="td">
                       <div className="flex justify-end">
@@ -441,7 +442,7 @@ export function SelfOnboarding() {
       <DetailSlideOver
         open={!!detail}
         title={detail ? subName(detail) : ''}
-        subtitle={detail ? `Submitted ${new Date(detail.created).toLocaleString()}` : ''}
+        subtitle={detail ? `Submitted ${formatDmyTime(detail.created)}` : ''}
         onClose={() => setDetail(null)}
         maxWidth="lg"
         footerActions={detail && can('manage_onboarding') && detail.status !== 'Converted' ? (

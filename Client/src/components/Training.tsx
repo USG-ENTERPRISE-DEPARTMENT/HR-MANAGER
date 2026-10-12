@@ -10,6 +10,7 @@ import { TabBar }          from './ui/TabBar';
 import { TableToolbar }    from './ui/TableToolbar';
 import { RowActions }      from './ui/RowActions';
 import { TablePagination } from './ui/TablePagination';
+import { TableStateRow }   from './ui/TableStateRow';
 import { FormModal }       from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
 import { DetailSlideOver } from './ui/DetailSlideOver';
@@ -20,6 +21,8 @@ import { toast }           from 'sonner';
 import { getCurrentUser }  from '../../lib/auth';
 import { useCan } from '@/hooks/useCan';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const CATEGORIES   = ['Technical', 'Leadership', 'Compliance', 'Soft Skills', 'Safety', 'Other'];
@@ -43,8 +46,7 @@ function StatusPill({ status }: { status?: string }) {
 }
 
 function fmtDate(v?: string | null) {
-  if (!v) return '—';
-  return String(v).substring(0, 10);
+  return formatDmy(v);
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -60,14 +62,26 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 
 function useCatalog() {
   const [catalog, setCatalog] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const r = await api.get('/training/catalog');
       setCatalog(r.data?.data ?? []);
     } catch { /* silent */ }
+    finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
-  return { catalog, reload: load };
+  return { catalog, loading, reload: load };
+}
+
+// Spinner for the course-card grids while the catalog is loading (cards, not a table).
+function GridLoading() {
+  return (
+    <div className="flex items-center justify-center gap-2 py-16 text-[var(--text-muted)] text-[13px]">
+      <Loader2 size={15} className="animate-spin text-[var(--accent)]" />Loading courses…
+    </div>
+  );
 }
 
 function useEmployees() {
@@ -530,11 +544,14 @@ function CatalogTab() {
   const updateSlot = (_key: string, field: string, val: string) =>
     setSlots(p => p.map(s => s._key === _key ? { ...s, [field]: val } : s));
 
+  const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const r = await api.get('/training/catalog?all=1');
       setRows(r.data?.data ?? []);
     } catch { toast.error('Failed to load catalog'); }
+    finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -635,7 +652,7 @@ function CatalogTab() {
       />
 
       <div className="overflow-y-auto flex-1 p-4 sm:p-5">
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && loading ? <GridLoading /> : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-[13px]">
             {search ? 'No courses match your search' : 'No courses in the catalog yet'}
           </div>
@@ -810,10 +827,10 @@ function CatalogTab() {
                   {slots.map((sl, i) => (
                     <div key={sl._key} className="grid grid-cols-[1fr_1fr_1fr_90px_auto] gap-2 items-end bg-[var(--bg)] border border-[var(--border)] rounded-[10px] p-3">
                       <FormField label={`Slot ${i + 1} Start`} required>
-                        <input type="date" className={inputClass} value={sl.start_date} onChange={e => updateSlot(sl._key, 'start_date', e.target.value)} />
+                        <DateInput className={inputClass} value={sl.start_date} onChange={e => updateSlot(sl._key, 'start_date', e.target.value)} />
                       </FormField>
                       <FormField label="End Date">
-                        <input type="date" className={inputClass} value={sl.end_date} onChange={e => updateSlot(sl._key, 'end_date', e.target.value)} />
+                        <DateInput className={inputClass} value={sl.end_date} onChange={e => updateSlot(sl._key, 'end_date', e.target.value)} />
                       </FormField>
                       <FormField label="Venue" required>
                         <input className={inputClass} value={sl.venue} onChange={e => updateSlot(sl._key, 'venue', e.target.value)} placeholder="Location" />
@@ -861,12 +878,15 @@ function AdminNominationsTab() {
   const [search, setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewRec, setViewRec]   = useState<any>(null);
+  const [loading, setLoading]   = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const r = await api.get('/training/nominations');
       setRows(r.data?.data ?? []);
     } catch { toast.error('Failed to load nominations'); }
+    finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -917,7 +937,7 @@ function AdminNominationsTab() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">No nominations found</td></tr>
+              <TableStateRow cols={8} loading={loading} empty="No nominations found" />
             ) : filtered.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td font-medium">{row.employee_name || '—'}</td>
@@ -973,8 +993,10 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const currencies = useCurrencies();
   const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }));
+  const [loading, setLoading]     = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const [nomRes, catRes] = await Promise.all([
         api.get('/training/nominations?personal=1'),
@@ -983,6 +1005,7 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
       setRows(nomRes.data?.data ?? []);
       setCatalog(catRes.data?.data ?? []);
     } catch { toast.error('Failed to load training data'); }
+    finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -1139,7 +1162,7 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">No training nominations yet</td></tr>
+              <TableStateRow cols={8} loading={loading} empty="No training nominations yet" />
             ) : filtered.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td font-medium">{row.training_name}</td>
@@ -1229,10 +1252,10 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
             {!(f.training_catalog_id && catalogSlots.length > 0) && (
               <>
                 <FormField label="Start Date" required>
-                  <input type="date" className={inputClass} value={f.start_date} onChange={e => set('start_date', e.target.value)} />
+                  <DateInput className={inputClass} value={f.start_date} onChange={e => set('start_date', e.target.value)} />
                 </FormField>
                 <FormField label="End Date">
-                  <input type="date" className={inputClass} value={f.end_date} onChange={e => set('end_date', e.target.value)} />
+                  <DateInput className={inputClass} value={f.end_date} onChange={e => set('end_date', e.target.value)} />
                 </FormField>
                 <div className="col-span-2">
                   <FormField label="Venue / Location">
@@ -1283,7 +1306,7 @@ function BrowseCatalogTab({ onNominate, onNominateSubordinate }: {
   onNominate: (course: any) => void;
   onNominateSubordinate?: (course: any) => void;
 }) {
-  const { catalog } = useCatalog();
+  const { catalog, loading } = useCatalog();
   const [search, setSearch]   = useState('');
   const [viewRec, setViewRec] = useState<any>(null);
 
@@ -1300,7 +1323,7 @@ function BrowseCatalogTab({ onNominate, onNominateSubordinate }: {
       <TableToolbar searchQuery={search} onSearchChange={setSearch} />
 
       <div className="overflow-y-auto flex-1 p-4 sm:p-5">
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && loading ? <GridLoading /> : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-[13px]">
             {search ? 'No courses match your search' : 'No courses available'}
           </div>
@@ -1454,8 +1477,10 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const currencies = useCurrencies();
   const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }));
+  const [loading, setLoading]   = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const [nomRes, subRes, catRes] = await Promise.all([
         api.get('/training/nominations/subordinate'),
@@ -1466,6 +1491,7 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
       setSubordinates(subRes.data?.data ?? []);
       setCatalog(catRes.data?.data ?? []);
     } catch { toast.error('Failed to load subordinate training data'); }
+    finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -1598,11 +1624,8 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">
-                  {rows.length === 0 ? 'No direct reports or no training nominations from your team' : 'No nominations match the selected filter'}
-                </td>
-              </tr>
+              <TableStateRow cols={8} loading={loading}
+                empty={rows.length === 0 ? 'No direct reports or no training nominations from your team' : 'No nominations match the selected filter'} />
             ) : filtered.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td font-medium">{row.employee_name || '—'}</td>
@@ -1699,10 +1722,10 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
             {!(f.training_catalog_id && catalogSlots.length > 0) && (
               <>
                 <FormField label="Start Date" required>
-                  <input type="date" className={inputClass} value={f.start_date} onChange={e => set('start_date', e.target.value)} />
+                  <DateInput className={inputClass} value={f.start_date} onChange={e => set('start_date', e.target.value)} />
                 </FormField>
                 <FormField label="End Date">
-                  <input type="date" className={inputClass} value={f.end_date} onChange={e => set('end_date', e.target.value)} />
+                  <DateInput className={inputClass} value={f.end_date} onChange={e => set('end_date', e.target.value)} />
                 </FormField>
                 <div className="col-span-2">
                   <FormField label="Venue / Location">

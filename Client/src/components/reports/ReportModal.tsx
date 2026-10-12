@@ -5,6 +5,7 @@ import { SearchSelect } from '../ui/SearchSelect';
 import { inputClass } from '../ui/FormField';
 import { exportReportExcel, reportPdf, ReportPreview } from '../ui/reportTools';
 
+import { DateInput } from '../ui/DateInput';
 export type Cell = string | number;
 
 export interface FilterDef {
@@ -71,7 +72,7 @@ export function ReportModal({
                       placeholder={f.allLabel ?? 'Select…'}
                     />
                   ) : (
-                    <input type="date" className={inputClass} value={values[f.key] ?? ''}
+                    <DateInput className={inputClass} value={values[f.key] ?? ''}
                       onChange={e => onFilterChange?.(f.key, e.target.value)} />
                   )}
                 </div>

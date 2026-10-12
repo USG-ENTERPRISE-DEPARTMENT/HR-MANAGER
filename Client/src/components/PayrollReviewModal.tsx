@@ -9,6 +9,7 @@ import { FormField } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { inputClass } from './ui/FormField';
 import { exportReportExcel } from './ui/reportTools';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 
 /**
  * Read-only payroll review for a stage approver. A payroll stage approver (e.g. Finance Review) can reach
@@ -148,7 +149,7 @@ export function PayrollReviewModal({
       fmt(netPay(eid)),
     ]);
     rows.push(['Totals', ...displayCols.map(([pid]) => fmt(colTotal(pid))), fmt(totalNet)]);
-    const period = run?.date_start ? `${String(run.date_start).slice(0,10)} to ${String(run.date_end || '').slice(0,10)}` : '';
+    const period = run?.date_start ? `${formatDmy(run.date_start, '')} to ${formatDmy(run.date_end || '', '')}` : '';
     const summary = [run?.freq_name, period, `${empIds.length} employees`].filter(Boolean).join(' · ');
     exportReportExcel(run?.name || 'Payroll Run', summary, headers, rows);
   }
@@ -176,7 +177,7 @@ export function PayrollReviewModal({
             </h3>
             <p className="text-[12px] text-[var(--text-muted)] mt-0.5">
               {run?.freq_name ? `${run.freq_name} · ` : ''}
-              {run?.date_start ? `${String(run.date_start).slice(0,10)} → ${String(run.date_end || '').slice(0,10)}` : 'Payroll review'}
+              {run?.date_start ? `${formatDmy(run.date_start, '')} → ${formatDmy(run.date_end || '', '')}` : 'Payroll review'}
             </p>
           </div>
           <div className="flex items-center gap-2">

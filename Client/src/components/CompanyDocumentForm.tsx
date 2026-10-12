@@ -7,6 +7,7 @@ import { MultiSearchSelect } from './ui/SearchSelect';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 
+import { DateInput } from './ui/DateInput';
 interface Option { id: string; label: string; }
 
 export function CompanyDocumentForm({ onClose, initialData, onSave }: any) {
@@ -111,8 +112,7 @@ export function CompanyDocumentForm({ onClose, initialData, onSave }: any) {
         </FormField>
 
         <FormField label="Valid Until">
-          <input
-            type="date"
+          <DateInput
             value={validUntil}
             onChange={e => setValidUntil(e.target.value)}
             className={inputClass}

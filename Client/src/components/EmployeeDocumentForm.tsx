@@ -8,6 +8,7 @@ import { SearchSelect } from './ui/SearchSelect';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 
+import { DateInput } from './ui/DateInput';
 export function EmployeeDocumentForm({ onClose, initialData, onSave }: any) {
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
 
@@ -99,11 +100,11 @@ export function EmployeeDocumentForm({ onClose, initialData, onSave }: any) {
         </FormField>
 
         <FormField label="Expiry Date">
-          <input type="date" name="expiryDate" value={formData.expiryDate} onChange={handleChange} className={inputClass} />
+          <DateInput name="expiryDate" value={formData.expiryDate} onChange={handleChange} className={inputClass} />
         </FormField>
 
         <FormField label="Date of Issue">
-          <input type="date" name="dateOfIssue" value={formData.dateOfIssue} onChange={handleChange} className={inputClass} />
+          <DateInput name="dateOfIssue" value={formData.dateOfIssue} onChange={handleChange} className={inputClass} />
         </FormField>
 
         <FormField label="Place of Issue">

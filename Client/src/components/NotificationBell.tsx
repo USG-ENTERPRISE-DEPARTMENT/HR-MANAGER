@@ -7,6 +7,7 @@ import {
 import { useNotifications, type Notif } from '@/lib/notifications';
 import { isMuted, setMuted } from '@/lib/notificationSound';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 const ICONS: Record<string, typeof Bell> = {
   leave:       CalendarCheck,
   medical:     Stethoscope,
@@ -26,7 +27,7 @@ function timeAgo(t: string | null): string {
   if (s < 3600)   return `${Math.floor(s / 60)}m ago`;
   if (s < 86400)  return `${Math.floor(s / 3600)}h ago`;
   if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(t).toLocaleDateString();
+  return formatDmy(new Date(t));
 }
 
 export function NotificationBell({ onNavigate }: { onNavigate?: (view: string) => void }) {

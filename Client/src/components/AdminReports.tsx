@@ -18,6 +18,8 @@ import { EmployeeLeavesReport, LeaveEntitlementReport } from './reports/LeaveRep
 import { GeneralPayrollReport, PayeReport, GlSummaryReport, PayrollMetaExport } from './reports/PayrollReports';
 import { JobPositionsReport, AttendanceReport } from './reports/OtherReports';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 // Reports carried over from the legacy IceHRM system. Each is self-contained; only one is open at a time.
 const LEGACY_REPORTS = {
   active:      ActiveEmployeesReport,
@@ -237,7 +239,7 @@ export function AdminReports() {
     if (!empFiltered.length) { toast.error('No employees match the selected filters'); return; }
     const aoa = [
       ['Employee Details Report'],
-      [`Generated ${new Date().toLocaleString()}`],
+      [`Generated ${formatDmyTime(new Date())}`],
       [empFilterSummary()],
       [],
       EMP_HEADERS,
@@ -782,11 +784,11 @@ export function AdminReports() {
                   </div>
                   <div>
                     <label className="label">Hired From</label>
-                    <input type="date" className={inputClass} value={empFilters.hireFrom} onChange={e => setEmpFilter('hireFrom', e.target.value)} />
+                    <DateInput className={inputClass} value={empFilters.hireFrom} onChange={e => setEmpFilter('hireFrom', e.target.value)} />
                   </div>
                   <div>
                     <label className="label">Hired To</label>
-                    <input type="date" className={inputClass} value={empFilters.hireTo} onChange={e => setEmpFilter('hireTo', e.target.value)} />
+                    <DateInput className={inputClass} value={empFilters.hireTo} onChange={e => setEmpFilter('hireTo', e.target.value)} />
                   </div>
                   {empFilterCount > 0 && (
                     <button onClick={clearEmpFilters} className="flex items-center gap-1 text-[12px] text-[var(--danger)] hover:underline h-9 self-end">
@@ -992,11 +994,11 @@ export function AdminReports() {
                   </div>
                   <div>
                     <label className="label">Starting From</label>
-                    <input type="date" className={inputClass} value={leaveFilters.from} onChange={e => setLeaveFilter('from', e.target.value)} />
+                    <DateInput className={inputClass} value={leaveFilters.from} onChange={e => setLeaveFilter('from', e.target.value)} />
                   </div>
                   <div>
                     <label className="label">Starting To</label>
-                    <input type="date" className={inputClass} value={leaveFilters.to} onChange={e => setLeaveFilter('to', e.target.value)} />
+                    <DateInput className={inputClass} value={leaveFilters.to} onChange={e => setLeaveFilter('to', e.target.value)} />
                   </div>
                   {leaveFilterCount > 0 && (
                     <button onClick={() => setLeaveFilters({ employee: '', type: '', period: '', status: '', from: '', to: '' })}

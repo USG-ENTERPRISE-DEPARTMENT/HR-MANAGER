@@ -19,12 +19,12 @@ import { FormField, inputClass } from './ui/FormField';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { ReviewDetailSlideOver } from './ReviewDetailSlideOver';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(v: string | null | undefined) {
-  if (!v) return '—';
-  try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return String(v).substring(0, 10); }
+  return formatDmy(v);
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -268,7 +268,7 @@ function GoalFormModal({ goal, cycles, employeeId, onClose, onSaved, progressOnl
             <input className={inputClass} value={form.target} onChange={e => set('target', e.target.value)} />
           </FormField>
           <FormField label="Due Date">
-            <input type="date" className={inputClass} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+            <DateInput className={inputClass} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
           </FormField>
           <FormField label="Status">
             <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>

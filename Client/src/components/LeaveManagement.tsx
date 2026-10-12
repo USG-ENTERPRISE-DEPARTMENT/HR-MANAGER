@@ -18,6 +18,8 @@ import { money } from '../../lib/currency';
 import { toast } from 'sonner';
 import { getCurrentUser } from '../../lib/auth';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 const ALL_TABS = ['All my Leave', 'Leave Entitlement', 'Approved Leave', 'Pending Leave', 'Subordinate Leave', 'Cancellation Request'] as const;
 
 const SortableHeader = ({ children }: { children: ReactNode }) => (
@@ -46,8 +48,7 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function fmtDate(v: string | null | undefined) {
-  if (!v) return '—';
-  return String(v).substring(0, 10);
+  return formatDmy(v);
 }
 
 export function LeaveManagement() {
@@ -809,16 +810,14 @@ const fetchSubordinateEmployees = useCallback(() => {
               const maxDate = activePeriod ? String(activePeriod.date_end  ).substring(0, 10) : undefined;
               return (<>
                 <FormField label="Start Date" required hint={activePeriod ? `Within ${activePeriod.name}` : 'No active leave period'}>
-                  <input
-                    type="date" className={inputClass}
+                  <DateInput className={inputClass}
                     value={applyForm.date_start}
                     min={minDate} max={maxDate}
                     onChange={e => setApplyForm(p => ({ ...p, date_start: e.target.value, date_end: p.date_end && e.target.value > p.date_end ? e.target.value : p.date_end }))}
                   />
                 </FormField>
                 <FormField label="End Date" required hint={activePeriod ? `Within ${activePeriod.name}` : undefined}>
-                  <input
-                    type="date" className={inputClass}
+                  <DateInput className={inputClass}
                     value={applyForm.date_end}
                     min={applyForm.date_start || minDate} max={maxDate}
                     onChange={e => setApplyForm(p => ({ ...p, date_end: e.target.value }))}
@@ -992,7 +991,7 @@ const fetchSubordinateEmployees = useCallback(() => {
                               <tr key={i} className="border-b border-[var(--border)] last:border-0"
                                 style={{ background: isOff ? 'color-mix(in srgb, var(--danger) 4%, transparent)' : undefined }}>
                                 <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] whitespace-nowrap">
-                                  {new Date(row.dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                  {formatDmy(row.dateStr)}
                                 </td>
                                 <td className="px-4 py-2.5 text-[var(--text-secondary)]">{row.dayName}</td>
                                 <td className="px-4 py-2.5">
@@ -1075,16 +1074,14 @@ const fetchSubordinateEmployees = useCallback(() => {
               const maxDate = activePeriod ? String(activePeriod.date_end  ).substring(0, 10) : undefined;
               return (<>
                 <FormField label="Start Date" required hint={activePeriod ? `Within ${activePeriod.name}` : 'No active leave period'}>
-                  <input
-                    type="date" className={inputClass}
+                  <DateInput className={inputClass}
                     value={editForm.date_start}
                     min={minDate} max={maxDate}
                     onChange={e => setEditForm(p => ({ ...p, date_start: e.target.value, date_end: p.date_end && e.target.value > p.date_end ? e.target.value : p.date_end }))}
                   />
                 </FormField>
                 <FormField label="End Date" required hint={activePeriod ? `Within ${activePeriod.name}` : undefined}>
-                  <input
-                    type="date" className={inputClass}
+                  <DateInput className={inputClass}
                     value={editForm.date_end}
                     min={editForm.date_start || minDate} max={maxDate}
                     onChange={e => setEditForm(p => ({ ...p, date_end: e.target.value }))}
@@ -1178,13 +1175,13 @@ const fetchSubordinateEmployees = useCallback(() => {
               const maxDate = activePeriod ? String(activePeriod.date_end  ).substring(0, 10) : undefined;
               return (<>
                 <FormField label="Start Date" required hint={activePeriod ? `Within ${activePeriod.name}` : 'No active leave period'}>
-                  <input type="date" className={inputClass} value={assignForm.date_start}
+                  <DateInput className={inputClass} value={assignForm.date_start}
                     min={minDate} max={maxDate}
                     onChange={e => setAssignForm(p => ({ ...p, date_start: e.target.value, date_end: p.date_end && e.target.value > p.date_end ? e.target.value : p.date_end }))}
                   />
                 </FormField>
                 <FormField label="End Date" required hint={activePeriod ? `Within ${activePeriod.name}` : undefined}>
-                  <input type="date" className={inputClass} value={assignForm.date_end}
+                  <DateInput className={inputClass} value={assignForm.date_end}
                     min={assignForm.date_start || minDate} max={maxDate}
                     onChange={e => setAssignForm(p => ({ ...p, date_end: e.target.value }))}
                   />

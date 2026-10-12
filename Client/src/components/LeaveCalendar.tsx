@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { DetailSlideOver } from './ui/DetailSlideOver';
 import api from '../../lib/api';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -296,7 +297,7 @@ export function LeaveCalendar() {
                           <span className="opacity-80">{leave.leave_type_name}</span>
                           {pending && <span className="text-[10px] italic opacity-60">Pending</span>}
                           <div className="mt-1 pt-1 border-t border-black/5 text-[10px] font-medium opacity-70">
-                            {String(leave.date_start).substring(0,10) === String(leave.date_end).substring(0,10) ? 'Full Day' : `${String(leave.date_start).substring(0,10)} to ${String(leave.date_end).substring(0,10)}`}
+                            {formatDmy(leave.date_start, '') === formatDmy(leave.date_end, '') ? 'Full Day' : `${formatDmy(leave.date_start, '')} to ${formatDmy(leave.date_end, '')}`}
                           </div>
                         </button>
                       );
@@ -364,7 +365,7 @@ export function LeaveCalendar() {
                               {leave.status}
                             </span>
                             <span className="text-xs text-slate-400 font-medium">
-                              {String(leave.date_start).substring(0,10) === String(leave.date_end).substring(0,10) ? 'Full Day' : `${String(leave.date_start).substring(0,10)} → ${String(leave.date_end).substring(0,10)}`}
+                              {formatDmy(leave.date_start, '') === formatDmy(leave.date_end, '') ? 'Full Day' : `${formatDmy(leave.date_start, '')} → ${formatDmy(leave.date_end, '')}`}
                             </span>
                           </div>
                         </button>
@@ -391,8 +392,8 @@ export function LeaveCalendar() {
             {[
               ['Leave Type',   selectedLeave.leave_type_name],
               ['Period',       selectedLeave.period_name],
-              ['Start Date',   String(selectedLeave.date_start).substring(0, 10)],
-              ['End Date',     String(selectedLeave.date_end).substring(0, 10)],
+              ['Start Date',   formatDmy(selectedLeave.date_start, '')],
+              ['End Date',     formatDmy(selectedLeave.date_end, '')],
               ['Days',         selectedLeave.day_count ?? '—'],
               ['Status',       selectedLeave.status],
               ['Department',   selectedLeave.department_name ?? '—'],

@@ -18,6 +18,7 @@ import { InterviewForm } from './InterviewForm';
 import api from '../../lib/api';
 import { useCan } from '@/hooks/useCan';
 
+import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 // ── Pipeline stage helpers ────────────────────────────────────────────────────
 
 const STAGE_COLORS: Record<string, string> = {
@@ -145,7 +146,7 @@ function InterviewDetails({ interview, candidate, job, pipeline, canManage = tru
               </div>
               {sentAt && (
                 <p className="text-[11px] text-emerald-600 flex items-center gap-1">
-                  ✓ Last sent {sentAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {sentAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  ✓ Last sent {formatDmyTime(sentAt)}
                 </p>
               )}
             </div>
@@ -171,7 +172,7 @@ function InterviewDetails({ interview, candidate, job, pipeline, canManage = tru
               </div>
               {sentAt && (
                 <p className="text-[11px] text-emerald-600 flex items-center gap-1">
-                  ✓ Last sent {sentAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {sentAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  ✓ Last sent {formatDmyTime(sentAt)}
                 </p>
               )}
             </div>
@@ -186,7 +187,7 @@ function InterviewDetails({ interview, candidate, job, pipeline, canManage = tru
         <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden">
           <InfoRow label="Round"        value={interview.level} />
           <InfoRow label="Status"       value={statusLabel} />
-          <InfoRow label="Date"         value={interview.scheduled ? new Date(interview.scheduled).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : null} />
+          <InfoRow label="Date"         value={interview.scheduled ? `${new Date(interview.scheduled).toLocaleDateString('en-GB', { weekday: 'long' })}, ${formatDmy(interview.scheduled)}` : null} />
           <InfoRow label="Time"         value={
             interview.scheduled
               ? interview.scheduled_end
@@ -702,7 +703,7 @@ export function Recruitment({ onNavigate }: { onNavigate?: (view: string) => voi
                       <td className="td font-medium text-[var(--text-primary)]">{job.title}</td>
                       <td className="td">{job.department ?? '—'}</td>
                       <td className="td"><JobStatusPill status={job.status} /></td>
-                      <td className="td">{job.closingDate ? new Date(job.closingDate).toLocaleDateString() : '—'}</td>
+                      <td className="td">{formatDmy(job.closingDate)}</td>
                       <td className="td">
                         <div className="flex justify-end">
                           <RowActions actions={[
@@ -824,7 +825,7 @@ export function Recruitment({ onNavigate }: { onNavigate?: (view: string) => voi
                           {cand ? `${cand.first_name} ${cand.last_name}` : `#${a.candidate}`}
                         </td>
                         <td className="td">{job?.title ?? `#${a.job}`}</td>
-                        <td className="td">{a.created ? new Date(a.created).toLocaleDateString() : '—'}</td>
+                        <td className="td">{formatDmy(a.created)}</td>
                         <td className="td text-[var(--text-muted)] max-w-[200px] truncate text-xs">{a.notes ? a.notes.slice(0, 80) + (a.notes.length > 80 ? '…' : '') : '—'}</td>
                         <td className="td">
                           <div className="flex justify-end">
@@ -940,7 +941,7 @@ export function Recruitment({ onNavigate }: { onNavigate?: (view: string) => voi
                               {iv.scheduled ? (
                                 <span>
                                   <span className={`block text-[13px]${isOverdue ? ' text-red-600 font-semibold' : ''}`}>
-                                    {new Date(iv.scheduled).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {formatDmy(iv.scheduled)}
                                   </span>
                                   <span className="block text-[11px] text-[var(--text-muted)]">
                                     {new Date(iv.scheduled).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -1074,7 +1075,7 @@ export function Recruitment({ onNavigate }: { onNavigate?: (view: string) => voi
                   <h2 className="text-[16px] font-bold text-[var(--text-primary)]">
                     {cand ? `${cand.first_name} ${cand.last_name}` : '—'}
                   </h2>
-                  <p className="text-[13px] text-[var(--text-muted)] mt-0.5">{job?.title ?? '—'} · Applied {viewingApplication.created ? new Date(viewingApplication.created).toLocaleDateString() : '—'}</p>
+                  <p className="text-[13px] text-[var(--text-muted)] mt-0.5">{job?.title ?? '—'} · Applied {formatDmy(viewingApplication.created)}</p>
                 </div>
                 <button onClick={() => setViewingApplication(null)} className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] transition-colors">
                   <X size={16} className="text-[var(--text-muted)]" />

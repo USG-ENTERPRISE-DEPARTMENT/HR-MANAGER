@@ -7,6 +7,7 @@ import { CountedTextarea } from './ui/CountedTextarea';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { DraftWithAI } from './ai/DraftWithAI';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ReviewMode = 'employee' | 'supervisor' | 'hr';
@@ -14,9 +15,7 @@ export type ReviewMode = 'employee' | 'supervisor' | 'hr';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(v: string | null | undefined) {
-  if (!v) return '—';
-  try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return String(v).substring(0, 10); }
+  return formatDmy(v);
 }
 
 const STEPS = ['Not Started', 'Self Assessment', 'Supervisor Review', 'HR Review', 'Completed'];

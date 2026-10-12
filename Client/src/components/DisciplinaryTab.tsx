@@ -3,6 +3,8 @@ import { Search, Filter, X, Eye } from 'lucide-react';
 import { motion } from 'motion/react';
 import api from '../../lib/api';
 
+import { DateInput } from './ui/DateInput';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 export const INCIDENT_TYPES = [
   'Verbal Warning', 'Written Warning', 'Final Warning',
   'Counselling', 'Suspension', 'Gross Misconduct',
@@ -39,11 +41,7 @@ export function statusPillD(status: string) {
   );
 }
 
-const fmtDate = (v: string | null | undefined) => {
-  if (!v) return '—';
-  try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return v; }
-};
+const fmtDate = (v: string | null | undefined) => formatDmy(v);
 
 const PAGE_SIZE = 25;
 
@@ -135,10 +133,10 @@ export function DisciplinaryTab({ onViewEmployee }: DisciplinaryTabProps) {
           </select>
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">From</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            <DateInput wrapperClassName="w-[140px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               className="py-1.5 px-2 text-[12px] border border-[var(--border)] rounded-lg bg-[var(--surface-hover)] focus:outline-none focus:border-[var(--accent)]" />
             <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">To</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            <DateInput wrapperClassName="w-[140px]" value={dateTo} onChange={e => setDateTo(e.target.value)}
               className="py-1.5 px-2 text-[12px] border border-[var(--border)] rounded-lg bg-[var(--surface-hover)] focus:outline-none focus:border-[var(--accent)]" />
           </div>
           {activeFilters > 0 && (

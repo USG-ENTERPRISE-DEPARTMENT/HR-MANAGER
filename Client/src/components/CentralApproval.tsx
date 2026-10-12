@@ -13,6 +13,7 @@ import { PayrollReviewModal } from './PayrollReviewModal';
 import { PageHeader } from './ui/PageHeader';
 import { EmployeeChangeComparison } from './ui/EmployeeChangeComparison';
 import { TransferChangeComparison } from './ui/TransferChangeComparison';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 
 type ApprovalModule = 'Employee' | 'Employee Transfer' | 'Payroll' | 'Medical' | 'Leave';
 
@@ -186,7 +187,7 @@ function PayrollDetail({ run, onApprove, onReject, onClose, busy }: { run: any; 
 
   const rows = [
     ['Run Name',     run.name         || '—'],
-    ['Period',       run.date_start   ? `${String(run.date_start).slice(0,10)} → ${String(run.date_end||'').slice(0,10)}` : '—'],
+    ['Period',       run.date_start   ? `${formatDmy(run.date_start, '')} → ${formatDmy(run.date_end||'', '')}` : '—'],
     ['Pay Frequency',run.freq_name    || '—'],
     ['Status',       run.status       || '—'],
     ['Deduction Group', run.group_name || '—'],
@@ -440,8 +441,8 @@ function LeaveApprovalDetail({ item, onApprove, onReject, onApproveAllowance, on
     ['Department',  l.department_name  || '—'],
     ['Leave Type',  l.leave_type_name  || '—'],
     ['Period',      l.period_name      || '—'],
-    ['From',        l.date_start ? String(l.date_start).slice(0, 10) : '—'],
-    ['To',          l.date_end   ? String(l.date_end).slice(0, 10)   : '—'],
+    ['From',        l.date_start ? formatDmy(l.date_start, '') : '—'],
+    ['To',          l.date_end   ? formatDmy(l.date_end, '')   : '—'],
     ['Days',        String(l.day_count ?? '—')],
     ['Status',      l.status           || '—'],
   ];
@@ -596,7 +597,7 @@ function EmployeeTransferDetail({ transfer, onApprove, onReject, onClose, busy }
     </div>
     <dl className="grid grid-cols-2 gap-4">
       <div><dt className="text-[11px] font-medium text-[var(--text-muted)]">Employee ID</dt><dd className="mt-0.5 text-sm font-semibold">{transfer.employee_code || '—'}</dd></div>
-      <div><dt className="text-[11px] font-medium text-[var(--text-muted)]">Effective Date</dt><dd className="mt-0.5 text-sm font-semibold">{String(transfer.effective_date || '').slice(0, 10)}</dd></div>
+      <div><dt className="text-[11px] font-medium text-[var(--text-muted)]">Effective Date</dt><dd className="mt-0.5 text-sm font-semibold">{formatDmy(transfer.effective_date || '', '')}</dd></div>
       <div className="col-span-2"><dt className="text-[11px] font-medium text-[var(--text-muted)]">Current Approval Stage</dt><dd className="mt-0.5 text-sm font-semibold">{currentStage?.stage_name || 'Direct HR approval'}</dd></div>
     </dl>
     <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Proposed changes</p><TransferChangeComparison changes={transfer.changes || []} /></div>
@@ -927,7 +928,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
               id:          String(r.id),
               module:      'Payroll',
               title:       r.name || 'Unnamed Run',
-              subtitle:    r.freq_name || r.date_start ? `${String(r.date_start || '').slice(0,10)}` : '',
+              subtitle:    r.freq_name || r.date_start ? `${formatDmy(r.date_start || '', '')}` : '',
               submittedAt: r.updated_at || r.created_at || null,
               status:      r.status || 'Pending Approval',
               raw:         r,
@@ -1006,7 +1007,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
           id: String(transfer.id),
           module: 'Employee Transfer',
           title: transfer.employee_name || 'Employee',
-          subtitle: `${transfer.transfer_type || 'Transfer'} · ${transfer.changes?.length || 0} change(s) · effective ${String(transfer.effective_date || '').slice(0, 10)}`,
+          subtitle: `${transfer.transfer_type || 'Transfer'} · ${transfer.changes?.length || 0} change(s) · effective ${formatDmy(transfer.effective_date || '', '')}`,
           submittedAt: transfer.submitted_at || transfer.created_at || null,
           status: transfer.status || 'Pending Approval',
           raw: transfer,
@@ -1143,7 +1144,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
                       <td className="td text-[var(--text-muted)] text-[13px]">{item.subtitle || '—'}</td>
                       <td className="td"><StatusChip status={item.status} /></td>
                       <td className="td text-[var(--text-muted)] text-[12px]">
-                        {item.submittedAt ? String(item.submittedAt).slice(0, 10) : '—'}
+                        {item.submittedAt ? formatDmy(item.submittedAt, '') : '—'}
                       </td>
                       <td className="td text-right">
                         <button

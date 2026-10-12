@@ -5,6 +5,7 @@ import {
 } from '@/lib/onboardingFields';
 import { publicApi, BRAND_BLUE as BLUE, resolveLogoUrl } from '@/lib/publicApi';
 import { appPath } from '@/lib/basePath';
+import { DateInput } from './ui/DateInput';
 
 interface Branding { company_name?: string; company_logo_url?: string; accent_color?: string }
 interface FormConfig {
@@ -176,8 +177,11 @@ export function OnboardingPortal() {
                                   if (file) { setFiles(p => ({ ...p, [f.key]: file })); if (errors[f.key]) setErrors(p => ({ ...p, [f.key]: false })); }
                                 }} />
                             </label>
+                          ) : f.type === 'date' ? (
+                            <DateInput value={values[f.key] ?? ''} onChange={e => setVal(f.key, e.target.value)}
+                              className={inputCls} style={ringStyle} />
                           ) : (
-                            <input type={f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : 'text'}
+                            <input type={f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : 'text'}
                               value={values[f.key] ?? ''} onChange={e => setVal(f.key, e.target.value)}
                               className={inputCls} style={ringStyle} />
                           )}

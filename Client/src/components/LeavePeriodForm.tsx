@@ -2,6 +2,7 @@ import { useFormState } from '../hooks/useFormState';
 import { FormModal } from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
 
+import { DateInput } from './ui/DateInput';
 export function LeavePeriodForm({ onClose, onSave, initialData }: any) {
   const { formData, handleChange } = useFormState({ name: '', startDate: '', endDate: '' }, initialData);
 
@@ -20,11 +21,11 @@ export function LeavePeriodForm({ onClose, onSave, initialData }: any) {
         </FormField>
 
         <FormField label="Start Date" required>
-          <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className={inputClass} />
+          <DateInput name="startDate" value={formData.startDate} onChange={handleChange} className={inputClass} />
         </FormField>
 
         <FormField label="End Date" required>
-          <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className={inputClass} />
+          <DateInput name="endDate" value={formData.endDate} onChange={handleChange} className={inputClass} />
         </FormField>
       </div>
     </FormModal>

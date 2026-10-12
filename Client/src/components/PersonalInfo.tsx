@@ -11,17 +11,15 @@ import api from '../../lib/api';
 import { getCurrentUser } from '../../lib/auth';
 import { employeeFieldVisible } from '../../lib/settings';
 
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'Personal' | 'Employment' | 'Relationships' | 'Qualifications' | 'Documents' | 'Leave' | 'Attendance';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (v: any): string | null => (v != null && v !== '' ? String(v) : null);
 
-const fmtDate = (v: string | null | undefined): string | null => {
-  if (!v) return null;
-  try { return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return null; }
-};
+// null (not '—') when empty: callers render their own placeholder.
+const fmtDate = (v: string | null | undefined): string | null => (v ? formatDmy(v, '') || null : null);
 
 function profLabel(k: string | null | undefined) {
   if (!k) return '—';

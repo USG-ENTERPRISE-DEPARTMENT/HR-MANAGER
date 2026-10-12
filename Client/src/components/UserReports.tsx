@@ -13,6 +13,7 @@ import api from '../../lib/api';
 import { getCurrentUser } from '../../lib/auth';
 import { PageHeader } from './ui/PageHeader';
 import { MyNassitReport } from './reports/MyNassitReport';
+import { fmtDate as formatDmy } from '@/lib/dateFormat';
 
 interface PayslipRun {
   run_id: string;
@@ -198,7 +199,7 @@ export function UserReports() {
     })
     .map((r: any) => [
       r.cycle_name ?? '—',
-      `${r.period_start ? String(r.period_start).slice(0, 10) : '—'} – ${r.period_end ? String(r.period_end).slice(0, 10) : '—'}`,
+      `${r.period_start ? formatDmy(r.period_start, '') : '—'} – ${r.period_end ? formatDmy(r.period_end, '') : '—'}`,
       r.status ?? '—', psc(r.self_score), psc(r.supervisor_score), psc(r.hr_score), psc(r.overall_score),
     ] as (string | number)[]), [perfRows, perfFilters]);
   const perfSummary = () => {
@@ -469,8 +470,8 @@ export function UserReports() {
                   </div>
                   {(medData.staff_records?.length > 0 || medData.dependent_records?.length > 0) ? (() => {
                     const recHeaders = ['Type', 'Date', 'Illness', 'Cost', 'Status'];
-                    const staffRows  = (medData.staff_records ?? []).map((r: any) => ['Staff', r.admission_date?.slice(0,10) ?? '', r.illness_type ?? '', fmt(r.cost), r.status ?? '']);
-                    const depRows    = (medData.dependent_records ?? []).map((r: any) => ['Dependent', r.date_attended?.slice(0,10) ?? '', r.illness_type ?? '', fmt(r.cost), r.status ?? '']);
+                    const staffRows  = (medData.staff_records ?? []).map((r: any) => ['Staff', formatDmy(r.admission_date, '') ?? '', r.illness_type ?? '', fmt(r.cost), r.status ?? '']);
+                    const depRows    = (medData.dependent_records ?? []).map((r: any) => ['Dependent', formatDmy(r.date_attended, '') ?? '', r.illness_type ?? '', fmt(r.cost), r.status ?? '']);
                     const allRecRows = [...staffRows, ...depRows];
                     return (
                       <>
@@ -507,7 +508,7 @@ export function UserReports() {
                               {(medData.staff_records ?? []).map((r: any, i: number) => (
                                 <tr key={`s${i}`} className="tr">
                                   <td className="td"><span className="pill pill-accent text-[10px]">Staff</span></td>
-                                  <td className="td">{r.admission_date?.slice(0,10)}</td>
+                                  <td className="td">{formatDmy(r.admission_date, '')}</td>
                                   <td className="td">{r.illness_type}</td>
                                   <td className="td">{fmt(r.cost)}</td>
                                   <td className="td"><span className={`pill text-[11px] ${r.status === 'Approved' ? 'pill-success' : r.status === 'Rejected' ? 'pill-danger' : r.status === 'Pending Approval' ? 'pill-warning' : ''}`}>{r.status}</span></td>
@@ -516,7 +517,7 @@ export function UserReports() {
                               {(medData.dependent_records ?? []).map((r: any, i: number) => (
                                 <tr key={`d${i}`} className="tr">
                                   <td className="td"><span className="pill text-[10px]">Dependent</span></td>
-                                  <td className="td">{r.date_attended?.slice(0,10)}</td>
+                                  <td className="td">{formatDmy(r.date_attended, '')}</td>
                                   <td className="td">{r.illness_type}</td>
                                   <td className="td">{fmt(r.cost)}</td>
                                   <td className="td"><span className={`pill text-[11px] ${r.status === 'Approved' ? 'pill-success' : r.status === 'Rejected' ? 'pill-danger' : r.status === 'Pending Approval' ? 'pill-warning' : ''}`}>{r.status}</span></td>
@@ -606,7 +607,7 @@ export function UserReports() {
                         </td>
                         <td className="td text-[var(--text-muted)] text-[12px]">
                           {run.date_start
-                            ? `${run.date_start.slice(0, 10)}${run.date_end ? ` → ${run.date_end.slice(0, 10)}` : ''}`
+                            ? `${formatDmy(run.date_start, '')}${run.date_end ? ` → ${formatDmy(run.date_end, '')}` : ''}`
                             : '—'}
                         </td>
                         <td className="td text-[var(--text-muted)]">{run.freq_name ?? '—'}</td>
