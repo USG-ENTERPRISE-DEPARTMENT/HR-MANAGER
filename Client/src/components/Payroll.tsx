@@ -738,6 +738,93 @@ function PayslipSlideOver({
   );
 }
 
+// Delivery status of a completed run's payslip emails (sent from a server-side queue). Refreshes
+// every 10s while any are still queued; hidden when the feature is off and nothing was ever queued.
+function PayslipEmailStatus({ runId }: { runId: string }) {
+  const { can } = useCan();
+  const [data, setData] = useState<{ enabled: boolean; counts: Record<string, number>; problems: any[] } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [showProblems, setShowProblems] = useState(false);
+
+  const load = useCallback(() => {
+    api.get(`/payroll/runs/${runId}/payslip-emails`).then(r => setData(r.data?.data ?? null)).catch(() => {});
+  }, [runId]);
+  useEffect(() => { load(); }, [load]);
+
+  const c = data?.counts ?? {};
+  const inFlight = (c.pending ?? 0) + (c.sending ?? 0);
+  useEffect(() => {
+    if (!inFlight) return;
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [inFlight, load]);
+
+  const total = Object.values(c).reduce((s, n) => s + n, 0);
+  if (!data || (!data.enabled && total === 0)) return null;
+
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      const r = await api.post(`/payroll/runs/${runId}/payslip-emails/retry`);
+      toast.success(r.data?.message ?? 'Payslip emails queued');
+      load();
+    } catch (e: any) { toast.error(e?.response?.data?.message ?? 'Could not queue payslip emails'); }
+    finally { setRetrying(false); }
+  };
+
+  const chip = (label: string, n: number | undefined, color: string) => (n ?? 0) > 0 && (
+    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border" style={{ color, borderColor: color }}>{n} {label}</span>
+  );
+
+  return (
+    <div className="px-4 py-3 border border-[var(--border)] rounded-[12px] bg-[var(--surface)] text-[13px] space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Send size={14} className="text-[var(--accent)] shrink-0" />
+        <span className="font-semibold text-[var(--text-primary)]">Payslip emails</span>
+        {total === 0
+          ? <span className="text-[var(--text-muted)] text-[12px]">Not queued for this run{data.enabled ? '' : ' — emailing is switched off'}</span>
+          : <>
+              {chip('sent', c.sent, 'var(--success,#10b981)')}
+              {chip(inFlight === 1 ? 'sending' : 'queued', inFlight || undefined, 'var(--accent)')}
+              {chip('failed', c.failed, 'var(--danger)')}
+              {chip('skipped', c.skipped, 'var(--text-muted)')}
+              {inFlight > 0 && <RefreshCw size={12} className="animate-spin text-[var(--text-muted)]" />}
+            </>}
+        <div className="ml-auto flex items-center gap-2">
+          {data.problems.length > 0 && (
+            <button className="text-[12px] text-[var(--accent)] hover:underline" onClick={() => setShowProblems(s => !s)}>
+              {showProblems ? 'Hide details' : `View ${data.problems.length} issue${data.problems.length !== 1 ? 's' : ''}`}
+            </button>
+          )}
+          {data.enabled && can('process_payroll') && ((c.failed ?? 0) > 0 || total === 0) && (
+            <button className="secondary-btn text-[12px]" onClick={retry} disabled={retrying}>
+              <RefreshCw size={13} className={retrying ? 'animate-spin' : ''} />
+              {total === 0 ? 'Send payslips' : 'Resend failed'}
+            </button>
+          )}
+        </div>
+      </div>
+      {showProblems && (
+        <div className="max-h-56 overflow-y-auto border border-[var(--border)] rounded-lg">
+          <table className="w-full border-collapse text-[12px]">
+            <thead><tr><th className="th">Employee</th><th className="th">Email</th><th className="th">Status</th><th className="th">Reason</th></tr></thead>
+            <tbody>
+              {data.problems.map(p => (
+                <tr key={p.employeeId} className="tr">
+                  <td className="td">{p.name || p.employeeId}{p.staffCode && <span className="text-[var(--text-muted)]"> · {p.staffCode}</span>}</td>
+                  <td className="td">{p.email || '—'}</td>
+                  <td className="td capitalize">{p.status}{p.attempts > 1 ? ` (${p.attempts} tries)` : ''}</td>
+                  <td className="td text-[var(--text-muted)]">{p.error || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PayrollGrid({
   gridData, activeRun, editMode, generating, finalizing, retryingGL, confirmingPaid, submitting, approving, rejecting,
   staleColumnCount, hiddenColIds, payslipHiddenColIds, aggregateColIds, colPayslipMeta, netExcludedIds, templateFrozen, approvalSettings, currentUserId, currentUserRoles, runStages,
@@ -1309,6 +1396,9 @@ function PayrollGrid({
           );
         })()
       )}
+
+      {/* ── Payslip email delivery (completed runs only) ── */}
+      {activeRun.status === 'Completed' && <PayslipEmailStatus runId={String(activeRun.id)} />}
 
       {/* ── Empty state ── */}
       {gridData.length === 0 && (

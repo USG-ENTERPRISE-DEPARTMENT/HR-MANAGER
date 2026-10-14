@@ -28,11 +28,12 @@ function hexToRgb(hex) {
   return [r, g, b];
 }
 
+// dd/mm/yyyy — the app-wide date format (Client/lib/dateFormat.ts). Read from the yyyy-mm-dd text,
+// not via `new Date()`, so a date column never shifts a day with the server's timezone.
 function fmtDate(value) {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value instanceof Date ? value.toISOString() : String(value));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(value);
 }
 
 /**
@@ -100,6 +101,35 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     }
   }
 
+  try {
+    const out = await renderPayslip(runId, empId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);
+    return res.end(out.buffer);
+  } catch (err) {
+    if (!(err instanceof PayslipError)) throw err;
+    if (err.status === 404) return respond.notFound(res, err.message);
+    return res.status(err.status).json({ success: false, message: err.message });
+  }
+});
+
+/** A payslip that cannot be produced for a reason the caller should report (not a crash). */
+class PayslipError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+
+/**
+ * Render one employee's payslip for a run as a PDF in memory.
+ *
+ * The single payslip renderer: the download endpoint and the payslip email worker
+ * (helpers/payslipMailer.js) both call it, so an emailed payslip is byte-for-byte the document a
+ * user would download — there is no second layout to drift. Performs NO permission check; callers
+ * must authorise first.
+ *
+ * @returns {Promise<{ buffer: Buffer, filename: string, emp: object, run: object, empName: string, period: string }>}
+ * @throws {PayslipError} run/employee not found, or payslips disabled for the run's payment type
+ */
+async function renderPayslip(runId, empId) {
   // ── Fetch run, settings, employee ──────────────────────────────────────────
   const [run] = await query`
     SELECT pr.id, pr.name, pr.date_start, pr.date_end, pr.status, pr.payment_type_id,
@@ -108,17 +138,17 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     FROM payrollruns pr
     LEFT JOIN payfrequencies pf ON pf.id = pr.pay_frequency
     WHERE pr.id = ${BigInt(runId)} LIMIT 1`;
-  if (!run) return respond.notFound(res, 'Payroll run not found');
+  if (!run) throw new PayslipError(404, 'Payroll run not found');
 
   if (run.payment_type_id) {
     const [pt] = await query`SELECT generate_payslip FROM paymenttype WHERE id = ${BigInt(run.payment_type_id)} LIMIT 1`.catch(() => [null]);
     if (pt && !pt.generate_payslip) {
-      return res.status(403).json({ success: false, message: 'Payslips are not generated for this payment type.' });
+      throw new PayslipError(403, 'Payslips are not generated for this payment type.');
     }
   }
 
   const [emp] = await query`
-    SELECT e.id, e.employee_id, e.firstName, e.lastName, e.email,
+    SELECT e.id, e.employee_id, e.firstName, e.lastName, e.email, e.work_email,
            e.bankAccount,
            COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS designation,
            COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department,
@@ -128,7 +158,7 @@ const downloadPayslip = asyncHandler(async (req, res) => {
     LEFT JOIN companystructures dept ON dept.id = e.departmentId
     LEFT JOIN companystructures br   ON br.id   = e.branchId
     WHERE e.id = ${BigInt(empId)} LIMIT 1`;
-  if (!emp) return respond.notFound(res, 'Employee not found');
+  if (!emp) throw new PayslipError(404, 'Employee not found');
 
   // Client-specific rule (Settings → Controls → Employee Form → "Departments only at Head Office"):
   // departments exist only at Head Office, so staff at any other branch show their BRANCH on the
@@ -291,14 +321,16 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   const [acR, acG, acB] = hexToRgb(s.accent_color);
   const empName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim();
   const period  = run.date_start
-    ? `${run.date_start.slice(0, 10)} → ${(run.date_end || '').slice(0, 10)}`
+    ? `${fmtDate(run.date_start)} → ${fmtDate(run.date_end)}`
     : run.name;
 
   // ── Build PDF ───────────────────────────────────────────────────────────────
   const doc = new PDFDocument({ size: 'A4', margin: 50, info: { Title: `Payslip — ${empName}` } });
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="payslip-${runId}-${empId}.pdf"`);
-  doc.pipe(res);
+  // Collected in memory rather than piped to a response, so the same document can be downloaded
+  // or attached to an email.
+  const chunks = [];
+  doc.on('data', (c) => chunks.push(c));
+  const finished = new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); });
 
   const pageW = doc.page.width - 100; // usable width (margin 50 each side)
 
@@ -428,7 +460,13 @@ const downloadPayslip = asyncHandler(async (req, res) => {
   }
 
   doc.end();
-});
+  await finished;
+  return {
+    buffer: Buffer.concat(chunks),
+    filename: `payslip-${runId}-${empId}.pdf`,
+    emp, run, empName, period,
+  };
+}
 
 // ── My payslips list (for employee self-service) ──────────────────────────────
 const getMyPayslips = asyncHandler(async (req, res) => {
@@ -516,4 +554,4 @@ const getMyTaxSummary = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { downloadPayslip, getMyPayslips, getMyTaxSummary };
+module.exports = { downloadPayslip, getMyPayslips, getMyTaxSummary, renderPayslip, PayslipError };

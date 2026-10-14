@@ -161,6 +161,9 @@ const CONTROL_KEYS = [
   // '1' = departments exist only at Head Office: Department is hidden/cleared for staff at any other
   // branch (employee form, transfers, import). Client-specific, so off unless switched on.
   'department_head_office_only',
+  // '1' = email each employee their payslip PDF when a payroll run reaches 'Completed'. Sent in the
+  // background from a queue (helpers/payslipMailer.js) — never inside the completion request.
+  'payroll_email_payslips',
   'employee_id_format',   // template for auto-generated employee IDs, e.g. EMP-{YYYY}-{SEQ4}
   // Master payment/GL-posting switches per module. '0' = record-only (skip all GL postings).
   'leave_payments_enabled', 'medical_payments_enabled', 'payroll_payments_enabled',

@@ -542,6 +542,7 @@ function PostingsSection({
   payLeave, setPayLeave, payMedical, setPayMedical, payPayroll, setPayPayroll,
   validateAccounts, setValidateAccounts,
 }: any) {
+  const [emailPayslips, setEmailPayslips] = useState<boolean>(() => getSettings().payments.emailPayslips);
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-[var(--text-muted)] leading-relaxed max-w-3xl">
@@ -575,6 +576,12 @@ function PostingsSection({
             description="When on, finalizing a payroll run posts the journal to the general ledger. When off, payroll runs are recorded and finalized only — no GL posting is attempted."
             checked={payPayroll}
             onChange={(v) => { setPayPayroll(v); saveSetting('payments', { payroll: v }); }}
+          />
+          <ControlRow
+            label="Email Payslips When a Run Is Completed"
+            description="When on, each employee is emailed their payslip PDF as soon as a payroll run is completed. Emails go out in the background from a queue — completing the run never waits on the mail server, and failed sends are retried automatically. Employees with no email address are skipped."
+            checked={emailPayslips}
+            onChange={(v) => { setEmailPayslips(v); saveSetting('payments', { emailPayslips: v }); }}
           />
         </SectionCard>
       </div>

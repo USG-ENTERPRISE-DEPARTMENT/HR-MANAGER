@@ -1200,6 +1200,9 @@ const finalizePayroll = asyncHandler(async (req, res) => {
       finalized_at=NOW(), updated_at=NOW() WHERE id=${BigInt(id)}`;
   await logAudit(id, 'finalize', req, { documentRef, status: finalStatus });
   logActivity({ module: 'Payroll', action: 'finalize', entityId: String(id), entityName: run.name, ...fromReq(req), details: { documentRef, status: finalStatus } });
+  // Record-only finalisation goes straight to 'Completed' (a GL-posted run completes later, on bank
+  // confirmation — see applyBankConfirmation).
+  if (finalStatus === 'Completed') queuePayslipEmails(id);
   const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
   // Do not say "finalized" flatly on the GL-success path: the money has not moved until the core
   // banking system approves, and overstating that here is the whole problem being fixed.
@@ -1608,6 +1611,47 @@ const rejectPayrollFromBank = asyncHandler(async (req, res) => {
  * `rejection_reason` is cleared: a run that was rejected, regenerated, re-posted and then confirmed
  * must not keep showing the old reason.
  */
+/**
+ * Queue a just-completed run's payslips for emailing, in the background.
+ *
+ * Deliberately NOT awaited by callers: completing a run must never wait on, or fail because of,
+ * email. enqueueRunPayslips() only inserts queue rows and never throws; it no-ops unless the
+ * "Email payslips when a payroll run is completed" control is on. The worker is nudged right away
+ * so payslips go out promptly instead of at the next minute tick.
+ */
+function queuePayslipEmails(runId) {
+  const mailer = require('../helpers/payslipMailer');
+  mailer.enqueueRunPayslips(runId)
+    .then((r) => { if (r.queued) return mailer.processQueue(); })
+    .catch((err) => console.error(`[payslip-mail] background queue for run ${runId} failed:`, err.message));
+}
+
+// GET /payroll/runs/:id/payslip-emails — delivery status of the run's payslip emails.
+const getPayslipEmailStatus = asyncHandler(async (req, res) => {
+  const { runSummary } = require('../helpers/payslipMailer');
+  respond.ok(res, 'Payslip email status', await runSummary(req.params.id));
+});
+
+// POST /payroll/runs/:id/payslip-emails/retry — re-queue the run's failed payslip emails.
+// Also enqueues the run if it never was (e.g. the setting was switched on after it completed);
+// rows already sent are never touched, so this cannot email anyone twice.
+const retryPayslipEmails = asyncHandler(async (req, res) => {
+  const mailer = require('../helpers/payslipMailer');
+  if (!(await mailer.isEnabled())) {
+    return respond.badReq(res, 'Payslip emails are switched off (Settings → Controls → Payroll).');
+  }
+  const [run] = await query`SELECT id, name, status FROM payrollruns WHERE id = ${BigInt(req.params.id)} LIMIT 1`;
+  if (!run) return respond.notFound(res, 'Payroll run not found');
+  if (run.status !== 'Completed') return respond.badReq(res, 'Payslips are only emailed for completed payroll runs');
+
+  const requeued = await mailer.retryFailed(run.id);
+  const added = await mailer.enqueueRunPayslips(run.id);
+  logActivity({ module: 'Payroll', action: 'payslip_email_retry', entityId: String(run.id), entityName: run.name,
+    ...fromReq(req), details: { requeued, newlyQueued: added.queued } });
+  mailer.processQueue().catch(() => {});
+  respond.ok(res, `${requeued + added.queued} payslip email(s) queued`, { requeued, queued: added.queued });
+});
+
 async function applyBankConfirmation(run, { confirmedBy, note, req, source }) {
   const by = confirmedBy != null ? BigInt(confirmedBy) : null;
   await exec`
@@ -1615,6 +1659,9 @@ async function applyBankConfirmation(run, { confirmedBy, note, req, source }) {
        SET status='Completed', rejection_reason=NULL,
            bank_confirmed_at=NOW(), bank_confirmed_by=${by}, updated_at=NOW()
      WHERE id=${BigInt(run.id)}`;
+
+  // Both ways a posted run becomes 'Completed' — the bank's callback and "Mark as Paid" — pass here.
+  queuePayslipEmails(run.id);
 
   const action = source === 'manual' ? 'bank_confirmation_manual' : 'bank_confirmation';
   await logAudit(run.id, action, req, { reference: run.document_ref ?? null, note: note || null });
@@ -1992,7 +2039,7 @@ const getMyNassit = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  getNassitReport, getPayeReport, getGlSummary, getMyNassit,
+  getNassitReport, getPayslipEmailStatus, retryPayslipEmails, getPayeReport, getGlSummary, getMyNassit,
   getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
   getPayrollByReference, rejectPayrollFromBank, confirmPayrollFromBank, confirmPayrollManually,

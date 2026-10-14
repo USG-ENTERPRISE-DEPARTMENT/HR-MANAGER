@@ -513,4 +513,50 @@ async function sendDocumentExpiryEmail({ to, employeeName, docType, expiryDate }
   });
 }
 
-module.exports = { sendWelcomeEmail, sendLeaveEmail, sendSchedulingInvite, sendInterviewConfirmation, buildIcs, sendCandidateStageEmail, sendEmployeeLifecycleEmail, sendDisciplinaryEmail, sendPerformanceEmail, sendDocumentExpiryEmail, notifyEnabled };
+// ── Bulk payslip delivery ─────────────────────────────────────────────────────
+
+/**
+ * A pooled, rate-limited SMTP connection for sending many messages in one go (payslip batches).
+ *
+ * One connection is reused for the whole batch instead of a handshake per email, and `rateLimit`
+ * keeps the send rate under what typical SMTP relays tolerate before throttling or flagging the
+ * sender as spam. Returns null when email is switched off globally (Settings → Email). Call
+ * `close()` when the batch is done.
+ */
+async function openBulkMailer({ perSecond = 2 } = {}) {
+  const cfg = await resolveMailConfig();
+  if (!cfg.enabled) return null;
+  const transport = nodemailer.createTransport({
+    host: cfg.host, port: cfg.port, secure: cfg.secure,
+    auth: { user: cfg.user, pass: cfg.pass },
+    pool: true, maxConnections: 1, maxMessages: 100,
+    rateDelta: 1000, rateLimit: perSecond,
+    connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 60000,
+  });
+  const branding = await resolveBranding();
+  return { transport, from: cfg.from, branding, close: () => transport.close() };
+}
+
+/** Email one payslip PDF to an employee through a mailer from openBulkMailer(). */
+async function sendPayslipEmail(mailer, { to, name, runName, period, pdf, filename }) {
+  const { branding } = mailer;
+  const subject = `Your payslip — ${runName}`;
+  const body = `
+    ${greeting(name)}
+    <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6">
+      Your payslip for the period below is attached to this email as a PDF.
+    </p>
+    ${infoTable([
+      ['Payroll', escapeHtml(runName)],
+      period ? ['Period', escapeHtml(period)] : null,
+    ])}
+    ${muted('This payslip is confidential. If anything on it looks wrong, please contact the HR or Payroll team. You can also download your payslips at any time from the HR system.')}
+  `;
+  await mailer.transport.sendMail({
+    from: mailer.from, to, subject,
+    html: emailShell({ branding, preheader: subject, body }),
+    attachments: [{ filename, content: pdf, contentType: 'application/pdf' }],
+  });
+}
+
+module.exports = { sendWelcomeEmail, sendLeaveEmail, sendSchedulingInvite, sendInterviewConfirmation, buildIcs, sendCandidateStageEmail, sendEmployeeLifecycleEmail, sendDisciplinaryEmail, sendPerformanceEmail, sendDocumentExpiryEmail, notifyEnabled, openBulkMailer, sendPayslipEmail };

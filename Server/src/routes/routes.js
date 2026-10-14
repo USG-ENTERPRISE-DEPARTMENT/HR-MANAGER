@@ -387,6 +387,8 @@ router.get   ('/payroll/approval-flow',           run.getApprovalFlow);
 router.put   ('/payroll/approval-flow',           permissionGuard('process_payroll'), run.saveApprovalFlow);
 router.get   ('/payroll/runs/:id/data',           run.getPayrollData);
 router.get   ('/payroll/runs/:id/nassit-report',  run.getNassitReport);
+router.get   ('/payroll/runs/:id/payslip-emails', run.getPayslipEmailStatus);
+router.post  ('/payroll/runs/:id/payslip-emails/retry', permissionGuard('process_payroll'), run.retryPayslipEmails);
 router.get   ('/payroll/runs/:id/paye-report',    run.getPayeReport);
 router.get   ('/payroll/runs/:id/gl-summary',     run.getGlSummary);
 router.get   ('/payroll/runs/:id/debug',          run.debugPayrollRun);

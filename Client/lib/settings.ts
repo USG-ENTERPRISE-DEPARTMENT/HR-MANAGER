@@ -33,6 +33,8 @@ export interface AppSettings {
     payroll: boolean;
     /** Screen every GL account against the core system before posting. Off = post unchecked. */
     validateAccounts: boolean;
+    /** Email each employee their payslip when a payroll run is completed (sent from a background queue). */
+    emailPayslips: boolean;
   };
   medicalClaims: {
     hospitalWhtRate: number;
@@ -76,6 +78,7 @@ const DEFAULTS: AppSettings = {
     medical: true,
     payroll: true,
     validateAccounts: true,
+    emailPayslips: false,
   },
   medicalClaims: {
     hospitalWhtRate: 0,
@@ -151,6 +154,7 @@ const SERVER_KEYS: Record<string, Record<string, string>> = {
     medical: 'medical_payments_enabled',
     payroll: 'payroll_payments_enabled',
     validateAccounts: 'gl_validate_accounts',
+    emailPayslips: 'payroll_email_payslips',
   },
 };
 

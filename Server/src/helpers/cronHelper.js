@@ -54,6 +54,14 @@ cron.schedule('*/15 * * * *', () => {
     .catch(err => console.error('[cron] Employee sync retry failed:', err.message));
 });
 
+// Every minute — sends queued payslip emails in small, rate-limited batches (see payslipMailer.js).
+// No-ops unless "Email payslips when a payroll run is completed" is switched on; a failed send is
+// retried with back-off, so a mail-server outage only delays payslips rather than losing them.
+cron.schedule('* * * * *', () => {
+  require('./payslipMailer').processQueue()
+    .catch(err => console.error('[cron] Payslip email worker failed:', err.message));
+});
+
 // AI knowledge index — build shortly after startup (once the server and a locally-starting
 // Ollama have settled), then re-check every 30 minutes. ensureIndexed() no-ops when the index is
 // already built or when Ollama is unavailable, so this self-heals if Ollama comes up later and
