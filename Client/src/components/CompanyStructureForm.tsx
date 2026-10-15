@@ -8,6 +8,7 @@ import { CountedTextarea } from './ui/CountedTextarea';
 import { SearchSelect } from './ui/SearchSelect';
 import api from '../../lib/api';
 import { getSettings } from '../../lib/settings';
+import { Select } from './ui/Select';
 
 interface Props {
   onClose: () => void;
@@ -133,12 +134,12 @@ export function CompanyStructureForm({ onClose, initialData, onSave, currentStru
         </FormField>
 
         <FormField label="Type of Company Structure *">
-          <select name="type" value={formData.type} onChange={handleChange} className={inputClass}>
+          <Select name="type" value={formData.type} onChange={handleChange} className={inputClass}>
             <option value="">Select Type</option>
             {typeOptions.map(t => (
               <option key={t.id} value={t.label}>{t.label}</option>
             ))}
-          </select>
+          </Select>
         </FormField>
 
         <FormField label={
@@ -172,12 +173,12 @@ export function CompanyStructureForm({ onClose, initialData, onSave, currentStru
         </FormField>
 
         <FormField label="Parent Structure">
-          <select name="parent2" value={formData.parent2} onChange={handleChange} className={inputClass}>
+          <Select name="parent2" value={formData.parent2} onChange={handleChange} className={inputClass}>
             <option value="">None (Top Level)</option>
             {parentOptions.map(s => (
               <option key={s.id} value={s.id}>{s.title}</option>
             ))}
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Address">

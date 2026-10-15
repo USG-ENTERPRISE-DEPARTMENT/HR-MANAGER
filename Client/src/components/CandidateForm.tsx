@@ -6,6 +6,7 @@ import { CountedTextarea } from './ui/CountedTextarea';
 import { DocUploadField } from './ui/DocUploadField';
 
 import { DateInput } from './ui/DateInput';
+import { Select } from './ui/Select';
 export function CandidateForm({ onClose, initialData, onSave, jobs = [] }: any) {
   const { formData, handleChange } = useFormState(
     {
@@ -69,21 +70,21 @@ export function CandidateForm({ onClose, initialData, onSave, jobs = [] }: any) 
         </FormField>
 
         <FormField label="Gender">
-          <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
+          <Select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
             <option value="">— Select —</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Marital Status">
-          <select name="marital_status" value={formData.marital_status} onChange={handleChange} className={inputClass}>
+          <Select name="marital_status" value={formData.marital_status} onChange={handleChange} className={inputClass}>
             <option value="">— Select —</option>
             <option value="Single">Single</option>
             <option value="Married">Married</option>
             <option value="Divorced">Divorced</option>
             <option value="Widowed">Widowed</option>
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Date of Birth">
@@ -119,19 +120,19 @@ export function CandidateForm({ onClose, initialData, onSave, jobs = [] }: any) 
         </FormField>
 
         <FormField label="Source">
-          <select name="source" value={formData.source ?? 'Sourced'} onChange={handleChange} className={inputClass}>
+          <Select name="source" value={formData.source ?? 'Sourced'} onChange={handleChange} className={inputClass}>
             <option value="Sourced">Sourced</option>
             <option value="Applied">Applied</option>
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Job Posting" required>
-          <select name="jobId" value={formData.jobId} onChange={handleChange} className={inputClass} required>
+          <Select name="jobId" value={formData.jobId} onChange={handleChange} className={inputClass} required>
             <option value="">— Select a job posting —</option>
             {jobs.map((j: any) => (
               <option key={j.id} value={String(j.id)}>{j.title}</option>
             ))}
-          </select>
+          </Select>
         </FormField>
 
         {/* CV Upload */}

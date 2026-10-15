@@ -956,8 +956,8 @@ model employeeleavelog {
   employee_leave BigInt
   user_id        BigInt?
   data           String                        @db.VarChar(500)
-  status_from    employeeleavelog_status_from? @default(Pending)
-  status_to      employeeleavelog_status_to?   @default(Pending)
+  status_from    String?                       @default("Pending") @db.VarChar(40)
+  status_to      String?                       @default("Pending") @db.VarChar(40)
   created        DateTime?                     @db.DateTime(0)
 }
 

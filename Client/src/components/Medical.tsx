@@ -29,6 +29,7 @@ import { useCan } from '@/hooks/useCan';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ADMISSION_TYPES    = ['Outpatient', 'Inpatient', 'Emergency', 'Day Case'];
@@ -898,10 +899,10 @@ function StaffMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean; cur
                 <DateInput className={inputClass} value={f.discharged_date} onChange={e => set('discharged_date', e.target.value)} />
               </F>
               <F label="Admission Type">
-                <select className={inputClass} value={f.admission_type} onChange={e => set('admission_type', e.target.value)}>
+                <Select className={inputClass} value={f.admission_type} onChange={e => set('admission_type', e.target.value)}>
                   <option value="">Select</option>
                   {ADMISSION_TYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
+                </Select>
               </F>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1161,10 +1162,10 @@ function DependentMedicalTab({ adminMode, currentEmpId }: { adminMode?: boolean;
                 <DateInput className={inputClass} value={f.date_discharged} onChange={e => set('date_discharged', e.target.value)} />
               </F>
               <F label="Admission Type">
-                <select className={inputClass} value={f.admission_type} onChange={e => set('admission_type', e.target.value)}>
+                <Select className={inputClass} value={f.admission_type} onChange={e => set('admission_type', e.target.value)}>
                   <option value="">Select</option>
                   {ADMISSION_TYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
+                </Select>
               </F>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1316,10 +1317,10 @@ function MedicalLimitsTab() {
               <SearchSelect value={f.paygrade} onChange={v => set('paygrade', v)} options={gradeOptions} placeholder="Select pay grade…" />
             </F>
             <F label="Currency" required>
-              <select className={inputClass} value={f.currency} onChange={e => set('currency', e.target.value)}>
+              <Select className={inputClass} value={f.currency} onChange={e => set('currency', e.target.value)}>
                 <option value="">Select currency…</option>
                 {currencies.map(c => <option key={c.id} value={c.code}>{c.label}</option>)}
-              </select>
+              </Select>
             </F>
             <F label="Limit Amount" required>
               <input type="number" min="0" step="0.01" className={inputClass} value={f.amount}
@@ -1604,18 +1605,18 @@ function StaffMedicalEnquiryTab() {
           searchPlaceholder="Search name or staff ID…"
           filterBar={
             <div className="flex items-center gap-2 flex-wrap w-full">
-              <select className={`${inputClass} !w-auto min-w-[160px]`} value={gradeFilter} onChange={e => setGradeFilter(e.target.value)}>
+              <Select className={`${inputClass} !w-auto min-w-[160px]`} value={gradeFilter} onChange={e => setGradeFilter(e.target.value)}>
                 <option value="">All pay grades</option>
                 {grades.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <select className={`${inputClass} !w-auto min-w-[180px]`} value={utilFilter} onChange={e => setUtilFilter(e.target.value)}>
+              </Select>
+              <Select className={`${inputClass} !w-auto min-w-[180px]`} value={utilFilter} onChange={e => setUtilFilter(e.target.value)}>
                 <option value="">All utilisation</option>
                 <option value="over">Over limit (≥ 100%)</option>
                 <option value="near">Near limit (80–99%)</option>
                 <option value="used">Has used medical</option>
                 <option value="unused">Nothing used</option>
                 <option value="nolimit">No limit set</option>
-              </select>
+              </Select>
               {(search || gradeFilter || utilFilter || sort) && (
                 <button className="secondary-btn text-[12px]" onClick={() => { setSearch(''); setGradeFilter(''); setUtilFilter(''); setSort(null); }}>
                   <X size={13} /> Clear
@@ -1917,10 +1918,10 @@ function RegisteredHospitalsTab() {
             onClose={() => setOpen(false)} onSave={handleSave} saveLabel={saving ? 'Saving…' : 'Save'}>
             <F label="Name" required><input className={inputClass} value={f.name} onChange={e => set('name', e.target.value)} /></F>
             <F label="Type" required>
-              <select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
+              <Select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
                 <option value="Hospital">Hospital</option>
                 <option value="Pharmacy">Pharmacy</option>
-              </select>
+              </Select>
             </F>
             <F label="Account" required><input className={inputClass} value={f.account} onChange={e => set('account', e.target.value)} /></F>
           </FormModal>
@@ -2508,10 +2509,10 @@ function HospitalClaimsTab() {
                   </div>
                   <div>
                     <label className="label">For</label>
-                    <select className={inputClass} value={iType} onChange={e => { setIType(e.target.value as 'self' | 'dependent'); setIDepId(''); }}>
+                    <Select className={inputClass} value={iType} onChange={e => { setIType(e.target.value as 'self' | 'dependent'); setIDepId(''); }}>
                       <option value="self">Self</option>
                       <option value="dependent">Dependent</option>
-                    </select>
+                    </Select>
                   </div>
                 </div>
 

@@ -16,7 +16,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useCan } from '@/hooks/useCan';
 
-import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { fmtDate as formatDmy, toIsoDate } from '@/lib/dateFormat';
 // share_departments / share_employees are stored as comma-joined IDs.
 // Resolve them to names so the column reads "Emps: John Doe" rather than "Emps: 8".
 const fmtSharing = (doc: any, empMap: Record<string, string> = {}, deptMap: Record<string, string> = {}) => {
@@ -142,9 +142,10 @@ export function Documents() {
     id:           row.id,
     employee:     String(row.employee),
     documentType: row.document_type_name ?? '',
-    dateOfIssue:  fmtDate(row.date_added)  === '—' ? '' : fmtDate(row.date_added),
+    // Form VALUES are yyyy-mm-dd (fmtDate is display-only, dd/mm/yyyy).
+    dateOfIssue:  toIsoDate(row.date_added),
     placeOfIssue: row.place_of_issue ?? '',
-    expiryDate:   fmtDate(row.valid_until) === '—' ? '' : fmtDate(row.valid_until),
+    expiryDate:   toIsoDate(row.valid_until),
     details:      row.details ?? '',
     attachment:   row.attachment ?? null,
   });

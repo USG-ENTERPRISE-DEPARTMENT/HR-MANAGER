@@ -46,6 +46,16 @@ export function fmtDateTimeSec(v: unknown, fallback = '—'): string {
   return d ? `${fmtDateTime(d)}:${pad(d.getSeconds())}` : fallback;
 }
 
+/**
+ * A stored date as yyyy-mm-dd — the VALUE format for date inputs and API payloads ('' if empty).
+ * Use this, never fmtDate (which is for display), when pre-filling a form field.
+ */
+export function toIsoDate(v: unknown): string {
+  if (v == null || v === '') return '';
+  const parts = isoDateParts(typeof v === 'string' ? v : (v instanceof Date ? v.toISOString() : String(v)));
+  return parts ? `${parts[0]}-${pad(parts[1])}-${pad(parts[2])}` : '';
+}
+
 /** yyyy-mm-dd → dd/mm/yyyy (empty string for anything else). Used by the date input. */
 export function isoToDmy(iso: string | null | undefined): string {
   const parts = iso ? isoDateParts(String(iso)) : null;

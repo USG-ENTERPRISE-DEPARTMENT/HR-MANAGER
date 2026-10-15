@@ -197,6 +197,27 @@ body {
   }
   input::placeholder, textarea::placeholder { color: var(--text-muted); }
 
+  /* The searchable <Select> (components/ui/Select.tsx) renders a button in place of a native
+     <select>; it must look exactly like the field it replaced. */
+  .select-trigger {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    text-align: left;
+  }
+  .select-trigger:focus, .select-trigger[aria-expanded="true"] {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  }
+  .select-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+
   /* ── Native date / time pickers ──────────────────────────────────────────────
      Chrome renders these as a row of editable segments plus a calendar button, none of which
      inherit the field styling above. Left alone they sit at the browser default font and size,

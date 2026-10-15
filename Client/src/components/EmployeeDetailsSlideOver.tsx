@@ -25,6 +25,7 @@ import { downloadTransferPdf } from './ui/transferPdf';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 interface EmployeeDetailsProps {
   isOpen: boolean;
   onClose: () => void;
@@ -803,7 +804,7 @@ const ActivityTab: React.FC<{ employeeId: string }> = ({ employeeId }) => {
         </div>
         <div className="relative">
           <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-          <select
+          <Select
             value={actionFilter}
             onChange={e => setActionFilter(e.target.value)}
             className="pl-7 pr-8 py-2 text-[12px] border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all appearance-none cursor-pointer"
@@ -812,7 +813,7 @@ const ActivityTab: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             {Object.entries(ACTION_META).map(([k, v]) => (
               <option key={k} value={k}>{v.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -1115,25 +1116,25 @@ const EmployeeDisciplinaryTab: React.FC<{ employeeId: string }> = ({ employeeId 
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Incident Type *</label>
-                    <select value={form.incident_type} onChange={e => setF('incident_type', e.target.value)}
+                    <Select value={form.incident_type} onChange={e => setF('incident_type', e.target.value)}
                       className="h-9 px-3 text-[12.5px] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 bg-white cursor-pointer">
                       <option value="">Select type…</option>
                       {INCIDENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    </Select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Severity</label>
-                    <select value={form.severity} onChange={e => setF('severity', e.target.value)}
+                    <Select value={form.severity} onChange={e => setF('severity', e.target.value)}
                       className="h-9 px-3 text-[12.5px] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 bg-white cursor-pointer">
                       {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    </Select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</label>
-                    <select value={form.status} onChange={e => setF('status', e.target.value)}
+                    <Select value={form.status} onChange={e => setF('status', e.target.value)}
                       className="h-9 px-3 text-[12.5px] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 bg-white cursor-pointer">
                       {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">

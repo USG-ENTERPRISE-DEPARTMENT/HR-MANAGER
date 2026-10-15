@@ -11,6 +11,7 @@ import { ConfirmAlert } from './ConfirmAlert';
 import { useCan } from '@/hooks/useCan';
 import api from '../../lib/api';
 import { MigrationPanel } from './system/MigrationPanel';
+import { Select } from './ui/Select';
 
 const logoUrl = (name?: string) =>
   !name ? '' : name.startsWith('blob:') || name.startsWith('http') ? name : `${api.defaults.baseURL}/documents/${name}`;
@@ -921,7 +922,7 @@ export function System() {
           <Modal title={modalTitle} onClose={() => setIsFormOpen(false)} onSave={currentSave} saving={saving}>
             <div>
               <label className="label">Code List <span className="text-[var(--danger)]">*</span></label>
-              <select
+              <Select
                 value={valForm.codeListId}
                 onChange={(e) => setValForm({ ...valForm, codeListId: e.target.value })}
                 disabled={!!selectedItem}
@@ -932,7 +933,7 @@ export function System() {
                     {c.code} — {c.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="label">Label <span className="text-[var(--danger)]">*</span></label>

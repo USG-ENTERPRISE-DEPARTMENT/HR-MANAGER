@@ -2399,6 +2399,63 @@ class MigrationRun {
     this.done(e);
   }
 
+  /* ── 4b. Dependents ───────────────────────────────────────────────────── */
+  // legacy employeedependents → employeedependents. The app stores `relationship` and `gender` as
+  // CODELIST IDS (the "Relationship Types" REL list and the "Gender" list) — that is what the
+  // Dependents screen, medical claims and the dependent pickers resolve labels from — so the legacy
+  // text ('Child', 'F') is mapped to those ids by label. A value with no matching list entry is
+  // written as NULL and counted rather than guessed.
+  //
+  // The target has no legacy-id column, so a re-run recognises an already-loaded dependent by
+  // (employee, name, date of birth) and skips it instead of loading a duplicate.
+  async loadDependents() {
+    const e = this.step('dependents', 'Employee dependents');
+    const rows = await this.src(`
+      SELECT id, employee, name, gender, place_of_birth, relationship, dob, id_number
+        FROM employeedependents ORDER BY id`);
+
+    // Dates are compared as calendar days: both drivers return a DATE as local midnight, so the
+    // y-m-d parts agree even though the Date objects' text forms might not.
+    const day = (v) => { const d = date(v); return d ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` : ''; };
+    const existing = await this.tgt(`SELECT employee, LOWER(TRIM(name)) AS name, dob FROM employeedependents`);
+    const key = (emp, name, dob) => `${emp}|${String(name ?? '').trim().toLowerCase()}|${day(dob)}`;
+    const seen = new Set(existing.map(r => key(r.employee, r.name, r.dob)));
+
+    const values = [];
+    let noEmployee = 0, unmappedRel = 0, unmappedGender = 0, duplicates = 0;
+    for (const r of rows) {
+      const empId = this.map.employee.get(String(r.employee));
+      if (!empId) { noEmployee++; e.skipped++; continue; }
+      const name = clean(r.name);
+      if (!name) { e.skipped++; continue; }
+      const k = key(empId, name, r.dob);
+      if (seen.has(k)) { duplicates++; continue; }
+      seen.add(k);
+
+      const relLabel = clean(r.relationship);
+      const rel = relLabel ? this.map.codelist.get(`Relationship Types#${relLabel.toLowerCase()}`) ?? null : null;
+      if (relLabel && !rel) unmappedRel++;
+      const genLabel = plan.normaliseGender(r.gender);
+      const gen = genLabel ? this.map.codelist.get(`Gender#${genLabel.toLowerCase()}`) ?? null : null;
+      if (clean(r.gender) && !gen) unmappedGender++;
+
+      values.push([
+        empId, name, gen != null ? String(gen) : null, clean(r.place_of_birth),
+        rel != null ? String(rel) : null, date(r.dob), clean(r.id_number),
+      ]);
+    }
+
+    e.inserted += await this.insertMany('employeedependents',
+      ['employee', 'name', 'gender', 'place_of_birth', 'relationship', 'dob', 'id_number'], values, '');
+
+    e.notes.push(`${e.inserted} dependent(s) loaded for ${new Set(values.map(v => String(v[0]))).size} employee(s)`);
+    if (duplicates)     e.notes.push(`${duplicates} already present from an earlier run — left as they are`);
+    if (noEmployee)     e.notes.push(`${noEmployee} skipped: their employee did not migrate`);
+    if (unmappedRel)    e.notes.push(`${unmappedRel} relationship value(s) not in the Relationship Types list — saved without a relationship`);
+    if (unmappedGender) e.notes.push(`${unmappedGender} gender value(s) not recognised — saved without a gender`);
+    this.done(e);
+  }
+
   /* ── 4c. PC codes (positions) ─────────────────────────────────────────── */
   // The legacy system has no positions, but it does have the supervisor tree (loaded above), which
   // is exactly what the app derives PC codes from. This runs the same backfill an operator would run
@@ -2442,6 +2499,8 @@ class MigrationRun {
       await this.loadAccessControl();
       // Needs employees, their supervisor links and job titles — all loaded above.
       await this.loadPcCodes();
+      // Needs the employee id map and the seeded Relationship Types / Gender code lists.
+      await this.loadDependents();
       // Components must exist before employeesalary and notch amounts can reference them.
       await this.loadSalaryComponents();
       if (this.scopes.payroll?.enabled) {

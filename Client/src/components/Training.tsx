@@ -23,6 +23,7 @@ import { useCan } from '@/hooks/useCan';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const CATEGORIES   = ['Technical', 'Leadership', 'Compliance', 'Soft Skills', 'Safety', 'Other'];
@@ -771,16 +772,16 @@ function CatalogTab() {
               <input className={inputClass} value={f.name} onChange={e => set('name', e.target.value)} placeholder="Course title" />
             </FormField>
             <FormField label="Category" required>
-              <select className={inputClass} value={f.category} onChange={e => set('category', e.target.value)}>
+              <Select className={inputClass} value={f.category} onChange={e => set('category', e.target.value)}>
                 <option value="">Select…</option>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Type" required>
-              <select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
+              <Select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
                 <option value="">Select…</option>
                 {COURSE_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Provider">
               <input className={inputClass} value={f.provider} onChange={e => set('provider', e.target.value)} placeholder="e.g. Coursera" />
@@ -795,10 +796,10 @@ function CatalogTab() {
               <input type="number" min="1" className={inputClass} value={f.max_seats} onChange={e => set('max_seats', e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="Leave blank for unlimited" />
             </FormField>
             <FormField label="Status">
-              <select className={inputClass} value={f.is_active} onChange={e => set('is_active', e.target.value)}>
+              <Select className={inputClass} value={f.is_active} onChange={e => set('is_active', e.target.value)}>
                 <option>Yes</option>
                 <option>No</option>
-              </select>
+              </Select>
             </FormField>
             <div className="col-span-2">
               <FormField label="Description">
@@ -1212,7 +1213,7 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
             {f.training_catalog_id && catalogSlots.length > 0 && (
               <div className="col-span-2">
                 <FormField label="Date Slot">
-                  <select className={inputClass} value={selectedSlotId} onChange={e => handleSlotSelect(e.target.value)}>
+                  <Select className={inputClass} value={selectedSlotId} onChange={e => handleSlotSelect(e.target.value)}>
                     <option value="">Choose a slot…</option>
                     {catalogSlots.map((sl: any, i: number) => {
                       const full = sl.max_seats != null && (sl.seats_left ?? 0) <= 0;
@@ -1222,7 +1223,7 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
                         </option>
                       );
                     })}
-                  </select>
+                  </Select>
                 </FormField>
               </div>
             )}
@@ -1232,16 +1233,16 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
               </FormField>
             </div>
             <FormField label="Category">
-              <select className={inputClass} value={f.category} onChange={e => set('category', e.target.value)}>
+              <Select className={inputClass} value={f.category} onChange={e => set('category', e.target.value)}>
                 <option value="">Select…</option>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Type">
-              <select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
+              <Select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
                 <option value="">Select…</option>
                 {COURSE_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
+              </Select>
             </FormField>
             <div className="col-span-2">
               <FormField label="Provider">
@@ -1682,7 +1683,7 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
             {f.training_catalog_id && catalogSlots.length > 0 && (
               <div className="col-span-2">
                 <FormField label="Date Slot">
-                  <select className={inputClass} value={selectedSlotId} onChange={e => handleSlotSelect(e.target.value)}>
+                  <Select className={inputClass} value={selectedSlotId} onChange={e => handleSlotSelect(e.target.value)}>
                     <option value="">Choose a slot…</option>
                     {catalogSlots.map((sl: any, i: number) => {
                       const full = sl.max_seats != null && (sl.seats_left ?? 0) <= 0;
@@ -1692,7 +1693,7 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
                         </option>
                       );
                     })}
-                  </select>
+                  </Select>
                 </FormField>
               </div>
             )}
@@ -1702,16 +1703,16 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
               </FormField>
             </div>
             <FormField label="Category">
-              <select className={inputClass} value={f.category} onChange={e => set('category', e.target.value)}>
+              <Select className={inputClass} value={f.category} onChange={e => set('category', e.target.value)}>
                 <option value="">Select…</option>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
+              </Select>
             </FormField>
             <FormField label="Type">
-              <select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
+              <Select className={inputClass} value={f.type} onChange={e => set('type', e.target.value)}>
                 <option value="">Select…</option>
                 {COURSE_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
+              </Select>
             </FormField>
             <div className="col-span-2">
               <FormField label="Provider">

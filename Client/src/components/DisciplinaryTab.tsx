@@ -5,6 +5,7 @@ import api from '../../lib/api';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 export const INCIDENT_TYPES = [
   'Verbal Warning', 'Written Warning', 'Final Warning',
   'Counselling', 'Suspension', 'Gross Misconduct',
@@ -112,25 +113,25 @@ export function DisciplinaryTab({ onViewEmployee }: DisciplinaryTabProps) {
           </div>
           <div className="relative shrink-0">
             <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-muted)] pointer-events-none" />
-            <select value={incidentType} onChange={e => setIncidentType(e.target.value)}
+            <Select value={incidentType} onChange={e => setIncidentType(e.target.value)}
               className="pl-6 pr-3 py-1.5 text-[12px] border border-[var(--border)] rounded-lg bg-[var(--surface-hover)] focus:outline-none focus:border-[var(--accent)] appearance-none cursor-pointer">
               <option value="">All types</option>
               {INCIDENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            </Select>
           </div>
         </div>
         {/* Row 2: severity + status + date range + clear */}
         <div className="flex flex-wrap items-center gap-2">
-          <select value={severity} onChange={e => setSeverity(e.target.value)}
+          <Select value={severity} onChange={e => setSeverity(e.target.value)}
             className="w-auto px-3 py-1.5 text-[12px] border border-[var(--border)] rounded-lg bg-[var(--surface-hover)] focus:outline-none focus:border-[var(--accent)] cursor-pointer">
             <option value="">All severities</option>
             {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select value={status} onChange={e => setStatus(e.target.value)}
+          </Select>
+          <Select value={status} onChange={e => setStatus(e.target.value)}
             className="w-auto px-3 py-1.5 text-[12px] border border-[var(--border)] rounded-lg bg-[var(--surface-hover)] focus:outline-none focus:border-[var(--accent)] cursor-pointer">
             <option value="">All statuses</option>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          </Select>
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">From</span>
             <DateInput wrapperClassName="w-[140px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)}

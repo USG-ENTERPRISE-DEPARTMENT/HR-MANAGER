@@ -4,6 +4,7 @@ import { useFormState } from '../hooks/useFormState';
 import { FormModal } from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
 import { MultiSearchSelect } from './ui/SearchSelect';
+import { Select } from './ui/Select';
 
 const YES_NO = (
   <>
@@ -67,24 +68,24 @@ export function LeaveTypeForm({ onClose, initialData, onSave, leaveGroups = [] }
         </FormField>
 
         <FormField label="Supervisor can assign leave to employees" required hint="When set to Yes, a supervisor can apply for this leave type on behalf of their direct reports from the Subordinate Leave tab.">
-          <select name="adminCanAssign" value={formData.adminCanAssign} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="adminCanAssign" value={formData.adminCanAssign} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         <FormField label="Employees can apply beyond the current leave balance" required hint="When set to Yes, employees are allowed to apply for more days than their remaining balance, resulting in a negative balance.">
-          <select name="applyBeyondBalance" value={formData.applyBeyondBalance} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="applyBeyondBalance" value={formData.applyBeyondBalance} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         <FormField label="Leave Accrue Enabled" required hint="When enabled, leave days are earned gradually over time rather than being granted all at once at the start of the period.">
-          <select name="leaveAccrueEnabled" value={formData.leaveAccrueEnabled} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="leaveAccrueEnabled" value={formData.leaveAccrueEnabled} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         {formData.leaveAccrueEnabled === 'Yes' && (
           <FormField label="Accrual Frequency" required hint="How often leave days are granted — Monthly (each month), Quarterly (every 3 months), or Bi-annually (every 6 months).">
-            <select name="accrualFrequency" value={formData.accrualFrequency} onChange={handleChange} className={inputClass}>
+            <Select name="accrualFrequency" value={formData.accrualFrequency} onChange={handleChange} className={inputClass}>
               <option value="Monthly">Monthly</option>
               <option value="Quarterly">Quarterly</option>
               <option value="Bi-annually">Bi-annually</option>
-            </select>
+            </Select>
           </FormField>
         )}
 
@@ -119,7 +120,7 @@ export function LeaveTypeForm({ onClose, initialData, onSave, leaveGroups = [] }
         )}
 
         <FormField label="Leave Carried Forward" required hint="When set to Yes, any unused leave balance at the end of a period is rolled over into the next period instead of being forfeited.">
-          <select name="leaveCarriedForward" value={formData.leaveCarriedForward} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="leaveCarriedForward" value={formData.leaveCarriedForward} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         <FormField label="Percentage of Leave Carried Forward" required hint="The portion of the unused balance that is carried forward. E.g. 50 means only half of unused days roll over. Set to 100 to carry the full balance.">
@@ -131,43 +132,43 @@ export function LeaveTypeForm({ onClose, initialData, onSave, leaveGroups = [] }
         </FormField>
 
         <FormField label="Carried Forward Leave Availability Period" required hint="How long the carried-forward days remain available before they expire. After this window, any unspent carried-forward balance is forfeited.">
-          <select name="carriedForwardAvailability" value={formData.carriedForwardAvailability} onChange={handleChange} className={inputClass}>
+          <Select name="carriedForwardAvailability" value={formData.carriedForwardAvailability} onChange={handleChange} className={inputClass}>
             <option value="1 Month">1 Month</option>
             <option value="3 Months">3 Months</option>
             <option value="6 Months">6 Months</option>
             <option value="1 Year">1 Year</option>
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Proportionate leaves on Joined Date" required hint="When set to Yes, a new joiner's entitlement is reduced based on how much of the period remains. Formula: (months remaining from hire date ÷ total period months) × full allocation, rounded to the nearest whole day. Only applies if the employee's hire date falls within the active leave period.">
-          <select name="proportionateOnJoined" value={formData.proportionateOnJoined} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="proportionateOnJoined" value={formData.proportionateOnJoined} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         <FormField label="Send Notification Emails" required hint="When set to Yes, email notifications are sent to the employee and their supervisor when a leave application is submitted, approved, or rejected.">
-          <select name="sendNotificationEmails" value={formData.sendNotificationEmails} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="sendNotificationEmails" value={formData.sendNotificationEmails} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         <FormField label="Gender Restriction" required hint="Restrict this leave type to a specific gender, e.g. Paternity Leave for males or Maternity Leave for females. Select 'All' to make it available to everyone. Genders are managed in the GEN code value list.">
-          <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
+          <Select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
             <option value="All">All (No Restriction)</option>
             {genders.map((g: any) => (
               <option key={g.id} value={String(g.label ?? '').charAt(0).toUpperCase()}>
                 {g.label} Only
               </option>
             ))}
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Leave Allowance" required hint="When set to Yes, employees taking this leave type will receive a leave allowance payout based on the configured allowance settings. The amount is calculated from the employee's salary grade.">
-          <select name="leaveAllowance" value={formData.leaveAllowance} onChange={handleChange} className={inputClass}>{YES_NO}</select>
+          <Select name="leaveAllowance" value={formData.leaveAllowance} onChange={handleChange} className={inputClass}>{YES_NO}</Select>
         </FormField>
 
         {formData.leaveAllowance === 'Yes' && (
           <FormField label="Allowance Frequency" required hint="'Every Application' pays the allowance each time a leave of this type is approved. 'Once Per Leave Period' pays it only on the first approved application in each leave period — subsequent applications in the same period will not trigger another payout.">
-            <select name="leaveAllowanceOnce" value={formData.leaveAllowanceOnce} onChange={handleChange} className={inputClass}>
+            <Select name="leaveAllowanceOnce" value={formData.leaveAllowanceOnce} onChange={handleChange} className={inputClass}>
               <option value="No">Every Application</option>
               <option value="Yes">Once Per Leave Period</option>
-            </select>
+            </Select>
           </FormField>
         )}
 

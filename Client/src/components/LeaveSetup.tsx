@@ -20,7 +20,8 @@ import { toast } from 'sonner';
 import { getCurrentUser } from '../../lib/auth';
 import { PERMISSIONS } from '../../lib/permissionKeys';
 
-import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { fmtDate as formatDmy, toIsoDate } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 const ALL_TABS = ['Leave Types', 'Leave Period', 'Work Week', 'Holidays', 'Leave Rules', 'Leave Groups'] as const;
 const TAB_PERMISSION: Record<string, string> = {
   'Leave Types':  PERMISSIONS.MANAGE_LEAVE_TYPES,
@@ -650,7 +651,7 @@ export function LeaveSetup() {
                 {DAY_ORDER.map(day => (
                   <React.Fragment key={day}>
                     <div className="font-bold text-[var(--text-primary)] text-[13px]">{day}</div>
-                    <select
+                    <Select
                       value={workDays[day] ?? 'Full_Day'}
                       onChange={(e) => setWorkDays(prev => ({ ...prev, [day]: e.target.value }))}
                       className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] text-[var(--text-primary)] max-w-xs transition-colors"
@@ -658,7 +659,7 @@ export function LeaveSetup() {
                       <option value="Full_Day">Full Day</option>
                       <option value="Half_Day">Half Day</option>
                       <option value="Non_working_Day">Non-working Day</option>
-                    </select>
+                    </Select>
                   </React.Fragment>
                 ))}
               </div>
@@ -1090,14 +1091,19 @@ export function LeaveSetup() {
         <LeavePeriodForm
           onClose={() => { setShowPeriodForm(false); setEditPeriod(null); }}
           onSave={savePeriod}
-          initialData={editPeriod ? { name: editPeriod.name, startDate: fmtDate(editPeriod.date_start), endDate: fmtDate(editPeriod.date_end) } : undefined}
+          initialData={editPeriod ? { name: editPeriod.name, startDate: toIsoDate(editPeriod.date_start), endDate: toIsoDate(editPeriod.date_end) } : undefined}
         />
       )}
       {showHolidayForm && (
         <HolidayForm
           onClose={() => { setShowHolidayForm(false); setEditHoliday(null); }}
           onSave={saveHoliday}
-          initialData={editHoliday ? { name: editHoliday.name, date: fmtDate(editHoliday.dateh), status: editHoliday.status } : undefined}
+          initialData={editHoliday ? {
+            name: editHoliday.name, date: toIsoDate(editHoliday.dateh),
+            // Holidays are listed via raw SQL, so status arrives as the DB label ('Half Day'); the
+            // form's options use the enum names ('Half_Day') — normalise or Half Day shows as Full Day.
+            status: /half/i.test(String(editHoliday.status ?? '')) ? 'Half_Day' : 'Full_Day',
+          } : undefined}
         />
       )}
 
@@ -1419,38 +1425,38 @@ export function LeaveSetup() {
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
             <FormField label="Leave Type" required hint="The leave type this rule applies to.">
-              <select className={inputClass} value={ruleForm.leave_type} onChange={e => setRuleForm((p: any) => ({ ...p, leave_type: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.leave_type} onChange={e => setRuleForm((p: any) => ({ ...p, leave_type: e.target.value }))}>
                 <option value="">Select leave type…</option>
                 {ruleLeaveTypes.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Job Title" hint="Restrict this rule to employees with a specific job title. Leave blank to apply to all titles.">
-              <select className={inputClass} value={ruleForm.job_title} onChange={e => setRuleForm((p: any) => ({ ...p, job_title: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.job_title} onChange={e => setRuleForm((p: any) => ({ ...p, job_title: e.target.value }))}>
                 <option value="">All job titles</option>
                 {ruleJobTitles.map((t: any) => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Department" hint="Restrict this rule to a specific department. Leave blank to apply across all departments.">
-              <select className={inputClass} value={ruleForm.department} onChange={e => setRuleForm((p: any) => ({ ...p, department: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.department} onChange={e => setRuleForm((p: any) => ({ ...p, department: e.target.value }))}>
                 <option value="">All departments</option>
                 {ruleDepartments.map((d: any) => <option key={d.id} value={d.id}>{d.title ?? d.name}</option>)}
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Employment Status" hint="Restrict this rule to employees with a specific employment status, e.g. Permanent, Contract. Leave blank to apply to all.">
-              <select className={inputClass} value={ruleForm.employment_status} onChange={e => setRuleForm((p: any) => ({ ...p, employment_status: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.employment_status} onChange={e => setRuleForm((p: any) => ({ ...p, employment_status: e.target.value }))}>
                 <option value="">All employment statuses</option>
                 {ruleEmpStatuses.map((s: any) => <option key={s.id} value={s.id}>{s.label ?? s.value}</option>)}
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Leave Group" hint="Restrict this rule to employees belonging to a specific paygrade group. Leave blank to apply to all groups.">
-              <select className={inputClass} value={ruleForm.leave_group} onChange={e => setRuleForm((p: any) => ({ ...p, leave_group: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.leave_group} onChange={e => setRuleForm((p: any) => ({ ...p, leave_group: e.target.value }))}>
                 <option value="">All leave groups</option>
                 {leaveGroups.map((g: any) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Required Experience (Days)" hint="Minimum number of days an employee must have been employed before they are eligible for this leave type under this rule. Leave blank for no minimum.">
@@ -1462,24 +1468,24 @@ export function LeaveSetup() {
             </FormField>
 
             <FormField label="Apply Beyond Balance" hint="Allow employees matching this rule to apply even when their balance is zero or negative.">
-              <select className={inputClass} value={ruleForm.apply_beyond_current} onChange={e => setRuleForm((p: any) => ({ ...p, apply_beyond_current: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.apply_beyond_current} onChange={e => setRuleForm((p: any) => ({ ...p, apply_beyond_current: e.target.value }))}>
                 <option value="No">No</option><option value="Yes">Yes</option>
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Leave Accrue" hint="Whether leave days are accrued gradually for employees under this rule.">
-              <select className={inputClass} value={ruleForm.leave_accrue} onChange={e => setRuleForm((p: any) => ({ ...p, leave_accrue: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.leave_accrue} onChange={e => setRuleForm((p: any) => ({ ...p, leave_accrue: e.target.value }))}>
                 <option value="No">No</option><option value="Yes">Yes</option>
-              </select>
+              </Select>
             </FormField>
 
             {ruleForm.leave_accrue === 'Yes' && (
               <FormField label="Accrual Frequency" hint="How often days are granted — Monthly, Quarterly (every 3 months), or Bi-annually (every 6 months).">
-                <select className={inputClass} value={ruleForm.accrual_frequency} onChange={(e: any) => setRuleForm((p: any) => ({ ...p, accrual_frequency: e.target.value }))}>
+                <Select className={inputClass} value={ruleForm.accrual_frequency} onChange={(e: any) => setRuleForm((p: any) => ({ ...p, accrual_frequency: e.target.value }))}>
                   <option value="Monthly">Monthly</option>
                   <option value="Quarterly">Quarterly</option>
                   <option value="Bi-annually">Bi-annually</option>
-                </select>
+                </Select>
               </FormField>
             )}
 
@@ -1514,9 +1520,9 @@ export function LeaveSetup() {
             )}
 
             <FormField label="Carry Forward" hint="Whether unused leave at period end is carried over for employees under this rule.">
-              <select className={inputClass} value={ruleForm.carried_forward} onChange={e => setRuleForm((p: any) => ({ ...p, carried_forward: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.carried_forward} onChange={e => setRuleForm((p: any) => ({ ...p, carried_forward: e.target.value }))}>
                 <option value="No">No</option><option value="Yes">Yes</option>
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Carry Forward %" hint="Percentage of unused days that carry over. 100 = full balance.">
@@ -1528,23 +1534,23 @@ export function LeaveSetup() {
             </FormField>
 
             <FormField label="Proportionate on Join Date" hint="When set to Yes, a new joiner's entitlement is reduced based on how much of the period remains. Formula: (months remaining from hire date ÷ total period months) × full allocation, rounded to the nearest whole day. Only applies if the employee's hire date falls within the active leave period.">
-              <select className={inputClass} value={ruleForm.propotionate_on_joined_date} onChange={e => setRuleForm((p: any) => ({ ...p, propotionate_on_joined_date: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.propotionate_on_joined_date} onChange={e => setRuleForm((p: any) => ({ ...p, propotionate_on_joined_date: e.target.value }))}>
                 <option value="Yes">Yes</option><option value="No">No</option>
-              </select>
+              </Select>
             </FormField>
 
             <FormField label="Leave Allowance" hint="Whether employees matching this rule are eligible for a leave allowance payout. Overrides the leave type's allowance setting when this rule applies.">
-              <select className={inputClass} value={ruleForm.leave_allowance} onChange={e => setRuleForm((p: any) => ({ ...p, leave_allowance: e.target.value }))}>
+              <Select className={inputClass} value={ruleForm.leave_allowance} onChange={e => setRuleForm((p: any) => ({ ...p, leave_allowance: e.target.value }))}>
                 <option value="No">No</option><option value="Yes">Yes</option>
-              </select>
+              </Select>
             </FormField>
 
             {ruleForm.leave_allowance === 'Yes' && (
               <FormField label="Allowance Frequency" hint="'Every Application' pays each time. 'Once Per Period' limits the payout to the first approved leave of this type per leave period.">
-                <select className={inputClass} value={ruleForm.leave_allowance_once} onChange={e => setRuleForm((p: any) => ({ ...p, leave_allowance_once: e.target.value }))}>
+                <Select className={inputClass} value={ruleForm.leave_allowance_once} onChange={e => setRuleForm((p: any) => ({ ...p, leave_allowance_once: e.target.value }))}>
                   <option value="No">Every Application</option>
                   <option value="Yes">Once Per Leave Period</option>
-                </select>
+                </Select>
               </FormField>
             )}
           </div>

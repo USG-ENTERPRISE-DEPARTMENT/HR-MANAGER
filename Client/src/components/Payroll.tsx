@@ -16,6 +16,7 @@ import { TablePagination } from './ui/TablePagination';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { GlBlockedModal, type InvalidAccount, type GlImbalance } from './ui/GlBlockedModal';
+import { GlFailureCard } from './ui/GlFailureCard';
 import { ConfirmAlert } from './ConfirmAlert';
 import { Combobox } from './EmployeeTabs';
 import api from '../../lib/api';
@@ -27,6 +28,7 @@ import { PageHeader } from './ui/PageHeader';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CalcGroup  { id: string; name: string; details: string | null; }
@@ -1360,41 +1362,16 @@ function PayrollGrid({
             )}
           </div>
           );
-        })() : (() => {
-          let glErrMsg = '';
-          try {
-            const log = JSON.parse(activeRun.payment_log ?? '{}');
-            const e = log?.error;
-            if (e && typeof e === 'object') glErrMsg = e.responseCode ? `[${e.responseCode}] ${e.message || ''}`.trim() : e.message || JSON.stringify(e);
-            else if (typeof e === 'string') glErrMsg = e;
-          } catch {}
-          return (
-            <div className="px-4 py-3 border border-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] rounded-[12px] text-[13px] space-y-2">
-              <div className="flex items-center gap-3">
-                <XCircle size={15} className="text-[var(--danger)] shrink-0" />
-                <span className="font-semibold text-[var(--danger)]">GL Posting Failed</span>
-                {activeRun.finalized_at && (
-                  <span className="text-[var(--text-muted)] ml-auto text-[11px]">
-                    {formatDmyTime(activeRun.finalized_at)}
-                  </span>
-                )}
-              </div>
-              {glErrMsg && (
-                <p className="text-[var(--danger)] text-[12px] font-mono bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-1.5 rounded-lg">
-                  {glErrMsg}
-                </p>
-              )}
-              {can('approve_payroll') && (
-              <div>
-                <button className="secondary-btn text-[12px]" onClick={onRetryGL} disabled={retryingGL}>
-                  <RefreshCw size={13} className={retryingGL ? 'animate-spin' : ''} />
-                  {retryingGL ? 'Retrying…' : 'Retry GL Posting'}
-                </button>
-              </div>
-              )}
-            </div>
-          );
-        })()
+        })() : (
+          <GlFailureCard
+            paymentLog={activeRun.payment_log}
+            failedAt={activeRun.finalized_at}
+            runName={activeRun.name}
+            canRetry={can('approve_payroll')}
+            retrying={retryingGL}
+            onRetry={onRetryGL}
+          />
+        )
       )}
 
       {/* ── Payslip email delivery (completed runs only) ── */}
@@ -1472,10 +1449,10 @@ function PayrollGrid({
               />
             </div>
             {departments.length > 0 && (
-              <select className={`${inputClass} !w-auto min-w-[180px]`} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+              <Select className={`${inputClass} !w-auto min-w-[180px]`} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
                 <option value="">All departments</option>
                 {departments.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+              </Select>
             )}
             {(gridSearch || deptFilter || sort) && (
               <button className="secondary-btn text-[12px]" onClick={() => { setGridSearch(''); setDeptFilter(''); setSort(null); }}>
@@ -4333,13 +4310,13 @@ export function Payroll() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Lower Limit Condition" required>
-                    <select className={inputClass} value={processForm.lower_limit_condition}
+                    <Select className={inputClass} value={processForm.lower_limit_condition}
                       onChange={e => setProcessForm(f => ({
                         ...f, lower_limit_condition: e.target.value,
                         lower_limit: e.target.value === 'NO_LOWER_LIMIT' ? '' : f.lower_limit,
                       }))}>
                       {LOWER_CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Lower Limit">
                     <input className={inputClass} type="text" inputMode="decimal" value={processForm.lower_limit}
@@ -4351,13 +4328,13 @@ export function Payroll() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Upper Limit Condition" required>
-                    <select className={inputClass} value={processForm.upper_limit_condition}
+                    <Select className={inputClass} value={processForm.upper_limit_condition}
                       onChange={e => setProcessForm(f => ({
                         ...f, upper_limit_condition: e.target.value,
                         upper_limit: e.target.value === 'NO_UPPER_LIMIT' ? '' : f.upper_limit,
                       }))}>
                       {UPPER_CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Upper Limit">
                     <input className={inputClass} type="text" inputMode="decimal" value={processForm.upper_limit}
@@ -4416,12 +4393,12 @@ export function Payroll() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <FormField label="Payment / Deduction">
-                    <select className={inputClass} value={pcForm.payment_deduction}
+                    <Select className={inputClass} value={pcForm.payment_deduction}
                       onChange={e => setPcForm(f => ({ ...f, payment_deduction: e.target.value }))}>
                       <option value="">— None —</option>
                       <option value="Payment">Payment</option>
                       <option value="Deduction">Deduction</option>
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Column Order">
                     <input className={inputClass} type="number" value={pcForm.colorder}
@@ -4474,57 +4451,57 @@ export function Payroll() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <FormField label="Enabled">
-                    <select className={inputClass} value={pcForm.enabled}
+                    <Select className={inputClass} value={pcForm.enabled}
                       onChange={e => setPcForm(f => ({ ...f, enabled: e.target.value }))}>
                       <option value="Yes">Yes</option>
                       <option value="No">No</option>
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Editable">
-                    <select className={inputClass} value={pcForm.editable}
+                    <Select className={inputClass} value={pcForm.editable}
                       onChange={e => setPcForm(f => ({ ...f, editable: e.target.value }))}>
                       <option value="Yes">Yes</option>
                       <option value="No">No</option>
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Show on Report">
-                    <select className={inputClass} value={pcForm.visible}
+                    <Select className={inputClass} value={pcForm.visible}
                       onChange={e => setPcForm(f => ({ ...f, visible: e.target.value }))}>
                       <option value="1">Yes</option>
                       <option value="0">No (hidden)</option>
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Include in Net Pay">
-                    <select className={inputClass} value={pcForm.include_in_net}
+                    <Select className={inputClass} value={pcForm.include_in_net}
                       onChange={e => setPcForm(f => ({ ...f, include_in_net: e.target.value }))}>
                       <option value="1">Yes</option>
                       <option value="0">No</option>
-                    </select>
+                    </Select>
                   </FormField>
                 </div>
                 {/* Payslip presentation only. Neither field affects the calculation or the GL
                     posting — a column moved here still posts on its real side. */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Payslip Section">
-                    <select className={inputClass} value={pcForm.payslip_section}
+                    <Select className={inputClass} value={pcForm.payslip_section}
                       onChange={e => setPcForm(f => ({ ...f, payslip_section: e.target.value }))}>
                       <option value="">Default (follow Payment/Deduction)</option>
                       <option value="earnings">Earnings</option>
                       <option value="deductions">Deductions</option>
                       <option value="info">Information only</option>
-                    </select>
+                    </Select>
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">
                       Which side of the payslip this prints on. Use “Information only” for employer
                       contributions that are neither paid to nor deducted from the employee.
                     </p>
                   </FormField>
                   <FormField label="Count in Payslip Total">
-                    <select className={inputClass} value={pcForm.payslip_in_total}
+                    <Select className={inputClass} value={pcForm.payslip_in_total}
                       disabled={!pcForm.payslip_section || pcForm.payslip_section === 'info'}
                       onChange={e => setPcForm(f => ({ ...f, payslip_in_total: e.target.value }))}>
                       <option value="0">No</option>
                       <option value="1">Yes</option>
-                    </select>
+                    </Select>
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">
                       Only applies when the section above moves this column. Leave as “No” unless the
                       amount really is part of that subtotal — counting an employer contribution makes
@@ -4562,11 +4539,11 @@ export function Payroll() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Posting Column">
-                    <select className={inputClass} value={pcForm.posting_column}
+                    <Select className={inputClass} value={pcForm.posting_column}
                       onChange={e => setPcForm(f => ({ ...f, posting_column: e.target.value }))}>
                       <option value="Yes">Yes</option>
                       <option value="No">No</option>
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Posting Branch">
                     <input className={inputClass} value={pcForm.posting_branch}

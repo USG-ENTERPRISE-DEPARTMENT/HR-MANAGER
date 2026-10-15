@@ -1677,6 +1677,57 @@ const syncEmployee = asyncHandler(async (req, res) => {
 const MAX_EMPLOYEE_PAGE = 500;
 const DEFAULT_EMPLOYEE_PAGE = 100;
 
+// Columns + joins shared by the directory (GET /me/employees) and the single-employee lookup
+// (GET /me/employees/:employeeCode). One definition, so the two endpoints cannot drift apart.
+// Callers append the WHERE / ORDER BY / LIMIT.
+const DIRECTORY_SELECT = Prisma.sql`
+    SELECT e.id, e.employee_id, e.firstName, e.lastName, e.middleName,
+           e.email, e.work_email, e.phone, e.mobilePhone, e.bankAccount,
+           e.lifecycleStatus, e.approvalStatus, e.status,
+           e.hireDate, e.confirmationDate,
+           COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS job_title,
+           COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department,
+           COALESCE(br.title, CONCAT(e.branchId, ''))     AS branch,
+           -- Deliberately NOT wrapped in the COALESCE(..., branchId) fallback used for the labels
+           -- above: that substitutes the raw id when the join misses, which is a readable hint in a
+           -- display name but would be a WRONG branch code to a caller that matches on it. A null
+           -- says "unknown", which is the truth.
+           br.comp_code                                   AS branch_code
+    FROM employee e
+    LEFT JOIN codelistvalue      jt   ON jt.id   = e.jobTitleId
+    LEFT JOIN companystructures  dept ON dept.id = e.departmentId
+    LEFT JOIN companystructures  br   ON br.id   = e.branchId`;
+
+// One DIRECTORY_SELECT row → the public employee shape. Keys are read in both cases because Postgres
+// returns unquoted mixed-case columns lower-cased.
+function toDirectoryEmployee(r) {
+  return {
+    id:              String(r.id),
+    employeeCode:    r.employee_id ?? null,
+    firstName:       r.firstname ?? r.firstName ?? null,
+    middleName:      r.middlename ?? r.middleName ?? null,
+    lastName:        r.lastname ?? r.lastName ?? null,
+    email:           r.email ?? null,
+    workEmail:       r.work_email ?? null,
+    phone:           r.phone ?? r.mobilephone ?? r.mobilePhone ?? null,
+    bankAccount:     r.bankaccount ?? r.bankAccount ?? null,
+    lifecycleStatus: r.lifecyclestatus ?? r.lifecycleStatus ?? null,
+    approvalStatus:  r.approvalstatus ?? r.approvalStatus ?? null,
+    // The 1/0 enabled flag, surfaced as a boolean so the caller does not have to know the encoding.
+    active:          String(r.status ?? '') === '1',
+    // `|| null`, not `?? null`: the SELECT's COALESCE(..., CONCAT(id, '')) yields '' when the employee
+    // has no value at all (e.g. no department for branch staff) — report that as null, not "".
+    jobTitle:        r.job_title || null,
+    department:      r.department || null,
+    branch:          r.branch || null,
+    // The code the core banking system knows a branch by (companystructures.comp_code, e.g. '003').
+    // Null when the employee has no branch, or their branchId points at a structure that no longer
+    // exists — see the note on DIRECTORY_SELECT.
+    branchCode:      r.branch_code ?? null,
+    hireDate:        r.hiredate ?? r.hireDate ?? null,
+  };
+}
+
 const getEmployeeDirectory = asyncHandler(async (req, res) => {
   // Compare case-insensitively so ?status=active and ?status=ACTIVE behave the same; the column
   // stores upper case.
@@ -1697,22 +1748,7 @@ const getEmployeeDirectory = asyncHandler(async (req, res) => {
     Prisma.sql`SELECT COUNT(*)::int AS total FROM employee e ${where}`);
 
   const rows = await prisma.$queryRaw(Prisma.sql`
-    SELECT e.id, e.employee_id, e.firstName, e.lastName, e.middleName,
-           e.email, e.work_email, e.phone, e.mobilePhone, e.bankAccount,
-           e.lifecycleStatus, e.approvalStatus, e.status,
-           e.hireDate, e.confirmationDate,
-           COALESCE(jt.label, CONCAT(e.jobTitleId, '')) AS job_title,
-           COALESCE(dept.title, CONCAT(e.departmentId, '')) AS department,
-           COALESCE(br.title, CONCAT(e.branchId, ''))     AS branch,
-           -- Deliberately NOT wrapped in the COALESCE(..., branchId) fallback used for the labels
-           -- above: that substitutes the raw id when the join misses, which is a readable hint in a
-           -- display name but would be a WRONG branch code to a caller that matches on it. A null
-           -- says "unknown", which is the truth.
-           br.comp_code                                   AS branch_code
-    FROM employee e
-    LEFT JOIN codelistvalue      jt   ON jt.id   = e.jobTitleId
-    LEFT JOIN companystructures  dept ON dept.id = e.departmentId
-    LEFT JOIN companystructures  br   ON br.id   = e.branchId
+    ${DIRECTORY_SELECT}
     ${where}
     ORDER BY e.employee_id ASC
     LIMIT ${limit} OFFSET ${offset}`);
@@ -1725,29 +1761,64 @@ const getEmployeeDirectory = asyncHandler(async (req, res) => {
     limit,
     total,
     pages: Math.max(1, Math.ceil(total / limit)),
-    employees: rows.map(r => ({
-      id:              String(r.id),
-      employeeCode:    r.employee_id ?? null,
-      firstName:       r.firstname ?? r.firstName ?? null,
-      middleName:      r.middlename ?? r.middleName ?? null,
-      lastName:        r.lastname ?? r.lastName ?? null,
-      email:           r.email ?? null,
-      workEmail:       r.work_email ?? null,
-      phone:           r.phone ?? r.mobilephone ?? r.mobilePhone ?? null,
-      bankAccount:     r.bankaccount ?? r.bankAccount ?? null,
-      lifecycleStatus: r.lifecyclestatus ?? r.lifecycleStatus ?? null,
-      approvalStatus:  r.approvalstatus ?? r.approvalStatus ?? null,
-      // The 1/0 enabled flag, surfaced as a boolean so the caller does not have to know the encoding.
-      active:          String(r.status ?? '') === '1',
-      jobTitle:        r.job_title ?? null,
-      department:      r.department ?? null,
-      branch:          r.branch ?? null,
-      // The code the core banking system knows a branch by (companystructures.comp_code, e.g. '003').
-      // Null when the employee has no branch, or their branchId points at a structure that no longer
-      // exists — see the note on the SELECT.
-      branchCode:      r.branch_code ?? null,
-      hireDate:        r.hiredate ?? r.hireDate ?? null,
-    })),
+    employees: rows.map(toDirectoryEmployee),
+  });
+});
+
+// ── Single employee details (API key only) ───────────────────────────────────
+// GET /me/employees/:employeeCode
+//
+// The detail companion to the directory above: one employee, looked up by STAFF ID (employee_id,
+// e.g. 'P2021005') — the identifier the calling systems hold. Same key-only caller and auth model.
+//
+// Returns every directory field (shared DIRECTORY_SELECT / toDirectoryEmployee, so the two endpoints
+// can never disagree) plus details that only make sense for a single record: gender, date of birth,
+// employment status, pay grade and notch, supervisor, and confirmation / retirement dates.
+//
+// Data minimisation: identity-document numbers (national ID, passport, driver's licence), next-of-kin
+// and family details are deliberately NOT returned. The key is shared and not tied to a person, so the
+// response carries only what an integration needs.
+const getEmployeeDetails = asyncHandler(async (req, res) => {
+  const code = String(req.params.employeeCode ?? '').trim();
+  if (!code || code.length > 50) return respond.badReq(res, 'A valid staff ID is required');
+
+  // Case-insensitive: staff IDs are stored upper case ('P2021005') but callers may not be.
+  const [r] = await prisma.$queryRaw(Prisma.sql`
+    ${DIRECTORY_SELECT}
+    WHERE UPPER(e.employee_id) = ${code.toUpperCase()}
+    LIMIT 1`);
+  if (!r) return respond.notFound(res, `No employee with staff ID "${code}"`);
+
+  // Detail-only fields, resolved to labels. Aliased lower-case: Postgres folds unquoted identifiers.
+  const [d] = await prisma.$queryRaw`
+    SELECT gen.label AS gender, e.dateOfBirth AS date_of_birth, e.retirement_date,
+           es.label AS employment_status, pg.name AS pay_grade, nc.name AS notch,
+           sup.employee_id AS supervisor_code,
+           TRIM(CONCAT(COALESCE(sup.firstName, ''), ' ', COALESCE(sup.lastName, ''))) AS supervisor_name,
+           nat.label AS nationality
+      FROM employee e
+      LEFT JOIN codelistvalue gen ON gen.id = e.genderId
+      LEFT JOIN codelistvalue es  ON es.id  = e.employmentStatusId
+      LEFT JOIN codelistvalue nat ON nat.id = e.nationalityId
+      LEFT JOIN paygrades     pg  ON pg.id  = e.paygradeId
+      LEFT JOIN notches       nc  ON nc.id  = e.notcheId
+      LEFT JOIN employee      sup ON sup.id = e.supervisorId
+     WHERE e.id = ${BigInt(r.id)}`;
+
+  respond.ok(res, 'Employee retrieved', {
+    ...toDirectoryEmployee(r),
+    gender:           d?.gender ?? null,
+    dateOfBirth:      d?.date_of_birth ?? null,
+    nationality:      d?.nationality ?? null,
+    employmentStatus: d?.employment_status ?? null,
+    payGrade:         d?.pay_grade ?? null,
+    notch:            d?.notch ?? null,
+    confirmationDate: r.confirmationdate ?? r.confirmationDate ?? null,
+    retirementDate:   d?.retirement_date ?? null,
+    // Null when the employee has no supervisor, or the supervisor's record no longer exists.
+    supervisor: d?.supervisor_code || (d?.supervisor_name ?? '').trim()
+      ? { employeeCode: d.supervisor_code ?? null, name: (d.supervisor_name ?? '').trim() || null }
+      : null,
   });
 });
 
@@ -1800,6 +1871,7 @@ const getBranches = asyncHandler(async (req, res) => {
 module.exports = {
   roSupervisorBlock,
   getEmployeeDirectory,
+  getEmployeeDetails,
   getBranches,
   getAllEmployees,
   getEmployeeApprovals,

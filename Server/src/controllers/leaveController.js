@@ -90,6 +90,34 @@ async function getWorkingDays(dateStart, dateEnd) {
   return days;
 }
 
+/**
+ * Prisma write that stores a leave's working days (from getWorkingDays) in employeeleavedays.
+ *
+ * Goes through the Prisma MODEL on purpose. leave_type is an enum whose database labels are
+ * 'Full Day' / 'Half Day - Morning'; the model maps the Prisma names to those labels and casts to
+ * the enum type. The raw INSERT this replaces wrote the Prisma name 'Full_Day', which the database
+ * rejects — and with the error swallowed, every leave was saved with ZERO days: it showed
+ * "0 working days" and deducted nothing from the balance (which is counted from these rows).
+ *
+ * Returns the write itself (not awaited) so callers can put it in the same transaction as the leave.
+ */
+function leaveDaysWrite(leaveId, days) {
+  const base = BigInt(Date.now()) * 1000n;   // explicit ids, matching the rest of this table's rows
+  return prisma.employeeleavedays.createMany({
+    data: days.map((d, i) => ({
+      id: base + BigInt(i),
+      employee_leave: BigInt(leaveId),
+      leave_date: new Date(d.date),
+      // A half working day (e.g. a Saturday morning) is recorded as a morning half day.
+      leave_type: d.type === 'Half_Day' ? 'Half_Day___Morning' : 'Full_Day',
+    })),
+  });
+}
+
+// For scripts/repairLeaveDays.js — backfills leaves saved with zero days by the old raw INSERT.
+exports.getWorkingDays = getWorkingDays;
+exports.leaveDaysWrite = leaveDaysWrite;
+
 // Postgres folds unquoted camelCase columns to lowercase, so `SELECT paygradeId` comes back as
 // `paygradeid` and `row.paygradeId` is undefined — every paygrade/department/service-days check then
 // fails. Employee profile queries alias these to snake_case; this restores the keys the checks read.
@@ -738,11 +766,18 @@ async function syncLeaveTypeGroups(leaveTypeId, groupIds) {
 
 // ── Write to leave log ────────────────────────────────────────────────────────
 
+// Leave approval history. status_from/status_to must be VARCHAR (manual migration
+// 20261014_employeeleavelog_status_varchar): as the original enum they rejected every insert, and with
+// the error swallowed no history was ever recorded. Failures are now logged — a history write must
+// never block the approval itself, but it must not disappear silently either.
 async function writeLog(leaveId, userId, data, statusFrom, statusTo) {
   try {
     await prisma.$executeRaw`INSERT INTO employeeleavelog (id, employee_leave, user_id, data, status_from, status_to, created)
-      VALUES (${BigInt(Date.now())}, ${toBigInt(leaveId)}, ${toBigInt(userId)}, ${String(data)}, ${String(statusFrom)}, ${String(statusTo)}, NOW())`;
-  } catch {}
+      VALUES (${BigInt(Date.now())}, ${toBigInt(leaveId)}, ${toBigInt(userId)}, ${String(data).slice(0, 500)},
+              ${statusFrom != null ? String(statusFrom).slice(0, 40) : null}, ${statusTo != null ? String(statusTo).slice(0, 40) : null}, NOW())`;
+  } catch (err) {
+    console.error(`[leave] could not write history for leave ${leaveId} (${statusFrom} → ${statusTo}):`, err.message);
+  }
 }
 
 // ── Email notifications ───────────────────────────────────────────────────────
@@ -1802,22 +1837,22 @@ exports.applyLeave = asyncHandler(async (req, res) => {
   const leaveId = BigInt(Date.now() + Math.floor(Math.random() * 10000));
   const amountVal = allowanceAmount !== null ? String(allowanceAmount) : null;
 
-  await prisma.$executeRaw`
-    INSERT INTO employeeleaves
-      (id, employee, leave_type, leave_period, date_start, date_end, notice_date,
-       details, req_allowance, position, emp_acc_no, leave_gl, leave_name,
-       department, status, approval_level, amount)
-    VALUES (${leaveId}, ${toBigInt(employee)}, ${toBigInt(leave_type)}, ${toBigInt(leave_period)},
-            ${new Date(date_start)}, ${new Date(date_end)}, ${new Date()},
-            ${details ?? null},
-            ${(effectiveReqAllow && !alreadyReceivedAllowance) ? 'Yes' : (typeWantsAllow && !alreadyReceivedAllowance ? null : 'No')},
-            ${position ?? null}, ${emp_acc_no ?? null}, ${typeRow?.leave_gl ?? null}, ${typeRow?.name ?? null},
-            ${department ?? null}, 'Draft', ${0}, ${amountVal})`;
-
-  for (const d of days) {
-    await prisma.$executeRaw`INSERT INTO employeeleavedays (id, employee_leave, leave_date, leave_type)
-      VALUES (${BigInt(Date.now() + Math.floor(Math.random() * 100000))}, ${leaveId}, ${new Date(d.date)}, ${d.type})`.catch(() => {});
-  }
+  // The leave and its days are written in ONE transaction: a leave saved without its day rows shows
+  // 0 days and deducts nothing from the balance, so if the days cannot be stored, neither is the leave.
+  await prisma.$transaction([
+    prisma.$executeRaw`
+      INSERT INTO employeeleaves
+        (id, employee, leave_type, leave_period, date_start, date_end, notice_date,
+         details, req_allowance, position, emp_acc_no, leave_gl, leave_name,
+         department, status, approval_level, amount)
+      VALUES (${leaveId}, ${toBigInt(employee)}, ${toBigInt(leave_type)}, ${toBigInt(leave_period)},
+              ${new Date(date_start)}, ${new Date(date_end)}, ${new Date()},
+              ${details ?? null},
+              ${(effectiveReqAllow && !alreadyReceivedAllowance) ? 'Yes' : (typeWantsAllow && !alreadyReceivedAllowance ? null : 'No')},
+              ${position ?? null}, ${emp_acc_no ?? null}, ${typeRow?.leave_gl ?? null}, ${typeRow?.name ?? null},
+              ${department ?? null}, 'Draft', ${0}, ${amountVal})`,
+    leaveDaysWrite(leaveId, days),
+  ]);
 
   // Store extra fields not in Prisma model
   const extraParts = [];
@@ -1858,18 +1893,22 @@ exports.updateLeave = asyncHandler(async (req, res) => {
   if (req_allowance !== undefined) data.req_allowance = req_allowance;
   if (position     !== undefined) data.position     = position;
 
-  await prisma.employeeleaves.update({ where: { id }, data });
-
-  // Recalculate leave days if dates changed
+  // Recalculate leave days if dates changed — replaced in the same transaction as the update, so an
+  // edit can never leave the application with its old days deleted and no new ones (0 days).
   if (date_start || date_end) {
-    await prisma.$executeRaw`DELETE FROM employeeleavedays WHERE employee_leave=${id}`;
     const start = date_start ?? current.date_start.toISOString().split('T')[0];
     const end   = date_end   ?? current.date_end.toISOString().split('T')[0];
     const days  = await getWorkingDays(start, end);
-    for (const d of days) {
-      await prisma.$executeRaw`INSERT INTO employeeleavedays (id, employee_leave, leave_date, leave_type)
-        VALUES (${BigInt(Date.now() + Math.floor(Math.random() * 100000))}, ${id}, ${new Date(d.date)}, ${d.type})`.catch(() => {});
+    if (!days.length) {
+      return respond.badReq(res, 'The selected date range contains no working days (weekends or public holidays only)');
     }
+    await prisma.$transaction([
+      prisma.employeeleaves.update({ where: { id }, data }),
+      prisma.$executeRaw`DELETE FROM employeeleavedays WHERE employee_leave=${id}`,
+      leaveDaysWrite(id, days),
+    ]);
+  } else {
+    await prisma.employeeleaves.update({ where: { id }, data });
   }
 
   respond.ok(res, 'Leave updated');

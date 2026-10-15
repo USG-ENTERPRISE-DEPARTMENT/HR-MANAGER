@@ -17,6 +17,7 @@ import { useCan } from '@/hooks/useCan';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // Action permission required to manage each salary tab
 const SALARY_TAB_PERM: Record<string, string> = {
   'Components':           'manage_salary_components',
@@ -65,6 +66,45 @@ function optionId(value: any) {
   return value === null || value === undefined ? '' : String(value);
 }
 
+// The "what's selected" chips above a multi-select. Up to CHIP_LIMIT they show inline as before; past
+// that (e.g. "Select All" across every pay grade picks ~390 notches) they collapse to a one-line
+// summary with Show / Clear all, and when shown sit in a capped, scrolling box — so selecting a lot
+// can never stretch the form (and its modal) to hundreds of chips tall.
+const CHIP_LIMIT = 12;
+function SelectedChips({ items, noun, onRemove, onClear }: {
+  items: { id: string; label: string }[];
+  noun: string;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!items.length) return null;
+  const many = items.length > CHIP_LIMIT;
+  const chips = (
+    <div className={`flex flex-wrap gap-1 ${many ? 'max-h-28 overflow-y-auto p-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]' : ''}`}>
+      {items.map(o => (
+        <span key={o.id} className="pill pill-accent flex items-center gap-1 text-xs">
+          {o.label}
+          <button type="button" onClick={() => onRemove(o.id)} className="ml-1 leading-none" aria-label={`Remove ${o.label}`}>×</button>
+        </span>
+      ))}
+    </div>
+  );
+  if (!many) return <div className="mb-2">{chips}</div>;
+  return (
+    <div className="mb-2 space-y-1.5">
+      <div className="flex items-center gap-3 text-xs">
+        <span className="font-semibold text-[var(--accent)]">{items.length} {noun} selected</span>
+        <button type="button" onClick={() => setExpanded(e => !e)} className="text-[var(--accent)] hover:underline">
+          {expanded ? 'Hide' : 'Show'}
+        </button>
+        <button type="button" onClick={onClear} className="text-[var(--danger)] hover:underline">Clear all</button>
+      </div>
+      {expanded && chips}
+    </div>
+  );
+}
+
 function MultiSelectEmployeeField({ selected, options, onChange }: { selected: string[]; options: any[]; onChange: (ids: string[]) => void }) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
@@ -93,16 +133,12 @@ function MultiSelectEmployeeField({ selected, options, onChange }: { selected: s
   return (
     <div className="mb-4 relative" ref={ref}>
       <label className="label">Employee <span className="text-[var(--danger)]">*</span></label>
-      {selectedOptions.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {selectedOptions.map(o => (
-            <span key={o.id} className="pill pill-accent flex items-center gap-1 text-xs">
-              {o.label}
-              <button type="button" onClick={() => toggle(optionId(o.id))} className="ml-1 leading-none">×</button>
-            </span>
-          ))}
-        </div>
-      )}
+      <SelectedChips
+        items={selectedOptions.map(o => ({ id: optionId(o.id), label: o.label }))}
+        noun="employees"
+        onRemove={toggle}
+        onClear={() => onChange([])}
+      />
       <input value={search} onChange={(e: { target: HTMLInputElement }) => { setSearch(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search and select employees..." />
       {open && filtered.length > 0 && (
         <div className="absolute z-50 left-0 right-0 bg-[var(--surface)] border border-[var(--border)] rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
@@ -160,22 +196,18 @@ function MultiSelectNotchField({
     <div className="mb-4">
       <label className="label">Notch(es) <span className="text-[var(--danger)]">*</span></label>
 
-      {selectedItems.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {selectedItems.map((n: any) => (
-            <span key={n.id} className="pill pill-accent flex items-center gap-1 text-xs">
-              {n.label ?? n.name}
-              <button type="button" onClick={() => toggle(String(n.id))} className="ml-1 leading-none">×</button>
-            </span>
-          ))}
-        </div>
-      )}
+      <SelectedChips
+        items={selectedItems.map((n: any) => ({ id: String(n.id), label: n.label ?? n.name }))}
+        noun="notches"
+        onRemove={toggle}
+        onClear={() => onChange([])}
+      />
 
       <div className="flex gap-2 mb-2">
-        <select value={filterPg} onChange={(e: any) => setFilterPg(e.target.value)} className="flex-1 text-xs !py-1.5">
+        <Select value={filterPg} onChange={(e: any) => setFilterPg(e.target.value)} className="flex-1 text-xs !py-1.5">
           <option value="">All paygrades</option>
           {paygrades.map((p: any) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
-        </select>
+        </Select>
         <input value={search} onChange={(e: any) => setSearch(e.target.value)} placeholder="Search notches..." className="flex-1 text-xs !py-1.5" />
       </div>
 
@@ -805,7 +837,7 @@ export function Salary() {
               paygrades={refs.paygrades ?? []}
               onChange={(notchIds: string[]) => setForm((p: any) => ({ ...p, notchIds }))}
             />
-            <div className="mb-4"><label className="label">Operation</label><select value={form.operation} onChange={(e) => set('operation', e.target.value)}><option>Increment</option><option>Decrement</option></select></div>
+            <div className="mb-4"><label className="label">Operation</label><Select value={form.operation} onChange={(e) => set('operation', e.target.value)}><option>Increment</option><option>Decrement</option></Select></div>
             <div className="mb-4"><label className="label">Change % <span className="text-[var(--danger)]">*</span></label><input type="number" value={form.percentage} onChange={(e) => set('percentage', e.target.value)} placeholder="0.00" /></div>
             <div className="mb-4"><label className="label">Date</label><DateInput value={form.date} onChange={(e) => set('date', e.target.value)} /></div>
           </>

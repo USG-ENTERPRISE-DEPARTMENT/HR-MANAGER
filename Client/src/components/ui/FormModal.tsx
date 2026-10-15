@@ -63,7 +63,10 @@ export function FormModal({
           </button>
         </div>
 
-        <div className={`${scrollable ? 'flex-1 overflow-y-auto' : ''} p-6`}>
+        {/* min-h-0 is what lets the body actually scroll: a flex child defaults to min-height:auto
+            and refuses to shrink below its content, so without it a long form grows past the
+            90vh cap and stretches the modal off-screen instead of scrolling inside it. */}
+        <div className={`${scrollable ? 'flex-1 min-h-0 overflow-y-auto' : ''} p-6`}>
           {readOnly
             ? <fieldset disabled style={{ display: 'contents' }}>{children}</fieldset>
             : children}

@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import { PERMISSION_GROUPS, formatPermission as fmtPerm } from '@/lib/permissionGroups';
 import { PermissionTooltip } from './ui/PermissionTooltip';
+import { Select } from './ui/Select';
 
 const blank = (type: string) =>
   type === 'Users'
@@ -174,12 +175,12 @@ export function UserCreationForm({ onClose, initialData, onSave, type, roles = [
             {/* Role */}
             <div>
               <label className="label">Role <span className="text-[var(--danger)]">*</span></label>
-              <select value={formData.roleId ?? ''} onChange={(e: any) => set('roleId', e.target.value)}>
+              <Select value={formData.roleId ?? ''} onChange={(e: any) => set('roleId', e.target.value)}>
                 <option value="">Select role</option>
                 {roles.map((r: any) => (
                   <option key={r.id} value={r.id}>{r.roleName ?? r.name}</option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             {/* Status */}

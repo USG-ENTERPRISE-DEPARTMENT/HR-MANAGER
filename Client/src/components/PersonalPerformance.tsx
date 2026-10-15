@@ -21,6 +21,7 @@ import { ReviewDetailSlideOver } from './ReviewDetailSlideOver';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(v: string | null | undefined) {
@@ -256,10 +257,10 @@ function GoalFormModal({ goal, cycles, employeeId, onClose, onSaved, progressOnl
             <CountedTextarea className={inputClass} rows={2} maxChars={2000} value={form.description} onChange={e => set('description', e.target.value)} />
           </FormField>
           <FormField label="Link to Cycle">
-            <select className={inputClass} value={form.cycle_id} onChange={e => set('cycle_id', e.target.value)}>
+            <Select className={inputClass} value={form.cycle_id} onChange={e => set('cycle_id', e.target.value)}>
               <option value="">None</option>
               {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </FormField>
           <FormField label="Weight (%)">
             <input type="number" min={0} max={100} className={inputClass} value={form.weight} onChange={e => set('weight', e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="0–100" />
@@ -271,9 +272,9 @@ function GoalFormModal({ goal, cycles, employeeId, onClose, onSaved, progressOnl
             <DateInput className={inputClass} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
           </FormField>
           <FormField label="Status">
-            <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
+            <Select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
               {GOAL_STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
+            </Select>
           </FormField>
           <FormField label="Comment" className="col-span-2">
             <CountedTextarea className={inputClass} rows={2} maxChars={300} value={form.comment} onChange={e => set('comment', e.target.value)} placeholder="Any notes or context for this goal…" />

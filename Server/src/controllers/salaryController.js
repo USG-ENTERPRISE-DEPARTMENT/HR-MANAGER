@@ -239,12 +239,21 @@ async function enrichEmployeeSalaries(rows) {
 
 // ── Salary history ────────────────────────────────────────────────────────────
 
+// Written through the Prisma MODEL: `action` is an enum column, and the raw INSERT this replaces bound
+// it as a text parameter, which Postgres rejects ("column action is of type salary_history_action but
+// expression is of type text"). With the error swallowed, no salary change was ever recorded. A
+// history failure must still never block the salary change itself, so it is logged, not thrown.
 async function recordHistory({ employeeId, componentId, componentName, action, oldAmount, newAmount, oldCurrency, newCurrency, changedBy }) {
-  await exec`
-    INSERT INTO salary_history (employee_id, component_id, component_name, action, old_amount, new_amount, old_currency, new_currency, changed_by)
-     VALUES (${BigInt(employeeId)}, ${BigInt(componentId)}, ${componentName || null}, ${action},
-             ${oldAmount || null}, ${newAmount || null}, ${oldCurrency || null}, ${newCurrency || null}, ${changedBy || null})`
-    .catch(() => {});
+  await prisma.salary_history.create({
+    data: {
+      employee_id: BigInt(employeeId), component_id: BigInt(componentId),
+      component_name: componentName || null, action,
+      old_amount: oldAmount != null && oldAmount !== '' ? String(oldAmount) : null,
+      new_amount: newAmount != null && newAmount !== '' ? String(newAmount) : null,
+      old_currency: oldCurrency || null, new_currency: newCurrency || null,
+      changed_by: changedBy != null && changedBy !== '' ? String(changedBy) : null,
+    },
+  }).catch((err) => console.error(`[salary] could not record ${action} history for employee ${employeeId}:`, err.message));
 }
 
 // GET /salary/employee-history/:employeeId — retrieve the last 200 salary change events (create/update/delete)

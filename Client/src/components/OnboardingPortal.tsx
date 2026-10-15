@@ -6,6 +6,7 @@ import {
 import { publicApi, BRAND_BLUE as BLUE, resolveLogoUrl } from '@/lib/publicApi';
 import { appPath } from '@/lib/basePath';
 import { DateInput } from './ui/DateInput';
+import { Select } from './ui/Select';
 
 interface Branding { company_name?: string; company_logo_url?: string; accent_color?: string }
 interface FormConfig {
@@ -162,11 +163,11 @@ export function OnboardingPortal() {
                             {f.label}{isReq && <span className="text-rose-500"> *</span>}
                           </label>
                           {f.type === 'select' ? (
-                            <select value={values[f.key] ?? ''} onChange={e => setVal(f.key, e.target.value)}
+                            <Select value={values[f.key] ?? ''} onChange={e => setVal(f.key, e.target.value)}
                               className={inputCls} style={ringStyle}>
                               <option value="">— Select —</option>
                               {optionsFor(f).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
+                            </Select>
                           ) : f.type === 'file' ? (
                             <label className={`flex items-center gap-2 ${inputCls} cursor-pointer ${files[f.key] ? 'text-slate-800' : 'text-slate-400'}`} style={ringStyle}>
                               <UploadCloud size={16} className="shrink-0" style={{ color: brand }} />

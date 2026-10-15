@@ -20,6 +20,7 @@ import { JobPositionsReport, AttendanceReport } from './reports/OtherReports';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // Reports carried over from the legacy IceHRM system. Each is self-contained; only one is open at a time.
 const LEGACY_REPORTS = {
   active:      ActiveEmployeesReport,
@@ -1191,7 +1192,7 @@ export function AdminReports() {
           >
             <div className="space-y-4">
               <FormField label="Payroll Run" required>
-                <select
+                <Select
                   className={inputClass}
                   value={selectedRun}
                   onChange={e => { setSelectedRun(e.target.value); setSelectedEmp('all'); }}
@@ -1201,12 +1202,12 @@ export function AdminReports() {
                   {runs.map(r => (
                     <option key={r.id} value={r.id}>{r.name} ({r.status})</option>
                   ))}
-                </select>
+                </Select>
               </FormField>
 
               {selectedRun && (
                 <FormField label="Employee">
-                  <select
+                  <Select
                     className={inputClass}
                     value={selectedEmp}
                     onChange={e => setSelectedEmp(e.target.value)}
@@ -1216,7 +1217,7 @@ export function AdminReports() {
                     {employees.map(e => (
                       <option key={e.id} value={e.id}>{e.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </FormField>
               )}
 

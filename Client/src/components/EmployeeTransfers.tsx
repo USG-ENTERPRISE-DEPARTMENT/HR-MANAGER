@@ -16,6 +16,7 @@ import { downloadTransferPdf } from './ui/transferPdf';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 type Transfer = {
   id: string; transfer_number: string; employee: string; employee_name: string; employee_code?: string;
   transfer_type: string; effective_date: string; status: string; reason?: string; supporting_document?: string;
@@ -138,7 +139,7 @@ function TransferForm({ initial, onClose, onSaved }: { initial?: Transfer | null
     <FormModal title={initial ? 'Edit Employee Transfer' : 'New Employee Transfer'} subtitle="Changes are applied only after approval and on the effective date." onClose={onClose} onSave={save} saveLabel={saving ? 'Saving…' : 'Save Draft'} maxWidth="4xl" scrollable>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Employee" required><SearchSelect value={form.employee} onChange={value => set('employee', value)} options={options(refs.employees, item => item.name || `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.employee_id)} placeholder="Select employee…" disabled={!!initial} /></FormField>
-        <FormField label="Transfer Type" required><select className={inputClass} value={form.transfer_type} onChange={event => set('transfer_type', event.target.value)}><option>Permanent Transfer</option><option>Temporary Transfer</option><option>Secondment</option><option>Promotion Transfer</option><option>Demotion Transfer</option></select></FormField>
+        <FormField label="Transfer Type" required><Select className={inputClass} value={form.transfer_type} onChange={event => set('transfer_type', event.target.value)}><option>Permanent Transfer</option><option>Temporary Transfer</option><option>Secondment</option><option>Promotion Transfer</option><option>Demotion Transfer</option></Select></FormField>
         <FormField label="Effective Date" required><DateInput className={inputClass} value={form.effective_date} onChange={event => set('effective_date', event.target.value)} /></FormField>
         <FormField label="Supporting Document Reference"><input className={inputClass} value={form.supporting_document} onChange={event => set('supporting_document', event.target.value)} placeholder="Filename, document ID, or reference" /></FormField>
       </div>

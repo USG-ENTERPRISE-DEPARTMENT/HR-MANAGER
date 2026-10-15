@@ -24,6 +24,7 @@ import { CountedTextarea } from './ui/CountedTextarea';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { Select } from './ui/Select';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(v: string | null | undefined) {
@@ -324,9 +325,9 @@ function CycleFormModal({ cycle, onClose, onSaved }: { cycle: any | null; onClos
           <input className={inputClass} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. 2025 Annual Review" />
         </FormField>
         <FormField label="Type">
-          <select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)}>
+          <Select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)}>
             {CYCLE_TYPES.map(t => <option key={t}>{t}</option>)}
-          </select>
+          </Select>
         </FormField>
         <div />
         <FormField label="Period Start" required>
@@ -413,10 +414,10 @@ function AddEmployeesModal({ cycleId, existingEmployeeIds = [], onClose, onSaved
           <div className="flex items-end gap-2">
             <div className="flex flex-col gap-1 flex-1">
               <label className="text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Filter by Department</label>
-              <select className={inputClass} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+              <Select className={inputClass} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
                 <option value="">All departments</option>
                 {departments.map(d => <option key={d}>{d}</option>)}
-              </select>
+              </Select>
             </div>
             {deptFilter && (
               <button type="button" onClick={addAllFromDept}
@@ -497,10 +498,10 @@ function GoalFormModal({ goal, cycles, employees, onClose, onSaved }: {
           <CountedTextarea className={inputClass} rows={2} maxChars={2000} value={form.description} onChange={e => set('description', e.target.value)} />
         </FormField>
         <FormField label="Link to Cycle">
-          <select className={inputClass} value={form.cycle_id} onChange={e => set('cycle_id', e.target.value)}>
+          <Select className={inputClass} value={form.cycle_id} onChange={e => set('cycle_id', e.target.value)}>
             <option value="">None</option>
             {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          </Select>
         </FormField>
         <FormField label="Weight (%)">
           <input type="number" min={0} max={100} className={inputClass} value={form.weight}
@@ -515,9 +516,9 @@ function GoalFormModal({ goal, cycles, employees, onClose, onSaved }: {
           <DateInput className={inputClass} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
         </FormField>
         <FormField label="Status">
-          <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
+          <Select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
             {GOAL_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
+          </Select>
         </FormField>
       </div>
     </FormModal>
@@ -554,9 +555,9 @@ function CompFormModal({ comp, onClose, onSaved }: { comp: any | null; onClose: 
           <input className={inputClass} value={form.name} onChange={e => set('name', e.target.value)} />
         </FormField>
         <FormField label="Category" required>
-          <select className={inputClass} value={form.category} onChange={e => set('category', e.target.value)}>
+          <Select className={inputClass} value={form.category} onChange={e => set('category', e.target.value)}>
             {COMP_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-          </select>
+          </Select>
         </FormField>
         <FormField label="Description">
           <CountedTextarea className={inputClass} rows={2} maxChars={500} value={form.description} onChange={e => set('description', e.target.value)} />
@@ -755,19 +756,19 @@ function CyclesTab() {
           <div className="px-4 py-3 bg-[var(--surface-hover)] border-t border-[var(--border)] flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1 min-w-[150px]">
               <label className="text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Status</label>
-              <select className="text-[12px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+              <Select className="text-[12px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                 value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="">All</option>
                 {CYCLE_STATUSES.map(s => <option key={s}>{s}</option>)}
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1 min-w-[150px]">
               <label className="text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Type</label>
-              <select className="text-[12px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+              <Select className="text-[12px] h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                 value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
                 <option value="">All</option>
                 {CYCLE_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
+              </Select>
             </div>
             {activeFilterCount > 0 && (
               <button onClick={() => { setStatusFilter(''); setTypeFilter(''); }}

@@ -27,7 +27,8 @@ export function FilterSelect({
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number } | null>(null);
 
   const selected = opts.find((o) => o.value === value);
-  const searchable = opts.length > 7;
+  // Every list is searchable (app-wide rule), not only long ones.
+  const searchable = true;
   const active = selected != null && value !== '' && value !== 'all';
 
   useEffect(() => {

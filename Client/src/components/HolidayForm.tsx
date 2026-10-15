@@ -3,6 +3,7 @@ import { FormModal } from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
 
 import { DateInput } from './ui/DateInput';
+import { Select } from './ui/Select';
 export function HolidayForm({ onClose, onSave, initialData }: any) {
   const { formData, handleChange } = useFormState({ name: '', date: '', status: 'Full_Day' }, initialData);
 
@@ -25,10 +26,10 @@ export function HolidayForm({ onClose, onSave, initialData }: any) {
         </FormField>
 
         <FormField label="Status">
-          <select name="status" value={formData.status} onChange={handleChange} className={inputClass}>
+          <Select name="status" value={formData.status} onChange={handleChange} className={inputClass}>
             <option value="Full_Day">Full Day</option>
             <option value="Half_Day">Half Day</option>
-          </select>
+          </Select>
         </FormField>
       </div>
     </FormModal>

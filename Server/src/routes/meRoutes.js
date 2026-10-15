@@ -84,6 +84,8 @@ router.get('/payroll/runs/by-reference/:reference', apiKeyOnly, payrollRun.getPa
 // NOT self-scoped — it deliberately returns other people's records, which is why it sits with the
 // server-to-server endpoints rather than under /me/profile and friends.
 router.get('/employees', apiKeyOnly, employeeCtrl.getEmployeeDirectory);
+// One employee's details by staff ID — same key-only caller, same reasoning for sitting here.
+router.get('/employees/:employeeCode', apiKeyOnly, employeeCtrl.getEmployeeDetails);
 
 // ── Branch list (API key only) ───────────────────────────────────────────────
 // Companion to `branchCode` on the directory above: resolves a branch code to its name and address.

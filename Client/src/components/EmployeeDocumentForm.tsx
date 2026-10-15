@@ -9,6 +9,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 
 import { DateInput } from './ui/DateInput';
+import { Select } from './ui/Select';
 export function EmployeeDocumentForm({ onClose, initialData, onSave }: any) {
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
 
@@ -89,14 +90,14 @@ export function EmployeeDocumentForm({ onClose, initialData, onSave }: any) {
         </FormField>
 
         <FormField label="Document Type" required>
-          <select name="documentType" value={formData.documentType} onChange={handleChange} className={inputClass}>
+          <Select name="documentType" value={formData.documentType} onChange={handleChange} className={inputClass}>
             <option value="">Select Type</option>
             <option value="National ID">National ID</option>
             <option value="Passport">Passport</option>
             <option value="Driver's License">Driver's License</option>
             <option value="Tax Certificate">Tax Certificate</option>
             <option value="SSNIT Card">SSNIT Card</option>
-          </select>
+          </Select>
         </FormField>
 
         <FormField label="Expiry Date">

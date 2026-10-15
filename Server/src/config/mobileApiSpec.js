@@ -719,6 +719,63 @@ spec.paths['/employees'] = {
     },
   },
 };
+
+// ── Single employee details ──────────────────────────────────────────────────
+// The directory's employee schema is reused (not copied), so the two can never document different
+// fields; only the detail-only fields are added here. Longhand for the same reason as above.
+{
+  const directoryItem = spec.paths['/employees'].get.responses[200]
+    .content['application/json'].schema.properties.data.properties.employees.items;
+  spec.paths['/employees/{employeeCode}'] = {
+    get: {
+      tags: ['Core Banking'],
+      summary: 'Get one employee by staff ID',
+      description: "⚠️ **Not self-scoped** — like `GET /employees`, any holder of the key can read any employee.\n\n" +
+        'Looks the employee up by **staff ID** (`employeeCode`, e.g. `P2021005`, case-insensitive) and returns every ' +
+        'directory field plus details for a single record: gender, date of birth, nationality, employment status, ' +
+        'pay grade and notch, confirmation and retirement dates, and supervisor.\n\n' +
+        'Identity-document numbers (national ID, passport, driver\'s licence), next-of-kin and family details are ' +
+        'deliberately **not** returned.',
+      security: [{ ApiKeyAuth: [] }],
+      parameters: [{
+        name: 'employeeCode', in: 'path', required: true,
+        schema: { type: 'string', example: 'P2021005' },
+        description: 'Staff ID — the `employeeCode` returned by `GET /employees`.',
+      }],
+      responses: {
+        200: {
+          description: 'Success',
+          content: { 'application/json': { schema: okEnvelope({
+            type: 'object',
+            properties: {
+              ...directoryItem.properties,
+              gender:           { type: 'string', nullable: true, example: 'Female' },
+              dateOfBirth:      { type: 'string', nullable: true, format: 'date' },
+              nationality:      { type: 'string', nullable: true, example: 'Sierra Leonean' },
+              employmentStatus: { type: 'string', nullable: true, example: 'Permanent' },
+              payGrade:         { type: 'string', nullable: true, example: 'Band 5' },
+              notch:            { type: 'string', nullable: true, example: 'B5 - Notch 3' },
+              confirmationDate: { type: 'string', nullable: true, format: 'date' },
+              retirementDate:   { type: 'string', nullable: true, format: 'date' },
+              supervisor: {
+                type: 'object', nullable: true,
+                description: 'Null when the employee has no supervisor recorded.',
+                properties: {
+                  employeeCode: { type: 'string', nullable: true, example: 'P1994001' },
+                  name:         { type: 'string', nullable: true, example: 'ADIKALI KAMARA' },
+                },
+              },
+            },
+          }, 'Employee retrieved') } },
+        },
+        400: errorEnvelope('400', 'A valid staff ID is required'),
+        401: errorEnvelope('401', 'Missing or invalid API key'),
+        404: errorEnvelope('404', 'No employee with staff ID "P9999999"'),
+        429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
+      },
+    },
+  };
+}
 // ── Payroll lookup by GL reference ───────────────────────────────────────────
 // `security` is overridden to the API key alone: the caller is the core banking system, which has no
 // employee identity to send. The base path still applies.
