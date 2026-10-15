@@ -272,9 +272,19 @@ function glDetail(glFail) {
 async function postStaffMedicalGL({ id, prefix, employeeName, illnessType, cost, approvedBy, glExpense, creditAccount, branch, currency, employeeCode }) {
   const amt = parseFloat(String(cost ?? 0));
   console.log(`[medical GL] MED_${prefix}_${id} — amt=${amt}, glExpense="${glExpense}", creditAccount="${creditAccount}", branch="${branch}", currency="${currency}"`);
-  if (!amt || !glExpense || !creditAccount) {
-    console.warn(`[medical GL] skipping — missing: ${!amt ? 'amount' : ''}${!glExpense ? ' glExpense' : ''}${!creditAccount ? ' creditAccount(bankAccount)' : ''}`);
-    return null;
+  // Missing configuration is a FAILURE, not a skip. This used to `return null`, so the claim was
+  // marked Approved with no GL entry and no log — the API was never called and nothing said so
+  // (every approved claim on record had neither a GL reference nor a posting log). Throwing lets the
+  // caller record it in payment_log, so the claim shows "GL Failed" with this reason and can be
+  // retried once the setting is fixed.
+  const missing = [
+    !amt          && 'a claim amount',
+    !glExpense    && 'the Medical Expense GL account (Settings → Controls → Medical & GL → GL Posting — Medical)',
+    !creditAccount && "the employee's bank account (on their employee profile)",
+  ].filter(Boolean);
+  if (missing.length) {
+    console.warn(`[medical GL] MED_${prefix}_${id} not posted — missing ${missing.join(', ')}`);
+    throw new Error(`GL posting not attempted — missing ${missing.join(' and ')}. Nothing was sent to the GL.`);
   }
   const narration   = ['Medical', employeeName, illnessType].filter(Boolean).join(' - ');
   const referenceNo = `M${prefix[0]}${id}${String(Date.now()).slice(-7)}`;
@@ -1561,6 +1571,17 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
         });
       }
 
+      // An empty side means the journal cannot be built — fail with the reason (claim shows
+      // "GL Failed", retryable) rather than silently approving with nothing posted, as it used to.
+      const missing = [
+        !expenseGl && 'the Medical Expense GL account (Settings → Controls → Medical & GL → GL Posting — Medical)',
+        expenseGl && !debitAccounts.length && 'any claim item with an amount',
+        !(creditAmt > 0 && claim.hospital_account) && "the hospital's account (Medical → Registered Hospitals)",
+      ].filter(Boolean);
+      if (missing.length) {
+        throw new Error(`GL posting not attempted — missing ${missing.join(' and ')}. Nothing was sent to the GL.`);
+      }
+
       let documentRef = null;
       let paymentLog  = null;
       if (debitAccounts.length && creditAccounts.length) {
@@ -1651,13 +1672,13 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount AS bank_account, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'STF', employeeName: emp?.name ?? String(rec.employee),
         illnessType: rec.type_of_illness, cost: rec.cost,
         approvedBy:    req.user?.username || req.user?.email || 'System',
         glExpense:     gl.expenseGl,
-        creditAccount: emp?.bankAccount || '',
+        creditAccount: emp?.bank_account || '',
         branch:        gl.branch,
         currency:      gl.currency,
         employeeCode:  emp?.employee_id || '',
@@ -1713,13 +1734,13 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount AS bank_account, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'STF', employeeName: emp?.name ?? String(rec.employee),
         illnessType: rec.type_of_illness, cost: rec.cost,
         approvedBy:    req.user?.username || req.user?.email || 'System',
         glExpense:     gl.expenseGl,
-        creditAccount: emp?.bankAccount || '',
+        creditAccount: emp?.bank_account || '',
         branch:        gl.branch,
         currency:      gl.currency,
         employeeCode:  emp?.employee_id || '',
@@ -1780,14 +1801,14 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount AS bank_account, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const desc = [rec.dependant_name, rec.type_of_illness].filter(Boolean).join(' - ');
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'DEP', employeeName: emp?.name ?? String(rec.employee),
         illnessType: desc, cost: rec.cost,
         approvedBy:    req.user?.username || req.user?.email || 'System',
         glExpense:     gl.expenseGl,
-        creditAccount: emp?.bankAccount || '',
+        creditAccount: emp?.bank_account || '',
         branch:        gl.branch,
         currency:      gl.currency,
         employeeCode:  emp?.employee_id || '',
@@ -1840,14 +1861,14 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
     try {
       const gl  = await loadGLSettings();
       const [emp] = await prisma.$queryRaw`
-        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+        SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount AS bank_account, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
       const desc = [rec.dependant_name, rec.type_of_illness].filter(Boolean).join(' - ');
       const result = await postStaffMedicalGL({
         id: String(id), prefix: 'DEP', employeeName: emp?.name ?? String(rec.employee),
         illnessType: desc, cost: rec.cost,
         approvedBy:    req.user?.username || req.user?.email || 'System',
         glExpense:     gl.expenseGl,
-        creditAccount: emp?.bankAccount || '',
+        creditAccount: emp?.bank_account || '',
         branch:        gl.branch,
         currency:      gl.currency,
         employeeCode:  emp?.employee_id || '',
@@ -1875,7 +1896,7 @@ async function retryMedicalGL(table, id, req) {
 
   const gl = await loadGLSettings();
   const [emp] = await prisma.$queryRaw`
-    SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
+    SELECT TRIM(CONCAT_WS(' ', firstName, lastName)) AS name, bankAccount AS bank_account, employee_id FROM employee WHERE id = ${toBigInt(rec.employee)} LIMIT 1`.catch(() => []);
 
   const prefix   = table === 'staffmedical' ? 'STF' : 'DEP';
   const desc     = table === 'staffmedical'
@@ -1889,7 +1910,7 @@ async function retryMedicalGL(table, id, req) {
     cost:          rec.cost,
     approvedBy:    req.user?.username || req.user?.email || 'System',
     glExpense:     gl.expenseGl,
-    creditAccount: emp?.bankAccount || '',
+    creditAccount: emp?.bank_account || '',
     branch:        gl.branch,
     currency:      gl.currency,
     employeeCode:  emp?.employee_id || '',
