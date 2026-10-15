@@ -149,7 +149,7 @@ function PhotoCaptureModal({ title, actionLabel, onCancel, onCapture }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] w-full max-w-md p-5">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] w-full max-h-[90vh] overflow-y-auto max-w-md p-5">
         <h3 className="font-bold text-[var(--text-primary)] mb-1">{title}</h3>
         <p className="text-[12px] text-[var(--text-muted)] mb-3 flex items-center gap-1.5">
           <Camera size={12} /> A photo is captured with this punch

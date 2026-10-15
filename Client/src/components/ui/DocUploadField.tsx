@@ -36,7 +36,7 @@ export function DocPreviewModal({ url, filename, onClose }: { url: string; filen
             <button onClick={onClose} className="action-btn"><X size={16} /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
           {isImg
             ? <img src={url} alt={filename} className="max-w-full max-h-full object-contain p-4" />
             : <iframe src={url} title={filename} className="w-full border-0" style={{ height: 600 }} />

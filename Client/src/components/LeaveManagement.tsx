@@ -925,7 +925,7 @@ const fetchSubordinateEmployees = useCallback(() => {
                 </div>
 
                 {/* Scrollable body */}
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
 
                   {/* Leave type + date range banner */}
                   <div className="rounded-xl px-5 py-4 flex items-center justify-between gap-4"

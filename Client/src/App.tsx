@@ -321,7 +321,7 @@ export default function App() {
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
         />
-        <main className="flex-1 overflow-y-auto w-full relative">
+        <main className="flex-1 min-h-0 overflow-y-auto w-full relative">
           <Suspense fallback={<RouteFallback />}>{renderView()}</Suspense>
         </main>
       </div>

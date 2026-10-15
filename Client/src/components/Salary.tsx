@@ -920,7 +920,7 @@ export function Salary() {
                 <input value={pgSearch} onChange={(e: any) => { setPgSearch(e.target.value); setPgPage(1); }} placeholder="Search paygrades..." className="!text-xs !py-1.5 w-full" />
               </div>
               {/* List */}
-              <div className="overflow-y-auto flex-1">
+              <div className="overflow-y-auto flex-1 min-h-0">
                 {filteredPgs.length === 0 ? (
                   <p className="text-xs text-[var(--text-muted)] text-center py-10">{pgSearch ? 'No results.' : 'No paygrades yet.'}</p>
                 ) : paginatedPgs.map((pg: any) => {
@@ -1190,7 +1190,7 @@ export function Salary() {
                 <button onClick={() => setHistoryEmployee(null)} className="action-btn text-[var(--text-muted)]"><X size={16} /></button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
                 {historyLoading ? (
                   <p className="text-sm text-[var(--text-muted)] text-center py-10">Loading...</p>
                 ) : historyRows.length === 0 ? (

@@ -101,7 +101,7 @@ export function AssistantWidget() {
               </div>
 
               {/* Messages */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+              <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3">
                 {unavailable && (
                   <div className="flex items-start gap-2 text-[12px] text-[var(--warning)] bg-[var(--warning-dim)] border border-[var(--border)] rounded-lg px-3 py-2">
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" />

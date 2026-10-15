@@ -201,7 +201,7 @@ export function LeaveCalendar() {
 
         {/* Month view */}
         {viewMode === 'month' && (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-auto">
            <div className="min-w-[720px] sm:min-w-0 flex flex-col h-full">
             <div className="grid grid-cols-7 border-b border-[var(--border)] bg-slate-100 sticky top-0 z-10">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -220,7 +220,7 @@ export function LeaveCalendar() {
                     <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-[var(--accent)] text-white' : holiday ? 'bg-red-50 text-red-600' : dateLeaves.length > 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-400'}`}>
                       {day}
                     </span>
-                    <div className="flex flex-col gap-1 overflow-y-auto flex-1 pr-1">
+                    <div className="flex flex-col gap-1 overflow-y-auto flex-1 min-h-0 pr-1">
                       {holiday && (
                         <div className="text-[10px] px-2 py-1 rounded border leading-tight truncate bg-red-50 text-red-700 border-red-200" title={holiday.name}>
                           <strong className="block truncate">🌟 {holiday.name}</strong>
@@ -254,7 +254,7 @@ export function LeaveCalendar() {
 
         {/* Week view */}
         {viewMode === 'week' && (
-          <div className="flex-1 flex flex-col overflow-auto bg-slate-50">
+          <div className="flex-1 min-h-0 flex flex-col overflow-auto bg-slate-50">
             <div className="grid grid-cols-7 min-w-[720px] sm:min-w-0 border-b border-slate-200 bg-white sticky top-0 z-10 shadow-sm">
               {weekDays.map((date, i) => {
                 const isToday = formatDateStr(date) === formatDateStr(today);
@@ -311,7 +311,7 @@ export function LeaveCalendar() {
 
         {/* Day view */}
         {viewMode === 'day' && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-6">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto bg-slate-50 p-6">
             <div className="max-w-3xl mx-auto w-full flex flex-col gap-4">
               {(() => {
                 const dateStr    = formatDateStr(currentDate);

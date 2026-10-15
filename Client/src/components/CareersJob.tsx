@@ -463,7 +463,7 @@ export function CareersJob({ code, onBack }: Props) {
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                 </button>
                               </div>
-                              <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
+                              <div className="flex-1 min-h-0 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
                                 {isImage
                                   ? <img src={blobUrl} alt={cvFile.name} className="max-w-full max-h-full object-contain p-4" />
                                   : <iframe src={blobUrl} title={cvFile.name} className="w-full border-0" style={{ height: 600 }} />

@@ -258,7 +258,7 @@ function TabShell({ label, onAdd, canManage = true, search, onSearch, children, 
           {canManage && <button onClick={onAdd} className="text-[var(--accent)] text-sm font-semibold hover:underline">Create the first record</button>}
         </div>
       ) : (
-        <div className="overflow-y-auto flex-1 overflow-x-auto">{children}</div>
+        <div className="overflow-y-auto flex-1 min-h-0 overflow-x-auto">{children}</div>
       )}
     </div>
   );

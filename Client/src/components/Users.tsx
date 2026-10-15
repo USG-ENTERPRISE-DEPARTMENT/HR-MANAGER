@@ -262,7 +262,7 @@ export function Users() {
             onSearchChange={setSearchQuery}
             searchPlaceholder="Search permissions..."
           />
-          <div className="overflow-y-auto flex-1 p-4 space-y-3">
+          <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-3">
             {PERMISSION_GROUPS.map((group) => {
               const visiblePerms = searchQuery
                 ? group.perms.filter(p => p.toLowerCase().includes(searchQuery.toLowerCase()) || fmtPerm(p).toLowerCase().includes(searchQuery.toLowerCase()))
@@ -485,7 +485,7 @@ export function Users() {
                 </div>
               )}
 
-              <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-3">
                 {rolePerms.size === 0 ? (
                   <p className="text-[13px] text-[var(--text-muted)] text-center py-8">No permissions assigned to this role.</p>
                 ) : (
@@ -529,7 +529,7 @@ export function Users() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="bg-[var(--surface)] w-full max-w-md rounded-2xl shadow-xl z-10 flex flex-col border border-[var(--border)] overflow-hidden"
+            className="bg-[var(--surface)] w-full max-w-md rounded-2xl shadow-xl z-10 flex flex-col border border-[var(--border)] max-h-[90vh] overflow-y-auto"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-slate-50/50 shrink-0">

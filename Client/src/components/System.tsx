@@ -52,7 +52,7 @@ function Modal({ title, onClose, onSave, saveLabel = 'Save', saving = false, chi
             <X size={15} />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-[18px]">
+        <div className="p-6 overflow-y-auto flex-1 min-h-0 flex flex-col gap-[18px]">
           {children}
         </div>
         <div className="px-6 py-4 border-t border-[var(--border)] flex justify-end gap-2.5">

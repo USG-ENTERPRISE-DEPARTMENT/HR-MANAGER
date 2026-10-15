@@ -29,7 +29,7 @@ export function ConfirmModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1,    y: 0  }}
-        className="relative bg-[var(--surface)] w-full max-w-sm rounded-2xl shadow-xl border border-[var(--border)] overflow-hidden"
+        className="relative bg-[var(--surface)] w-full max-w-sm rounded-2xl shadow-xl border border-[var(--border)] max-h-[90vh] overflow-y-auto"
       >
         <div className="px-6 pt-6 pb-5 flex items-start gap-4">
           <div className={`shrink-0 w-10 h-10 rounded-full ${iconBg} flex items-center justify-center`}>

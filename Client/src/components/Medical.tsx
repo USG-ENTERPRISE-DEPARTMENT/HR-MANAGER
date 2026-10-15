@@ -138,7 +138,7 @@ function DocPreviewModal({ url, filename, onClose }: { url: string; filename: st
             <button onClick={onClose} className="action-btn"><X size={16} /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
           {isImg
             ? <img src={url} alt={filename} className="max-w-full max-h-full object-contain p-2" />
             : <iframe src={url} title={filename} className="w-full border-0" style={{ height: 600 }} />
@@ -495,7 +495,7 @@ function MedicalDetailPanel({ record: initialRecord, type, adminMode, onClose, o
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
           {type === 'dependent' ? (
             <div className="grid grid-cols-2 gap-3">
               <DetailRow label="Employee">{record.employee_name}</DetailRow>
@@ -1421,7 +1421,7 @@ function MedicalEnquiryDetail({ row, onClose }: { row: any; onClose: () => void 
         </div>
 
         {/* Records */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-[13px] text-[var(--text-muted)]">Loading records…</div>
           ) : (
@@ -1800,7 +1800,7 @@ function UtilizationHistoryModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full border-collapse min-w-[640px]">
             <thead className="sticky top-0 bg-[var(--surface)] z-10">
               <tr>
@@ -2012,7 +2012,7 @@ function HospitalClaimDetailPanel({ row: initialRow, onClose, onRefresh }: { row
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <DetailRow label="Hospital">{row.hospital_name}</DetailRow>
             <DetailRow label="Type">{row.hospital_type ?? '—'}</DetailRow>

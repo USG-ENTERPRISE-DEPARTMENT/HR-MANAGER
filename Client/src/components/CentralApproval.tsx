@@ -277,7 +277,7 @@ function DocModal({ url, filename, onClose }: { url: string; filename: string; o
             <button onClick={onClose} className="action-btn"><X size={16} /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-100 flex items-center justify-center" style={{ minHeight: 400 }}>
           {isImg
             ? <img src={url} alt={filename} className="max-w-full max-h-full object-contain p-2" />
             : <iframe src={url} title={filename} className="w-full border-0" style={{ height: 600 }} />}
@@ -790,7 +790,7 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
           {item.module === 'Employee' ? (
             <EmployeeDetail emp={item.raw} onApprove={approveEmployee} onReject={rejectEmployee} onClose={onClose} busy={busy} />
           ) : item.module === 'Payroll' ? (

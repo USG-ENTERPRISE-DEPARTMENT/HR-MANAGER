@@ -1082,7 +1082,7 @@ export function Recruitment({ onNavigate }: { onNavigate?: (view: string) => voi
                 </button>
               </div>
               {/* Body */}
-              <div className="overflow-y-auto flex-1 p-6 space-y-6">
+              <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
                 {/* Cover letter */}
                 <div>
                   <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2">Cover Letter</p>

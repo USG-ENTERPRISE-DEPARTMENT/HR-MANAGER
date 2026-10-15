@@ -1870,7 +1870,7 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowSuspendModal(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.15 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 z-10">
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-h-[90vh] overflow-y-auto max-w-md p-6 z-10">
               <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-4">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
               </div>
@@ -1930,7 +1930,7 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowResignModal(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.15 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 z-10">
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-h-[90vh] overflow-y-auto max-w-md p-6 z-10">
               <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center mb-4">
                 <LogOut className="w-5 h-5 text-rose-500" />
               </div>
@@ -1994,7 +1994,7 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowTerminateModal(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.15 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 z-10">
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-h-[90vh] overflow-y-auto max-w-md p-6 z-10">
               <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center mb-4">
                 <XCircle className="w-5 h-5 text-red-600" />
               </div>
@@ -2057,7 +2057,7 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.15 }}
-              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 z-10"
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-h-[90vh] overflow-y-auto max-w-md p-6 z-10"
             >
               <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center mb-4">
                 <XCircle className="w-5 h-5 text-rose-600" />

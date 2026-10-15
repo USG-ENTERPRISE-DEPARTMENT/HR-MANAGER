@@ -198,7 +198,7 @@ export function PcCodes() {
             }
           />
 
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full">
               <thead>
                 <tr>

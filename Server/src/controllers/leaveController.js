@@ -1658,11 +1658,22 @@ exports.applyLeave = asyncHandler(async (req, res) => {
   let { leave_period } = req.body;
 
   // Leave period is an HR-managed concept, not something a mobile user knows or should have to send.
-  // Default to the currently active period so clients can omit it; an explicit value still wins.
-  if (leave_period == null || String(leave_period).trim() === '') {
-    const active = await prisma.leaveperiods.findMany({ where: { status: 'Active' } }).catch(() => []);
-    if (!active.length) return respond.badReq(res, 'No active leave period is configured. Contact HR.');
-    leave_period = String(active[0].id);
+  // Resolve it from the leave dates when it is omitted OR names a period that doesn't exist (clients
+  // copied the API docs' example id, which matched no row and failed with "Leave period not found").
+  // A valid explicit id still wins.
+  const explicitPeriod = leave_period != null && String(leave_period).trim() !== ''
+    && toBigInt(leave_period) != null
+    && await prisma.leaveperiods.findUnique({ where: { id: toBigInt(leave_period) } }).catch(() => null);
+  if (!explicitPeriod) {
+    const covering = date_start && date_end
+      ? await prisma.leaveperiods.findMany({
+          where: { date_start: { lte: new Date(date_start) }, date_end: { gte: new Date(date_end) } },
+        }).catch(() => [])
+      : [];
+    const active = covering.length ? [] : await prisma.leaveperiods.findMany({ where: { status: 'Active' } }).catch(() => []);
+    const pick = covering.find(p => p.status === 'Active') ?? covering[0] ?? active[0];
+    if (!pick) return respond.badReq(res, 'No active leave period is configured. Contact HR.');
+    leave_period = String(pick.id);
   }
 
   // Resolve employee first — use body value if provided, otherwise look up from user account

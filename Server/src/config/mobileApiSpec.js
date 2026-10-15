@@ -144,7 +144,7 @@ const spec = {
         required: ['leave_type', 'date_start', 'date_end'],
         properties: {
           leave_type:   { ...id('1'), description: 'From GET /leave/types' },
-          leave_period: { ...id('2'), nullable: true, description: 'Optional — defaults to the currently active leave period. Omit unless applying against a specific past period.' },
+          leave_period: { ...id('1'), nullable: true, description: 'Optional — omit it. The server picks the leave period that covers date_start..date_end (falling back to the active period); an id that matches no period is ignored the same way.' },
           date_start:   { type: 'string', format: 'date', example: '2026-08-03' },
           date_end:     { type: 'string', format: 'date', example: '2026-08-07' },
           details:      { type: 'string', example: 'Family visit' },

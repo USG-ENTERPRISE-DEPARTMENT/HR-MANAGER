@@ -192,7 +192,7 @@ export function PayrollReviewModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
           {loading ? (
             <div className="py-16 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
               <Loader2 className="animate-spin" size={26} />

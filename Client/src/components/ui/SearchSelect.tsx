@@ -6,6 +6,7 @@ import { inputClass } from './FormField';
 // ── Portal dropdown positioner ────────────────────────────────────────────────
 
 const DROPDOWN_H = 260; // max expected height — used to decide flip direction
+const CHIP_LIMIT = 8;   // multi-select: chips drawn in the field before collapsing to "+N more"
 
 function useDropdownPos(open: boolean, triggerRef: React.RefObject<HTMLElement | null>) {
   const [pos, setPos] = useState<{
@@ -165,7 +166,9 @@ export function MultiSearchSelect({ value, onChange, options, placeholder = 'Sel
         {selectedOptions.length === 0 && (
           <span className="text-slate-400 font-normal py-0.5">{placeholder}</span>
         )}
-        {selectedOptions.map(o => (
+        {/* Only the first CHIP_LIMIT chips are drawn: "Select All" on a long list would otherwise grow
+            the field — and any modal around it — to hundreds of chips tall. The rest are counted. */}
+        {selectedOptions.slice(0, CHIP_LIMIT).map(o => (
           <span key={o.id} className="inline-flex items-center gap-1 bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] text-[11px] font-semibold px-2 py-0.5 rounded-full">
             {o.label}
             <button type="button" onMouseDown={e => { e.stopPropagation(); toggle(o.id); }} className="hover:text-[var(--danger)] transition-colors">
@@ -173,6 +176,12 @@ export function MultiSearchSelect({ value, onChange, options, placeholder = 'Sel
             </button>
           </span>
         ))}
+        {selectedOptions.length > CHIP_LIMIT && (
+          <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border border-[var(--accent)] text-[var(--accent)]"
+            title={selectedOptions.slice(CHIP_LIMIT).map(o => o.label).join(', ')}>
+            +{selectedOptions.length - CHIP_LIMIT} more
+          </span>
+        )}
         <svg width="12" height="12" viewBox="0 0 12 12" className="ml-auto shrink-0 opacity-50">
           <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
         </svg>

@@ -1492,7 +1492,7 @@ function ControlsTab() {
       </div>
 
       {/* Content — disabled (read-only) without manage_settings */}
-      <fieldset disabled={!canManage} className={`flex-1 overflow-y-auto p-5 min-w-0 border-0 m-0 ${!canManage ? 'readonly-section' : ''}`}>
+      <fieldset disabled={!canManage} className={`flex-1 min-h-0 overflow-y-auto p-5 min-w-0 border-0 m-0 ${!canManage ? 'readonly-section' : ''}`}>
         {subTab === 'General' && (
           <GeneralSection
             autoGenCode={autoGenCode} setAutoGenCode={setAutoGenCode}
@@ -1630,7 +1630,7 @@ function EmailSetupTab() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
 
         {/* Enable toggle */}
         <SectionCard icon={<Mail size={13} />} title="Email Notifications">
@@ -1798,7 +1798,7 @@ function NotificationSettingsTab() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
         <p className="text-[13px] text-[var(--text-muted)] leading-relaxed">
           Turn a module off to stop all of its automated emails. The module keeps working normally — only its email
           notifications are suppressed. Email must also be enabled under <span className="font-semibold text-[var(--text-secondary)]">Email Setup</span> for any of these to send.
@@ -2128,7 +2128,7 @@ function MessagesTab() {
       </div>
 
       {/* List */}
-      <div className="overflow-y-auto flex-1">
+      <div className="overflow-y-auto flex-1 min-h-0">
         {loading ? (
           <div className="p-10 text-center text-[var(--text-muted)] text-sm">Loading…</div>
         ) : visible.length === 0 ? (

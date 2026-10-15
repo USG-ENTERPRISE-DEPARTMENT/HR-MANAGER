@@ -336,15 +336,32 @@ function SearchableCheckList({
           <span className="text-[13px] text-[var(--text-muted)]">None selected</span>
         ) : (
           <div className="flex flex-wrap gap-1.5 flex-1">
-            {selected.map(id => {
-              const opt = options.find(o => o.id === id);
-              return opt
-                ? <span key={id} className="pill pill-accent text-[11px] px-2 py-0.5">{opt.label}</span>
-                : <span key={id} title={`"${id}" was renamed or removed — click to open and remove it`}
-                    className="pill text-[11px] px-2 py-0.5 opacity-60 border border-dashed border-[var(--warning)] text-[var(--warning)]">
-                    {id} ⚠
-                  </span>;
-            })}
+            {/* First 8 chips only — selecting many columns would otherwise make the field (and the
+                modal holding it) grow without limit. Missing/renamed ids sort first so the ⚠ ones
+                needing attention are never the ones hidden behind "+N more". */}
+            {(() => {
+              const sorted = [...selected].sort((a, b) =>
+                Number(!!options.find(o => o.id === a)) - Number(!!options.find(o => o.id === b)));
+              const shown = sorted.slice(0, 8);
+              return (
+                <>
+                  {shown.map(id => {
+                    const opt = options.find(o => o.id === id);
+                    return opt
+                      ? <span key={id} className="pill pill-accent text-[11px] px-2 py-0.5">{opt.label}</span>
+                      : <span key={id} title={`"${id}" was renamed or removed — click to open and remove it`}
+                          className="pill text-[11px] px-2 py-0.5 opacity-60 border border-dashed border-[var(--warning)] text-[var(--warning)]">
+                          {id} ⚠
+                        </span>;
+                  })}
+                  {sorted.length > 8 && (
+                    <span className="pill text-[11px] px-2 py-0.5 border border-[var(--accent)] text-[var(--accent)]">
+                      +{sorted.length - 8} more
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
         <ChevronDown size={14} className={`text-[var(--text-muted)] shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
@@ -1684,7 +1701,7 @@ function PayrollGrid({
                 <span className="text-[18px] leading-none">×</span>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               {auditLoading ? (
                 <p className="text-center text-[var(--text-muted)] text-[13px] py-8">Loading…</p>
               ) : auditLog.length === 0 ? (
