@@ -104,8 +104,17 @@ exports.updateProfile = asyncHandler(async (req, res) => {
 
 // ── Leave ────────────────────────────────────────────────────────────────────
 
+/**
+ * Leave period is HR-managed — the server resolves it from the leave dates. A client-sent id is
+ * dropped, not trusted: apps copying the docs' example id failed with "Leave period not found".
+ */
+const noLeavePeriod = (req) => {
+  delete req.body.leave_period;
+  return req;
+};
+
 exports.getLeaves     = (req, res, next) => leave.getLeaves(ownQuery(req), res, next);
-exports.applyLeave    = (req, res, next) => leave.applyLeave(ownBody(req), res, next);
+exports.applyLeave    = (req, res, next) => leave.applyLeave(noLeavePeriod(ownBody(req)), res, next);
 exports.getLeaveTypes = (req, res, next) => leave.getLeaveTypes(req, res, next);
 
 exports.getLeaveBalance = (req, res, next) => {
@@ -115,7 +124,7 @@ exports.getLeaveBalance = (req, res, next) => {
 
 exports.submitLeave = (req, res, next) => leave.submitLeave(req, res, next);
 exports.cancelLeave = (req, res, next) => leave.cancelLeave(req, res, next);
-exports.updateLeave = (req, res, next) => leave.updateLeave(ownBody(req), res, next);
+exports.updateLeave = (req, res, next) => leave.updateLeave(noLeavePeriod(ownBody(req)), res, next);
 exports.deleteLeave = (req, res, next) => leave.deleteLeave(req, res, next);
 exports.leaveOwnership = requireOwnership('employeeleaves');
 

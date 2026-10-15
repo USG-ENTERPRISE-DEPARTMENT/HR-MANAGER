@@ -131,7 +131,7 @@ const spec = {
         properties: {
           id: id('1784846878958'), employee: id(),
           leave_type: id('1'), leave_type_name: { type: 'string', example: 'Annual Leave' },
-          leave_period: id('2'), period_name: { type: 'string', example: '2026 Leave Period' },
+          leave_period: id('1'), period_name: { type: 'string', example: '2026 Leave Period' },
           date_start: { type: 'string', format: 'date', example: '2026-08-03' },
           date_end:   { type: 'string', format: 'date', example: '2026-08-07' },
           status: { type: 'string', example: 'Draft', enum: ['Draft', 'Pending Approval', 'Approved', 'Rejected', 'Cancelled'] },
@@ -144,7 +144,6 @@ const spec = {
         required: ['leave_type', 'date_start', 'date_end'],
         properties: {
           leave_type:   { ...id('1'), description: 'From GET /leave/types' },
-          leave_period: { ...id('1'), nullable: true, description: 'Optional — omit it. The server picks the leave period that covers date_start..date_end (falling back to the active period); an id that matches no period is ignored the same way.' },
           date_start:   { type: 'string', format: 'date', example: '2026-08-03' },
           date_end:     { type: 'string', format: 'date', example: '2026-08-07' },
           details:      { type: 'string', example: 'Family visit' },
@@ -353,7 +352,7 @@ const spec = {
       }),
       post: op({
         tag: 'Leave', summary: 'Apply for leave',
-        description: 'Creates the request as a Draft. Call `/leave/{id}/submit` to send it for approval.',
+        description: 'Creates the request as a Draft. Call `/leave/{id}/submit` to send it for approval. The leave period is resolved from the dates; a `leave_period` in the body is ignored.',
         body: { $ref: '#/components/schemas/LeaveApplication' },
         response: { $ref: '#/components/schemas/Leave' },
       }),
