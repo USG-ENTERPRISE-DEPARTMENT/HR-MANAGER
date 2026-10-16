@@ -838,6 +838,8 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
     const amount = parseFloat(row.amount || '0');
     // Skip zero/blank cells — buildAndPostGL does the same, so they never reached the GL either.
     if (!amount || amount <= 0) continue;
+    // Same rule as buildGLJournal — a legacy Net Salary column is not a component.
+    if (isNetSalaryColumn(row.col_name)) continue;
 
     const key = String(row.employee);
     if (!byEmp.has(key)) {
@@ -956,6 +958,13 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
   });
 });
 
+// Net pay is never a payroll column here: the journal synthesizes it (earnings − deductions) and the
+// reports carry their own default Net Pay column. Migrated runs still hold the legacy system's
+// "Net Salary…" columns, stored as posting DEDUCTIONS with no GL account — counted, each one both
+// drops out as "unmapped" and subtracts the whole net from itself, leaving a negative net pay and an
+// unbalanced journal. Ignore them wherever posting totals are built.
+const isNetSalaryColumn = (name) => /^net\s+(salary|pay)\b/i.test(String(name || '').trim());
+
 // ── GL journal builder (shared by posting + the GL Summary report) ───────────
 // Builds the exact debit/credit lines a run would post, without sending anything. The GL Summary
 // report reads the same lines, so what it shows is what the bank receives.
@@ -1002,6 +1011,7 @@ async function buildGLJournal(id) {
   for (const row of postingRows) {
     const amount   = parseFloat(row.amount || '0');
     if (!amount || amount <= 0) continue;
+    if (isNetSalaryColumn(row.col_name)) continue;
     const branch   = row.posting_branch || defaultBranch;
     const currency = systemCurrency;
     // prodRef prefix encodes the side of the journal: BS_ for debits, NS_ for credits.
@@ -2046,6 +2056,6 @@ module.exports = {
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
   getPayrollByReference, rejectPayrollFromBank, confirmPayrollFromBank, confirmPayrollManually,
   submitPayroll, approvePayroll, rejectPayroll, getPayrollAudit, duplicatePayrollRun,
-  debugPayrollRun,
+  debugPayrollRun, buildGLJournal,
   getApprovalFlow, saveApprovalFlow, getRunStages,
 };
