@@ -26,6 +26,9 @@ app.use(morgan(process.env.LOG_LEVEL));
 // Per-request async context (lets the Prisma audit middleware know the acting user).
 app.use(require('./middleware/requestContext').withRequest);
 
+// Incoming requests and outgoing API calls (GL, employee sync, …) → server.log at the repo root.
+app.use(require('./helpers/serverLog').requestLogger);
+
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
