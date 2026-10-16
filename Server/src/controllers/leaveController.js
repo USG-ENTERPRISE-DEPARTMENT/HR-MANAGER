@@ -6,6 +6,7 @@ const { sendLeaveEmail } = require('../helpers/emailHelper');
 const { logActivity, fromReq } = require('./auditController');
 const { toBigInt, s, enumSql } = require('../helpers/controllerHelpers');
 const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
+const { pushLeave } = require('../helpers/mobilePush');
 const { Prisma } = require('@prisma/client'); // Prisma.sql / Prisma.join for portable dynamic SQL
 const { upsertSetting: upsertSettingShared } = require('../helpers/settingsHelper');
 
@@ -39,6 +40,7 @@ async function notifyLeaveInApp(leaveId, kind, reason, fromUser = null) {
                 : kind === 'cancelled' ? `Your ${lt} request was cancelled`
                 : `Your ${lt} request was updated`;
       notifyEmployee(r.employee, { message: msg, action: 'LeaveManagement', type: 'leave', fromUser });
+      if (['approved', 'rejected', 'cancelled'].includes(kind)) pushLeave(leaveId);
     }
   } catch { /* never block the request */ }
 }

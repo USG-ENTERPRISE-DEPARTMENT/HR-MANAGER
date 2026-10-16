@@ -1620,6 +1620,8 @@ const rejectPayrollFromBank = asyncHandler(async (req, res) => {
  * so payslips go out promptly instead of at the next minute tick.
  */
 function queuePayslipEmails(runId) {
+  // Mobile "payslip ready" push rides the same trigger — independent of the email control.
+  require('../helpers/mobilePush').pushPayslips(runId);
   const mailer = require('../helpers/payslipMailer');
   mailer.enqueueRunPayslips(runId)
     .then((r) => { if (r.queued) return mailer.processQueue(); })

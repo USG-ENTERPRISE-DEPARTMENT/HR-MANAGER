@@ -464,7 +464,7 @@ async function renderPayslip(runId, empId) {
   return {
     buffer: Buffer.concat(chunks),
     filename: `payslip-${runId}-${empId}.pdf`,
-    emp, run, empName, period,
+    emp, run, empName, period, netPay,
   };
 }
 

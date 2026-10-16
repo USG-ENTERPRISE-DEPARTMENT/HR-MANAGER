@@ -11,6 +11,7 @@ const { postToGL } = require('../helpers/glHelper');
 const { getApiConfig } = require('../controllers/apiIntegrationController');
 const { toBigInt, s } = require('../helpers/controllerHelpers');
 const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
+const { pushMedical } = require('../helpers/mobilePush');
 const { logActivity, fromReq } = require('./auditController');
 const { upsertSetting: upsertSettingShared } = require('../helpers/settingsHelper');
 
@@ -697,6 +698,7 @@ async function medicalStageReject(req, res, recordType, table, recordId, employe
   await prisma.$executeRaw`UPDATE medicalrequest_stages SET status='Rejected', acted_by=${actedBy}, acted_at=NOW(), comment=${reason} WHERE id=${BigInt(current.id)}`;
   await rejectRecord(reason, req.user?.id != null ? String(req.user.id) : null);
   if (employeeId) notifyMedicalStatus(req, employeeId, 'Rejected', reason, label);
+  if (recordType !== 'claim') pushMedical(recordType, recordId);
   const updated = await fetchMedicalRecord(table, recordId);
   respond.ok(res, 'Rejected', s(updated));
   return { handled: true };
@@ -763,6 +765,7 @@ exports.updateStaffMedical = asyncHandler(async (req, res) => {
     try {
       const rec = await prisma.staffmedical.findUnique({ where: { id }, select: { employee: true } });
       notifyMedicalStatus(req, rec?.employee, status, reason, 'staff medical claim');
+      if (status === 'Approved' || status === 'Rejected') pushMedical('staff', id);
     } catch { /* non-blocking */ }
   }
 
@@ -938,6 +941,7 @@ exports.updateDependentMedical = asyncHandler(async (req, res) => {
     try {
       const rec = await prisma.dependentmedical.findUnique({ where: { id }, select: { employee: true } });
       notifyMedicalStatus(req, rec?.employee, status, reason, 'dependent medical claim');
+      if (status === 'Approved' || status === 'Rejected') pushMedical('dependent', id);
     } catch { /* non-blocking */ }
   }
 
@@ -1646,6 +1650,7 @@ exports.submitStaffMedical = asyncHandler(async (req, res) => {
     : [];
   if (flow.length) notifyMedicalStageApprovers(flow[0], req, rec.employee);
   else notifyMedicalStatus(req, rec.employee, 'Pending Approval', null, 'staff medical claim');
+  pushMedical('staff', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   respond.ok(res, 'Submitted for approval', serializeMedical(updated));
 });
@@ -1693,6 +1698,7 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
       await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
+  pushMedical('staff', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
   respond.ok(res, response.status === 'GL Failed' ? 'Approved, but GL posting failed' : 'Approved',
@@ -1714,6 +1720,7 @@ exports.rejectStaffMedical = asyncHandler(async (req, res) => {
   if (!assertCanApproveMedical(req, res)) return; // no flow → enforce blanket permission
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE staffmedical SET status='Rejected', approved_by=${userId != null ? String(userId) : null}, rejection_reason=${reason?.trim() || null}, updatedAt=NOW() WHERE id=${id}`;
+  pushMedical('staff', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   respond.ok(res, 'Rejected', serializeMedical(updated));
 });
@@ -1755,6 +1762,7 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
       await prisma.$executeRaw`UPDATE staffmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
+  pushMedical('staff', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM staffmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
   respond.ok(res, response.status === 'GL Failed' ? 'Finalized, but GL posting failed' : 'Finalized', { ...response, gl_payload: glPayload, ...glDetail(glFail) });
@@ -1777,6 +1785,7 @@ exports.submitDependentMedical = asyncHandler(async (req, res) => {
     : [];
   if (flow.length) notifyMedicalStageApprovers(flow[0], req, rec.employee);
   else notifyMedicalStatus(req, rec.employee, 'Pending Approval', null, 'dependent medical claim');
+  pushMedical('dependent', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   respond.ok(res, 'Submitted for approval', serializeMedical(updated));
 });
@@ -1823,6 +1832,7 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
       await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
+  pushMedical('dependent', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
   respond.ok(res, response.status === 'GL Failed' ? 'Approved, but GL posting failed' : 'Approved', { ...response, gl_payload: glPayload, ...glDetail(glFail) });
@@ -1842,6 +1852,7 @@ exports.rejectDependentMedical = asyncHandler(async (req, res) => {
   if (!assertCanApproveMedical(req, res)) return; // no flow → enforce blanket permission
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE dependentmedical SET status='Rejected', approved_by=${userId != null ? String(userId) : null}, rejection_reason=${reason?.trim() || null} WHERE id=${id}`;
+  pushMedical('dependent', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   respond.ok(res, 'Rejected', serializeMedical(updated));
 });
@@ -1883,6 +1894,7 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
       await prisma.$executeRaw`UPDATE dependentmedical SET payment_log=${JSON.stringify(glFail.log)} WHERE id=${id}`;
     }
   }
+  pushMedical('dependent', id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM dependentmedical WHERE id=${id}`;
   const response = serializeMedical(updated);
   respond.ok(res, response.status === 'GL Failed' ? 'Finalized, but GL posting failed' : 'Finalized', { ...response, gl_payload: glPayload, ...glDetail(glFail) });

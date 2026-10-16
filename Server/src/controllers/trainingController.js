@@ -4,6 +4,7 @@ const respond       = require('../helpers/respondHelper');
 const { tmsg }      = require('../helpers/messageStore');
 const { toBigInt, s, safeAlter } = require('../helpers/controllerHelpers');
 const { notifyEmployee, notifyUsersWithPermission } = require('../helpers/notificationHelper');
+const { pushTraining } = require('../helpers/mobilePush');
 const { Prisma } = require('@prisma/client'); // Prisma.join for portable IN lists
 
 // Schema patches — per-slot seat cap; wider currency for CUR code-list labels (no-ops once applied)
@@ -523,6 +524,7 @@ exports.approveNomination = asyncHandler(async (req, res) => {
     message: `Your nomination for "${existing.training_name}" was approved`,
     action: 'PersonalTraining', type: 'training', fromUser: req.user?.id,
   });
+  pushTraining(id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM trainingnomination WHERE id = ${id}`;
   respond.ok(res, 'Nomination approved', s(updated ?? {}));
 });
@@ -543,6 +545,7 @@ exports.rejectNomination = asyncHandler(async (req, res) => {
     message: `Your nomination for "${existing.training_name}" was rejected${reason ? ': ' + reason : ''}`,
     action: 'PersonalTraining', type: 'training', fromUser: req.user?.id,
   });
+  pushTraining(id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM trainingnomination WHERE id = ${id}`;
   respond.ok(res, 'Nomination rejected', s(updated ?? {}));
 });
@@ -611,6 +614,7 @@ exports.supervisorRejectNomination = asyncHandler(async (req, res) => {
     message: `Your nomination for "${existing.training_name}" was rejected by your supervisor${reason ? ': ' + reason : ''}`,
     action: 'PersonalTraining', type: 'training', fromUser: req.user?.id,
   });
+  pushTraining(id);
   const [updated] = await prisma.$queryRaw`SELECT * FROM trainingnomination WHERE id = ${id}`;
   respond.ok(res, 'Nomination rejected', s(updated ?? {}));
 });
