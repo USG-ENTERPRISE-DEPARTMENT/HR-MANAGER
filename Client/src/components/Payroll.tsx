@@ -29,6 +29,7 @@ import { PageHeader } from './ui/PageHeader';
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 import { Select } from './ui/Select';
+import { useRealtimeRefresh } from '@/lib/realtime';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CalcGroup  { id: string; name: string; details: string | null; }
@@ -1926,6 +1927,8 @@ export function Payroll() {
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => { if (activeTab === 'Payroll Runs')      loadRuns();          }, [activeTab]);
+  // A run approved / posted / confirmed by the bank elsewhere → refresh the runs list in place.
+  useRealtimeRefresh('payroll', () => { if (activeTab === 'Payroll Runs') loadRuns(true); });
   useEffect(() => { if (activeTab === 'Deduction Groups')  loadCgData();        }, [activeTab]);
   useEffect(() => { if (activeTab === 'Calculation Rules') loadScAll();         }, [activeTab]);
   useEffect(() => { if (activeTab === 'Payroll Columns')   loadPcData();        }, [activeTab]);
@@ -2092,8 +2095,9 @@ export function Payroll() {
     finally { setPeLoading(false); }
   }
 
-  async function loadRuns() {
-    setRunLoading(true);
+  // `silent`: realtime refreshes keep the list on screen instead of flashing the loading row.
+  async function loadRuns(silent = false) {
+    if (!silent) setRunLoading(true);
     try {
       const [runsRes, pfRes, cgRes, ptRes, tplRes] = await Promise.all([
         api.get('/payroll/runs'),

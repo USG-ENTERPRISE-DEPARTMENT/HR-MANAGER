@@ -17,7 +17,7 @@ async function createNotification({ toUser, fromUser = null, fromEmployee = null
   const to = big(toUser);
   if (!to) return;
   try {
-    await prisma.notifications.create({
+    const row = await prisma.notifications.create({
       data: {
         toUser: to,
         fromUser:     big(fromUser),
@@ -30,6 +30,14 @@ async function createNotification({ toUser, fromUser = null, fromEmployee = null
         time:         new Date(),
       },
     });
+    // Push it to the recipient's open tabs immediately (bell + toast), instead of waiting for the
+    // client's next poll. Every notification in the app is created here, so this one call covers all
+    // modules. A push failure must never affect the notification itself, which is already saved.
+    try {
+      require('./realtime').publishToUser(to, 'notification', {
+        id: String(row.id), message: row.message, action: row.action, type: row.type, time: row.time,
+      });
+    } catch { /* realtime is best-effort */ }
   } catch (err) {
     console.error('createNotification failed:', err.message);
   }

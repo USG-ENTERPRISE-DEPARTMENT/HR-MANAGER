@@ -261,8 +261,14 @@ const deleteLanguage = asyncHandler(async (req, res) => {
 // ─── DEPENDENTS ───────────────────────────────────────────────────────────────
 
 // GET /employee-relations/dependents — list all employee dependents with resolved relationship/gender labels and employee names.
+// Optional ?employee=<id> narrows it to one employee's dependents.
 const getAllDependents = asyncHandler(async (req, res) => {
-  const rows = await prisma.employeedependents.findMany({ orderBy: { id: 'desc' } });
+  const empFilter = req.query.employee ? toBigInt(req.query.employee) : null;
+  if (req.query.employee && !empFilter) return respond.badReq(res, 'Invalid employee id');
+  const rows = await prisma.employeedependents.findMany({
+    where: empFilter ? { employee: empFilter } : undefined,
+    orderBy: { id: 'desc' },
+  });
   const em = await empMap(rows.map(r => r.employee));
   const allClvIds = [
     ...rows.map(r => r.relationship).filter(Boolean),
@@ -276,6 +282,29 @@ const getAllDependents = asyncHandler(async (req, res) => {
     genderLabel:       r.gender       ? (cm[r.gender]       ?? r.gender)       : null,
   })));
 });
+
+// One employee's registered dependents, shaped for a picker (mobile medical dropdown). Relationship and
+// gender are CodeListValue ids on most rows but free text on migrated ones, so the label falls back to
+// the stored value.
+async function dependentsOf(employeeId) {
+  const empId = toBigInt(employeeId);
+  if (!empId) return [];
+  const rows = await prisma.employeedependents.findMany({
+    where: { employee: empId }, orderBy: { name: 'asc' },
+  });
+  const cm = await clvMap([...rows.map(r => r.relationship), ...rows.map(r => r.gender)].filter(Boolean));
+  return rows.map(r => ({
+    id:                r.id.toString(),
+    name:              r.name,
+    relationship:      r.relationship ?? null,
+    relationshipLabel: r.relationship ? (cm[r.relationship] ?? r.relationship) : null,
+    gender:            r.gender ?? null,
+    genderLabel:       r.gender ? (cm[r.gender] ?? r.gender) : null,
+    dob:               r.dob ? r.dob.toISOString().slice(0, 10) : null,
+    id_number:         r.id_number ?? null,
+    place_of_birth:    r.place_of_birth ?? null,
+  }));
+}
 
 // POST /employee-relations/dependents — add a dependent (child, spouse, etc.) linked to an employee.
 const addDependent = asyncHandler(async (req, res) => {
@@ -390,6 +419,6 @@ module.exports = {
   getAllCerts, addCert, updateCert, deleteCert,
   getAllEducation, addEducation, updateEducation, deleteEducation,
   getAllLanguages, addLanguage, updateLanguage, deleteLanguage,
-  getAllDependents, addDependent, updateDependent, deleteDependent,
+  getAllDependents, addDependent, updateDependent, deleteDependent, dependentsOf,
   getAllEmergencyContacts, addEmergencyContact, updateEmergencyContact, deleteEmergencyContact,
 };

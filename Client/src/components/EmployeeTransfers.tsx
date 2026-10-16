@@ -17,6 +17,7 @@ import { downloadTransferPdf } from './ui/transferPdf';
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
 import { Select } from './ui/Select';
+import { useRealtimeRefresh } from '@/lib/realtime';
 type Transfer = {
   id: string; transfer_number: string; employee: string; employee_name: string; employee_code?: string;
   transfer_type: string; effective_date: string; status: string; reason?: string; supporting_document?: string;
@@ -197,12 +198,14 @@ export function EmployeeTransfers() {
   const [form, setForm] = useState<Transfer | null | undefined>(undefined);
   const [detail, setDetail] = useState<Transfer | null>(null);
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     api.get('/employee-transfers').then(response => setRows(response.data?.data || []))
-      .catch(() => toast.error('Failed to load employee transfers')).finally(() => setLoading(false));
+      .catch(() => { if (!silent) toast.error('Failed to load employee transfers'); }).finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(() => load(), []);
+  // Transfers created/approved elsewhere → refresh quietly (no spinner flash, no error toast).
+  useRealtimeRefresh('transfers', () => load(true));
   const filtered = useMemo(() => rows.filter(row => (status === 'All' || row.status === status) && `${row.transfer_number} ${row.employee_name} ${row.transfer_type}`.toLowerCase().includes(search.toLowerCase())), [rows, status, search]);
 
   const action = async (path: string, body: any, success: string) => {
@@ -226,7 +229,7 @@ export function EmployeeTransfers() {
   return <div className="p-4 sm:p-6 lg:p-8">
     <div className="flex flex-wrap items-start justify-between gap-3"><PageHeader title="Employee Transfers" subtitle="Plan, approve, schedule, and audit employee assignment changes." /><div className="flex gap-2">{can('create_employee_transfers') && <button className="primary-btn" onClick={() => setForm(null)}><Plus size={15} />New Transfer</button>}</div></div>
     <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-4"><div className="flex flex-wrap gap-2">{statuses.map(item => <button key={item} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === item ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`} onClick={() => setStatus(item)}>{item}</button>)}</div><div className="flex gap-2"><input className={`${inputClass} w-56`} value={search} onChange={event => setSearch(event.target.value)} placeholder="Search transfers…" /><button className="secondary-btn" onClick={load}><RefreshCw size={15} /></button></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-4"><div className="flex flex-wrap gap-2">{statuses.map(item => <button key={item} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === item ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`} onClick={() => setStatus(item)}>{item}</button>)}</div><div className="flex gap-2"><input className={`${inputClass} w-56`} value={search} onChange={event => setSearch(event.target.value)} placeholder="Search transfers…" /><button className="secondary-btn" onClick={() => load()}><RefreshCw size={15} /></button></div></div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>

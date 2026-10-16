@@ -277,9 +277,9 @@ const spec = {
         type: 'object',
         required: ['dependent_id', 'date_attended', 'illness_type', 'cost'],
         properties: {
-          dependent_id:    { ...id('7'), description: 'Registered dependant id (from the employee\'s dependants)' },
-          relationship:    { type: 'string', example: 'Child' },
-          dob:             { type: 'string', format: 'date', nullable: true, example: '2015-04-10' },
+          dependent_id:    { ...id('7'), description: 'Id of one of the caller\'s dependants, from `GET /dependents` (show them as a dropdown). Any other id returns `400`.' },
+          relationship:    { type: 'string', example: 'Child', description: 'Optional — taken from the dependant\'s record when omitted.' },
+          dob:             { type: 'string', format: 'date', nullable: true, example: '2015-04-10', description: 'Optional — taken from the dependant\'s record when omitted.' },
           date_attended:   { type: 'string', format: 'date', example: '2026-07-20' },
           date_discharged: { type: 'string', format: 'date', nullable: true, example: '2026-07-21' },
           admission_type:  { type: 'string', example: 'Outpatient' },
@@ -443,6 +443,27 @@ const spec = {
       delete: op({ tag: 'Medical', summary: 'Delete an own draft staff medical claim', description: 'Only claims still in `Draft` may be deleted.', params: [pathId], response: { type: 'object' } }),
     },
     '/medical/staff/{id}/submit':      { post: op({ tag: 'Medical', summary: 'Submit a staff medical claim', params: [pathId], response: { type: 'object' } }) },
+    '/dependents': {
+      get: op({
+        tag: 'Medical', summary: 'List own registered dependants',
+        description: 'The authenticated employee\'s dependants as registered by HR, sorted by name. Use this to fill the dependant dropdown on the dependent medical claim form and send the chosen `id` as `dependent_id`. An empty list means HR has registered no dependants, so no dependent claim can be made.',
+        response: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id:                { type: 'string', example: '7' },
+              name:              { type: 'string', example: 'Aminata Kamara' },
+              relationshipLabel: { type: 'string', nullable: true, example: 'Child' },
+              genderLabel:       { type: 'string', nullable: true, example: 'Female' },
+              dob:               { type: 'string', format: 'date', nullable: true, example: '2015-04-10' },
+              id_number:         { type: 'string', nullable: true },
+              place_of_birth:    { type: 'string', nullable: true },
+            },
+          },
+        },
+      }),
+    },
     '/medical/dependents': {
       get:  op({ tag: 'Medical', summary: 'List own dependent medical claims', response: { type: 'array', items: { type: 'object' } } }),
       post: op({

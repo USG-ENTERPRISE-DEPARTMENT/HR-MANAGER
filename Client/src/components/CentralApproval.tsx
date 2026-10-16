@@ -14,6 +14,7 @@ import { PageHeader } from './ui/PageHeader';
 import { EmployeeChangeComparison } from './ui/EmployeeChangeComparison';
 import { TransferChangeComparison } from './ui/TransferChangeComparison';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { useRealtimeRefresh } from '@/lib/realtime';
 
 type ApprovalModule = 'Employee' | 'Employee Transfer' | 'Payroll' | 'Medical' | 'Leave';
 
@@ -855,8 +856,10 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
   const [selectedItem, setSelectedItem] = useState<ApprovalItem | null>(null);
   const [reviewItem, setReviewItem]   = useState<ApprovalItem | null>(null);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  // `silent`: a realtime refresh keeps the current rows on screen instead of swapping the table for
+  // the loading spinner, so the queue does not flash every time something changes elsewhere.
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const currentUser = getCurrentUser();
       const isAdmin = currentUser?.allRoles?.some(r => ['admin', 'super-admin', 'hr'].includes(r.name)) ?? false;
@@ -1033,6 +1036,12 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  // The queue aggregates all four workflows — refresh (quietly) when any of them changes, e.g. a
+  // staff member submitting a medical claim or leave from the mobile app.
+  useRealtimeRefresh('medical',   () => fetchAll(true));
+  useRealtimeRefresh('leave',     () => fetchAll(true));
+  useRealtimeRefresh('payroll',   () => fetchAll(true));
+  useRealtimeRefresh('transfers', () => fetchAll(true));
 
   function handleDone(id: string) {
     setItems(prev => prev.filter(i => i.id !== id));
@@ -1092,7 +1101,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
             searchPlaceholder="Search approvals…"
             searchWidth="sm:min-w-[300px]"
             actions={
-              <button className="secondary-btn" onClick={fetchAll}>
+              <button className="secondary-btn" onClick={() => fetchAll()}>
                 <RefreshCw size={14} />
                 <span>Refresh</span>
               </button>

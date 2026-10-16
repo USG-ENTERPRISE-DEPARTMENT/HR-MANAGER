@@ -20,6 +20,7 @@ import { getCurrentUser } from '../../lib/auth';
 
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { useRealtimeRefresh } from '@/lib/realtime';
 const ALL_TABS = ['All my Leave', 'Leave Entitlement', 'Approved Leave', 'Pending Leave', 'Subordinate Leave', 'Cancellation Request'] as const;
 
 const SortableHeader = ({ children }: { children: ReactNode }) => (
@@ -141,14 +142,18 @@ const fetchSubordinateEmployees = useCallback(() => {
       .finally(() => setLoading(false));
   }, [currentUser?.employeeId]);
 
-  useEffect(() => {
+  const loadActiveTab = () => {
     if (activeTab === 'All my Leave')       fetchLeaves();
     if (activeTab === 'Approved Leave')     fetchLeaves('Approved');
     if (activeTab === 'Pending Leave')      fetchLeaves('Draft');
     if (activeTab === 'Subordinate Leave')    { fetchSubordinate(); fetchSubordinateEmployees(); }
     if (activeTab === 'Cancellation Request') fetchSubordinate('Cancelled');
     if (activeTab === 'Leave Entitlement')  fetchBalance();
-  }, [activeTab, fetchLeaves, fetchSubordinate, fetchBalance]);
+  };
+  useEffect(loadActiveTab, [activeTab, fetchLeaves, fetchSubordinate, fetchBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Leave applied/approved anywhere (another user, or a staff member on the mobile app) → reload the
+  // open tab, so approvers see new requests and staff see decisions without refreshing the page.
+  useRealtimeRefresh('leave', loadActiveTab);
 
   // Workweek + holidays are static — fetch once on mount so they're always ready
   useEffect(() => {

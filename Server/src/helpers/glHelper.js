@@ -3,6 +3,21 @@ const fs             = require('fs');
 const path           = require('path');
 const { getApiConfig } = require('../controllers/apiIntegrationController');
 const { prisma }       = require('./dbQueryHelper');
+const { als }          = require('../middleware/requestContext');
+
+/**
+ * Staff code (employee.employee_id, e.g. P2001002) of the user logged in on the current request.
+ * Read from the request context so every postToGL caller gets it without threading `req` through.
+ * Returns null outside a request, or when the user has no linked employee (admin-only accounts).
+ */
+async function loggedInEmployeeCode() {
+  const empId = als.getStore()?.req?.user?.employeeId;
+  if (empId == null) return null;
+  const emp = await prisma.employee
+    .findUnique({ where: { id: BigInt(empId) }, select: { employee_id: true } })
+    .catch(() => null);
+  return emp?.employee_id || null;
+}
 
 /**
  * Is GL account validation switched on?
@@ -420,8 +435,10 @@ async function postToGL({
 
   // Field order mirrors the bank's documented payload. `terminal` reuses the X-FORWARDED-FOR value
   // when unset — both identify the originating machine, and it is already configured.
-  // `postedBy` is the SYSTEM identifier (POSTING_POSTED_BY, e.g. 'HRMS'), not the approving user;
-  // it falls back to approvedBy only when nothing is configured.
+  // `postedBy` is the staff code of the logged-in user. Accounts with no linked employee fall back
+  // to the configured system identifier (gl_extra.posted_by / POSTING_POSTED_BY), then approvedBy.
+  const postedBy = await loggedInEmployeeCode()
+    || extra.posted_by || process.env.POSTING_POSTED_BY || approvedBy;
   const payload = {
     approvedBy,
     channelCode:   extra.channel_code || 'HRP',
@@ -432,7 +449,7 @@ async function postToGL({
     debitAccounts,
     creditAccounts,
     referenceNo,
-    postedBy:      extra.posted_by || process.env.POSTING_POSTED_BY || approvedBy,
+    postedBy,
   };
 
   // Log the request before sending: a timeout or a crash mid-flight must still leave a record of

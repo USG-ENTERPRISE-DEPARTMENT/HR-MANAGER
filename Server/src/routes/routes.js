@@ -1,6 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const { checkToken, handleRefreshToken } = require("../middleware/authMiddleware");
+const realtime = require('../helpers/realtime');
+
+// Realtime "change" broadcast — registered FIRST so it also sees the mobile API (/me/…), which is
+// mounted before the global checkToken. After any successful write under a watched prefix
+// (medical, leave, payroll runs, …) open web pages are told to refetch. See helpers/realtime.js.
+router.use(realtime.changeBroadcaster);
 const { registerUser, loginUser, logoutUser, getAllUsers, getUserById, updateUser, changePassword, deactivateUser, activateUser,updateUserStatus,getMe,updateUserTheme } = require("../controllers/userController.js");
 const xauth = require('../controllers/xauthController');
 const { assignRoleToUser, revokeRoleFromUser, assignPermissionToUser, revokePermissionFromUser, getAllRoles, getAllPermissions, getUserAccess, addRole, deleteRole, updateRole, updateRoleStatus } = require('../controllers/rolePermissionController');
@@ -151,6 +157,19 @@ router.get ('/public/attendance/kiosk/:token/lookup/:staffId', attendance.kioskL
 router.post('/public/attendance/kiosk/:token/punch',           attendance.kioskPunch);
 
 // ─────────────────────────────────────────────
+// Realtime stream (SSE) — authenticated by a one-time ticket in the query string, because
+// EventSource cannot send an Authorization header. Tickets come from POST /realtime/ticket (below
+// checkToken). See helpers/realtime.js.
+// ─────────────────────────────────────────────
+router.get('/realtime/stream', (req, res) => {
+  const userId = realtime.redeemTicket(req.query.ticket);
+  if (!userId) return res.status(401).json({ status: '401', message: 'Invalid or expired realtime ticket' });
+  if (!realtime.subscribe(userId, req, res)) {
+    return res.status(429).json({ status: '429', message: 'Too many open realtime connections' });
+  }
+});
+
+// ─────────────────────────────────────────────
 // Mobile self-service API (x-api-key + x-employee-id, no JWT)
 // Mounted here so it bypasses the global checkToken below. Its own middleware authenticates every
 // request and pins the employee — see middleware/mobileAuth.js for the auth model and its caveats.
@@ -163,6 +182,11 @@ router.use('/me', require('./meRoutes'));
 // All routes below require a valid token
 // ─────────────────────────────────────────────
 router.use(checkToken);
+
+// One-time ticket for opening the realtime stream (GET /realtime/stream?ticket=…).
+router.post('/realtime/ticket', (req, res) => {
+  res.json({ status: '200', message: 'Realtime ticket issued', data: realtime.issueTicket(req.user.id) });
+});
 
 
 // ─────────────────────────────────────────────

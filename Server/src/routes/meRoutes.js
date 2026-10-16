@@ -143,9 +143,13 @@ router.post('/medical/staff',     upload.array('attachments', 3), me.createStaff
 router.put   ('/medical/staff/:id', upload.array('attachments', 3), me.staffMedicalOwnership, me.staffMedicalDraft, me.updateStaffMedical);
 router.delete('/medical/staff/:id', me.staffMedicalOwnership, me.staffMedicalDraft, me.deleteStaffMedical);
 router.post('/medical/staff/:id/submit', me.staffMedicalOwnership, me.submitStaffMedical);
+// The caller's registered dependents — the source for the dependent-claim dropdown.
+router.get ('/dependents', me.getMyDependents);
+// Dependent claims: the dependent guard runs after multer (it reads the multipart body) and rejects a
+// dependent_id that is not one of the caller's own.
 router.get ('/medical/dependents', me.getDependentMedical);
-router.post('/medical/dependents', upload.array('attachments', 3), me.createDependentMedical);
-router.put   ('/medical/dependents/:id', upload.array('attachments', 3), me.dependentMedicalOwnership, me.dependentMedicalDraft, me.updateDependentMedical);
+router.post('/medical/dependents', upload.array('attachments', 3), me.newDependentClaimDependent, me.createDependentMedical);
+router.put   ('/medical/dependents/:id', upload.array('attachments', 3), me.dependentMedicalOwnership, me.dependentMedicalDraft, me.editDependentClaimDependent, me.updateDependentMedical);
 router.delete('/medical/dependents/:id', me.dependentMedicalOwnership, me.dependentMedicalDraft, me.deleteDependentMedical);
 router.post('/medical/dependents/:id/submit', me.dependentMedicalOwnership, me.submitDependentMedical);
 

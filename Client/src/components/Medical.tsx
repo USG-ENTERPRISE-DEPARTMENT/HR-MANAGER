@@ -30,6 +30,7 @@ import { useCan } from '@/hooks/useCan';
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
 import { Select } from './ui/Select';
+import { useRealtimeRefresh } from '@/lib/realtime';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ADMISSION_TYPES    = ['Outpatient', 'Inpatient', 'Emergency', 'Day Case'];
@@ -81,6 +82,9 @@ function useLoadRows(url: string) {
     setLoading(true);
     api.get(url).then(r => setRows(r.data.data ?? r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
   };
+  // Refetch whenever medical data changes anywhere — another user, or a staff member submitting from
+  // the mobile app — so open lists stay current without a manual reload.
+  useRealtimeRefresh('medical', load);
   return { rows, setRows, loading, load };
 }
 
@@ -1999,7 +2003,10 @@ function HospitalClaimDetailPanel({ row: initialRow, onClose, onRefresh }: { row
       <motion.div
         initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className="relative z-10 w-full max-w-lg bg-[var(--surface)] shadow-2xl flex flex-col h-full border-l border-[var(--border)]"
+        // max-w-3xl (768px), not max-w-lg (512px): the claim-items table (Employee / For / Narration /
+        // Amount) plus the totals and GL detail were cramped and truncated at 512px. Still full-width
+        // on small screens.
+        className="relative z-10 w-full max-w-3xl bg-[var(--surface)] shadow-2xl flex flex-col h-full border-l border-[var(--border)]"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] shrink-0">
           <div>

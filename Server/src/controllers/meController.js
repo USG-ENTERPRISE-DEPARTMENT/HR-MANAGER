@@ -28,6 +28,7 @@ const perf       = require('./performanceController');
 const docs       = require('./documentController');
 const notif      = require('./notificationController');
 const employee   = require('./employeeController');
+const relations  = require('./employeeRelationsController');
 
 // ── Scoping utilities ────────────────────────────────────────────────────────
 
@@ -253,6 +254,36 @@ exports.updateStaffMedical  = (req, res, next) => med.updateStaffMedical(noAppro
 exports.deleteStaffMedical  = (req, res, next) => med.deleteStaffMedical(req, res, next);
 exports.staffMedicalOwnership = requireOwnership('staffmedical');
 exports.staffMedicalDraft     = requireDraft('staffmedical', 'medical claims');
+
+/** GET /me/dependents — the caller's registered dependents, for the dependent-claim dropdown. */
+exports.getMyDependents = asyncHandler(async (req, res) => {
+  respond.ok(res, 'Dependents retrieved', await relations.dependentsOf(req.self.id));
+});
+
+/**
+ * Guard for dependent claims: `dependent_id` must be one of the CALLER's dependents.
+ * medicalController looks the id up in the register without checking whose it is, so on this path a
+ * caller could otherwise file a claim against another employee's dependant. Required on create, and
+ * checked on edit only when sent. Relationship and date of birth are filled from the register when the
+ * app does not send them, so it only has to pass the id it got from GET /me/dependents.
+ */
+const ownDependent = (required) => asyncHandler(async (req, res, next) => {
+  const raw = req.body?.dependent_id;
+  if (raw == null || raw === '') {
+    return required ? respond.badReq(res, 'dependent_id is required — pick one from GET /me/dependents') : next();
+  }
+  const depId = toBigInt(raw);
+  const dep = depId == null ? null : await prisma.employeedependents.findFirst({
+    where: { id: depId, employee: toBigInt(req.self.id) },
+    select: { relationship: true, dob: true },
+  }).catch(() => null);
+  if (!dep) return respond.badReq(res, 'Dependent not found for this employee');
+  if (!req.body.relationship && dep.relationship) req.body.relationship = dep.relationship;
+  if (!req.body.dob && dep.dob) req.body.dob = dep.dob.toISOString().slice(0, 10);
+  next();
+});
+exports.newDependentClaimDependent  = ownDependent(true);
+exports.editDependentClaimDependent = ownDependent(false);
 
 exports.getDependentMedical    = (req, res, next) => med.getDependentMedical(req, res, next);
 exports.createDependentMedical = (req, res, next) => med.createDependentMedical(ownBody(req), res, next);

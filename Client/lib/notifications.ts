@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import api from './api';
 import { getCurrentUser } from './auth';
 import { playChime } from './notificationSound';
+import { useRealtimeNotification } from './realtime';
 
 export interface Notif {
   id: string;
@@ -52,6 +53,11 @@ export function useNotifications() {
       }
     } catch { /* offline / transient — keep current state */ }
   }, []);
+
+  // Realtime: the server pushes the moment a notification is created for this user, so refetch then
+  // and the existing watermark logic chimes + toasts it — instantly instead of up to 20s later. The
+  // interval below stays as the fallback for when the realtime stream is down.
+  useRealtimeNotification(() => { void poll(); });
 
   useEffect(() => {
     if (!getCurrentUser()) return;

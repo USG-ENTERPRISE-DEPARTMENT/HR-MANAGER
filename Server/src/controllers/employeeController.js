@@ -198,6 +198,11 @@ async function pushEmployeeToExternalSystem(e) {
     const basicPass = apiCfg.employee_sync_basic_pass   || apiCfg.gl_basic_pass;
 
     const headers = { 'Content-Type': 'application/json' };
+    // Same X-FORWARDED-FOR as GL postings (glHelper) — core banking identifies the caller by it.
+    let extra = {};
+    try { extra = JSON.parse(apiCfg.gl_extra || '{}'); } catch {}
+    const forwardedFor = apiCfg.gl_forwarded_for || extra.x_forwarded_for || extra.forwarded_for;
+    if (forwardedFor) headers['X-FORWARDED-FOR'] = String(forwardedFor);
     if (bearer) {
       headers['Authorization'] = `Bearer ${bearer}`;
     } else if (basicUser) {
