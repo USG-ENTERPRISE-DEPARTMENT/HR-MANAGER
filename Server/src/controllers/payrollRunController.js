@@ -431,12 +431,17 @@ const generatePayroll = asyncHandler(async (req, res) => {
   await attachColumnGroups(allCols);
   const { compNameById } = await attachColumnRefs(allCols);
 
-  // Load payroll employees (optionally scoped to the run's deduction group)
+  // Load payroll employees (optionally scoped to the run's deduction group). Active employees only:
+  // payroll enrolment (payrollemployees) is never removed when someone leaves, so without the status
+  // check every terminated employee kept being paid — 136 of 429 in one migrated UTB run — and, having
+  // no bank account on file, blocked the GL journal from balancing.
   const groupFilter = run.deduction_group ? Prisma.sql`AND pe.deduction_group = ${BigInt(run.deduction_group)}` : Prisma.empty;
   const payrollEmps = await query`
     SELECT pe.id, pe.employee, pe.deduction_group, pe.deduction_exemptions
-     FROM payrollemployees pe WHERE pe.pay_frequency = ${parseInt(run.pay_frequency)} ${groupFilter}`;
-  if (!payrollEmps.length) return respond.ok(res, 'No employees found for this pay frequency', []);
+     FROM payrollemployees pe
+     JOIN employee e ON e.id = pe.employee AND e.status = '1'
+     WHERE pe.pay_frequency = ${parseInt(run.pay_frequency)} ${groupFilter}`;
+  if (!payrollEmps.length) return respond.ok(res, 'No active employees found for this pay frequency', []);
 
   // Load all saved calculations with their items
   const savedCalcs = await query`
@@ -839,7 +844,7 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
     // Skip zero/blank cells — buildAndPostGL does the same, so they never reached the GL either.
     if (!amount || amount <= 0) continue;
     // Same rule as buildGLJournal — a legacy Net Salary column is not a component.
-    if (isNetSalaryColumn(row.col_name)) continue;
+    if (isNetSalaryColumn(row.col_name, row.salarycomponent_gl)) continue;
 
     const key = String(row.employee);
     if (!byEmp.has(key)) {
@@ -959,11 +964,15 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
 });
 
 // Net pay is never a payroll column here: the journal synthesizes it (earnings − deductions) and the
-// reports carry their own default Net Pay column. Migrated runs still hold the legacy system's
-// "Net Salary…" columns, stored as posting DEDUCTIONS with no GL account — counted, each one both
-// drops out as "unmapped" and subtracts the whole net from itself, leaving a negative net pay and an
-// unbalanced journal. Ignore them wherever posting totals are built.
-const isNetSalaryColumn = (name) => /^net\s+(salary|pay)\b/i.test(String(name || '').trim());
+// reports carry their own default Net Pay column. Migrated runs still hold the legacy system's "Net …"
+// columns — Net Salary, and a per-component take-home for each allowance (Net Rent Allowance =
+// Rent Allowance, Net Rice Subsidy = Rice Subsidy − Tax on Rice Subsidy, NET PAYE Backlog, Net Cloth
+// Allowance…). All are stored as posting DEDUCTIONS with no GL account, so counting one both drops it
+// out as "unmapped" and cancels the payment it describes, leaving a negative net pay and an
+// unbalanced journal. Ignore them wherever posting totals are built. A "Net" column that HAS been
+// given a GL account is a deliberate posting and still counts.
+const isNetSalaryColumn = (name, glAccount) =>
+  !String(glAccount || '').trim() && /^net\b/i.test(String(name || '').trim());
 
 // ── GL journal builder (shared by posting + the GL Summary report) ───────────
 // Builds the exact debit/credit lines a run would post, without sending anything. The GL Summary
@@ -1011,7 +1020,7 @@ async function buildGLJournal(id) {
   for (const row of postingRows) {
     const amount   = parseFloat(row.amount || '0');
     if (!amount || amount <= 0) continue;
-    if (isNetSalaryColumn(row.col_name)) continue;
+    if (isNetSalaryColumn(row.col_name, row.salarycomponent_gl)) continue;
     const branch   = row.posting_branch || defaultBranch;
     const currency = systemCurrency;
     // prodRef prefix encodes the side of the journal: BS_ for debits, NS_ for credits.
