@@ -991,9 +991,27 @@ class MigrationRun {
     const byKey = new Map(existing.map(r => [runKey(r.name, r.date_start), r.id]));
 
     const src = await this.src(`
-      SELECT id, name, pay_period, date_start, date_end, status, deduction_group,
+      SELECT id, name, pay_period, date_start, date_end, status, deduction_group, columns,
              documentRef, payment_log, posting_date, finalized_date, approved_by, approved_date
         FROM payroll ORDER BY id`);
+
+    // The legacy run's own column list (payroll.columns, a JSON array of LEGACY column ids),
+    // translated to target ids by the name map loadPayrollConfig built. Every legacy run decided its
+    // columns this way; without the list a duplicated run calculates every enabled column in its
+    // group and its net pay no longer matches the run it was copied from. Ids that do not translate
+    // are dropped (and counted); an empty result stays NULL, i.e. the group-scoped default.
+    let untranslated = 0;
+    const runColumns = (raw) => {
+      let ids;
+      try { ids = JSON.parse(raw ?? 'null'); } catch { return null; }
+      if (!Array.isArray(ids)) return null;
+      const out = [];
+      for (const legacyId of ids) {
+        const target = this.map.payrollColumn.get(String(legacyId));
+        if (target != null) out.push(String(target)); else untranslated++;
+      }
+      return out.length ? JSON.stringify([...new Set(out)]) : null;
+    };
 
     const toInsert = [];
     for (const r of src) {
@@ -1002,22 +1020,36 @@ class MigrationRun {
       toInsert.push([name, int(r.pay_period), date(r.date_start), date(r.date_end),
         clean(r.status) ?? 'Draft', int(r.deduction_group), clean(r.documentRef),
         clean(r.payment_log), date(r.finalized_date) ?? date(r.posting_date),
-        int(r.approved_by), date(r.approved_date)]);
+        int(r.approved_by), date(r.approved_date), runColumns(r.columns)]);
     }
     e.inserted += await this.insertMany('payrollruns',
       ['name', 'pay_frequency', 'date_start', 'date_end', 'status', 'deduction_group',
-       'document_ref', 'payment_log', 'finalized_at', 'approved_by', 'approved_at'],
+       'document_ref', 'payment_log', 'finalized_at', 'approved_by', 'approved_at', 'columns'],
       toInsert, 'ON CONFLICT DO NOTHING', 'payrollruns');
 
     for (const row of await this.tgt(`SELECT id, name, date_start FROM payrollruns`)) {
       byKey.set(runKey(row.name, row.date_start), row.id);
     }
+    const backfill = [];
     for (const r of src) {
       const name = clean(r.name) ?? `Run ${r.id}`;
       const id = byKey.get(runKey(name, date(r.date_start)));
-      if (id) this.map.payrollRun.set(String(r.id), id);
-      else e.skipped++;
+      if (id) {
+        this.map.payrollRun.set(String(r.id), id);
+        const cols = runColumns(r.columns);
+        if (cols) backfill.push([String(id), cols]);
+      } else e.skipped++;
     }
+    // Runs migrated before the column list existed: fill it in where still empty. Batched, one
+    // statement per chunk (see insertMany). Never overwrites a list someone has set in the app.
+    for (let i = 0; i < backfill.length; i += 500) {
+      const chunk = backfill.slice(i, i + 500);
+      const values = chunk.map((_, k) => `($${k * 2 + 1}::bigint, $${k * 2 + 2}::text)`).join(',');
+      await this.tgt(
+        `UPDATE payrollruns pr SET columns = v.cols FROM (VALUES ${values}) AS v(id, cols)
+          WHERE pr.id = v.id AND pr.columns IS NULL`, chunk.flat());
+    }
+    if (untranslated) e.notes.push(`${untranslated} run column reference(s) did not match a migrated payroll column and were dropped`);
 
     this.done(e);
   }

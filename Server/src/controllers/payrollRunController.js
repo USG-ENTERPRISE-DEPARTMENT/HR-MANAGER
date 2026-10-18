@@ -166,10 +166,28 @@ function matchesBracket(item, amount) {
   return lowerOk && upperOk;
 }
 
-/** Round a value UP to 2 decimal places. The small epsilon absorbs floating-point noise so a value
- *  that is already exact to the cent (e.g. 12.35) is not pushed up to 12.36. */
-function ceilTo2(n) {
-  return Math.ceil(n * 100 - 1e-6) / 100;
+/** Round a value to the NEAREST cent, halves away from zero — the legacy payroll's rounding
+ *  (e.g. 781.54 × 1.21 = 945.6634 → 945.66). It used to round UP, which put regenerated runs a cent
+ *  above the migrated ones. Number.EPSILON absorbs float noise so 1.005 rounds to 1.01, not 1.00. */
+function roundTo2(n) {
+  return Math.sign(n) * Math.round((Math.abs(n) + Number.EPSILON) * 100) / 100;
+}
+
+/** An employee's exempt calculation-rule ids (payrollemployees.deduction_exemptions) as strings.
+ *  Stored as a JSON array (`["618","617"]`) — splitting that on commas yielded `["618"` and `"617"`,
+ *  which never matched a rule id, so no exemption ever applied (over-60s were charged NASSIT).
+ *  A plain comma list is still accepted. */
+function parseExemptions(raw) {
+  if (raw == null || raw === '') return [];
+  if (Array.isArray(raw)) return raw.map(String);
+  const text = String(raw).trim();
+  if (text.startsWith('[')) {
+    try {
+      const arr = JSON.parse(text);
+      if (Array.isArray(arr)) return arr.map(v => String(v).trim()).filter(Boolean);
+    } catch { /* fall through to the comma form */ }
+  }
+  return text.replace(/[[\]"']/g, '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
 // ── Calculation engine ────────────────────────────────────────────────────────
@@ -227,7 +245,7 @@ function calcColumn(col, salaryMap, allCols, savedCalcs, empId, exemptions, cach
   // Auto-matching by target_name was removed: savedCalc target_name is the BASE column/component,
   // not the output column, so name-matching incorrectly applied rules to the wrong columns.
   // X (and the target's own name) in bracket formulas = the rule's TARGET base amount.
-  const exemptIds = (exemptions || '').split(',').map(s => s.trim()).filter(Boolean);
+  const exemptIds = parseExemptions(exemptions);
   if (col.calculation_rule) {
     const rulesToApply = savedCalcs.filter(sc =>
       String(sc.id) === String(col.calculation_rule) &&
@@ -261,8 +279,8 @@ function calcColumn(col, salaryMap, allCols, savedCalcs, empId, exemptions, cach
           if (cache[c.id] !== undefined) { bracketVars[c.name] = cache[c.id]; bracketVars[c.name.toUpperCase()] = cache[c.id]; }
         });
         const calcResult = safeEval(bracket.value, bracketVars);
-        // Saved-calculation (bracket) results round UP to the nearest cent.
-        if (!isNaN(calcResult)) result = ceilTo2(calcResult);
+        // Saved-calculation (bracket) results round to the nearest cent, as the legacy payroll did.
+        if (!isNaN(calcResult)) result = roundTo2(calcResult);
       }
     });
   }
@@ -303,6 +321,17 @@ const STATUS_SQL = {
 const LOCKED_STATUSES = new Set(['Completed', 'Bank Pending']);
 const isRunLocked = (status) => LOCKED_STATUSES.has(String(status ?? ''));
 
+/** A run's own column list (payrollruns.columns, a JSON array of ids) as a Set, or null when unset.
+ *  Like the legacy payroll's per-run list, it decides which columns the run produces — and it
+ *  overrides calculation groups: the legacy run paid every listed column to everyone in the run. */
+function parseRunColumns(json) {
+  if (!json) return null;
+  try {
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) && arr.length ? new Set(arr.map(String)) : null;
+  } catch { return null; }
+}
+
 // Reusable SELECT fragment. Built with Prisma.sql so it composes into tagged queries:
 //   query`${RUNS_SELECT} WHERE pr.id = ${id}`
 const RUNS_SELECT = Prisma.sql`
@@ -314,7 +343,7 @@ const RUNS_SELECT = Prisma.sql`
          pr.document_ref, pr.payment_log, pr.finalized_at,
          -- Lower-case with underscores, so these read back identically on MySQL and Postgres (which
          -- folds unquoted identifiers) — no alias needed, unlike e.bankAccount elsewhere in this file.
-         pr.bank_confirmed_at, pr.bank_confirmed_by,
+         pr.bank_confirmed_at, pr.bank_confirmed_by, pr.columns,
          cs.approver_type  AS cur_approver_type,
          cs.approver_id    AS cur_approver_id,
          cs.approver_label AS cur_approver_label,
@@ -346,14 +375,38 @@ const getPayrollRuns = asyncHandler(async (_req, res) => {
 });
 
 // POST /payroll/runs — create a new payroll run in Draft status for a given pay frequency and date range.
+/**
+ * The column list a new run in this group should start with: the list of the group's most recent run
+ * (by period, then id), preferring one with the same payment type so a bonus run does not inherit a
+ * salary run's columns. Null when the group has no run with a list — the run then falls back to
+ * every enabled column in its group.
+ */
+async function latestGroupColumns(deductionGroup, paymentTypeId, excludeRunId = null) {
+  if (!deductionGroup) return null;
+  const exclude = excludeRunId ? Prisma.sql`AND id <> ${BigInt(excludeRunId)}` : Prisma.empty;
+  // Built here, not as `${pt} IS NULL`: Postgres cannot type a bare NULL parameter.
+  const samePaymentType = paymentTypeId
+    ? Prisma.sql`payment_type_id = ${BigInt(paymentTypeId)}`
+    : Prisma.sql`payment_type_id IS NULL`;
+  const [row] = await query`
+    SELECT columns FROM payrollruns
+     WHERE deduction_group = ${BigInt(deductionGroup)} AND columns IS NOT NULL ${exclude}
+     ORDER BY CASE WHEN ${samePaymentType} THEN 0 ELSE 1 END,
+              date_start IS NULL, date_start DESC, id DESC
+     LIMIT 1`;
+  return row?.columns ?? null;
+}
+
 const createPayrollRun = asyncHandler(async (req, res) => {
   const { name, pay_frequency, date_start, date_end, deduction_group, payment_type } = req.body;
   if (!name?.trim()) return respond.badReq(res, 'Run name is required');
   if (!pay_frequency)  return respond.badReq(res, 'Pay frequency is required');
+  const columns = await latestGroupColumns(deduction_group, payment_type);
   await exec`
-    INSERT INTO payrollruns (name, pay_frequency, date_start, date_end, deduction_group, payment_type_id)
+    INSERT INTO payrollruns (name, pay_frequency, date_start, date_end, deduction_group, payment_type_id, columns)
      VALUES (${name.trim()}, ${parseInt(pay_frequency)}, ${toDate(date_start)}, ${toDate(date_end)},
-             ${deduction_group ? BigInt(deduction_group) : null}, ${payment_type ? BigInt(payment_type) : null})`;
+             ${deduction_group ? BigInt(deduction_group) : null}, ${payment_type ? BigInt(payment_type) : null},
+             ${columns})`;
   const rows = await query`${RUNS_SELECT} ORDER BY pr.id DESC LIMIT 1`;
   respond.created(res, 'Payroll run created', rows[0] || null);
 });
@@ -362,9 +415,13 @@ const createPayrollRun = asyncHandler(async (req, res) => {
 const updatePayrollRun = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { name, pay_frequency, date_start, date_end, deduction_group, payment_type } = req.body;
-  const [run] = await query`SELECT status FROM payrollruns WHERE id = ${BigInt(id)}`;
+  const [run] = await query`SELECT status, name, deduction_group, columns FROM payrollruns WHERE id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
   if (isRunLocked(run.status)) return respond.badReq(res, `Cannot edit a payroll run that is ${run.status} — its journal has already been posted to the general ledger`);
+  // Moving the run to another group swaps in that group's latest column list — the old group's
+  // columns would calculate the wrong pay for the new group's employees.
+  const groupChanged = String(run.deduction_group ?? '') !== String(deduction_group ?? '');
+  const columns = groupChanged ? await latestGroupColumns(deduction_group, payment_type, id) : run.columns;
   await exec`
     UPDATE payrollruns SET
       name=${name?.trim() || run.name},
@@ -373,6 +430,7 @@ const updatePayrollRun = asyncHandler(async (req, res) => {
       date_end=${toDate(date_end)},
       deduction_group=${deduction_group ? BigInt(deduction_group) : null},
       payment_type_id=${payment_type ? BigInt(payment_type) : null},
+      columns=${columns ?? null},
       updated_at=NOW()
      WHERE id=${BigInt(id)}`;
   const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
@@ -420,12 +478,17 @@ const generatePayroll = asyncHandler(async (req, res) => {
 
   // Load all enabled columns — no pay_frequency filter; columns are not per-frequency.
   // A column's calculation groups (payrollcolumn_groups) mean "only run for employees in those
-  // groups"; no groups = universal.
+  // groups"; no groups = universal. A run with its own column list produces exactly those columns
+  // instead (listed ones load even if since disabled); every column stays loaded so a listed
+  // aggregate (Gross, Total Deductions…) can still resolve the columns it adds up.
+  const runCols = parseRunColumns(run.columns);
+  const runColIds = runCols ? [...runCols].map(Number).filter(Number.isFinite) : [];
+  const listedFilter = runColIds.length ? Prisma.sql`OR id IN (${Prisma.join(runColIds)})` : Prisma.empty;
   const allCols = await query`
     SELECT id, name, calculation_function,
             payment_deduction, colorder, default_value, calculation_rule
      FROM payrollcolumns
-     WHERE enabled='Yes'
+     WHERE enabled='Yes' ${listedFilter}
      ORDER BY COALESCE(colorder, 99999), id`;
   if (!allCols.length) return respond.ok(res, 'No enabled payroll columns found', []);
   await attachColumnGroups(allCols);
@@ -472,6 +535,7 @@ const generatePayroll = asyncHandler(async (req, res) => {
   const runTemplate = await resolveRunTemplate(id);
   const templateColIds = new Set(parseTemplateColumns(runTemplate?.visible_columns));
   const applicableCols = allCols.filter(col => {
+    if (runCols) return runCols.has(String(col.id));
     if (templateColIds.size) return templateColIds.has(String(col.id));
     return !col.groupIds.length || payrollEmps.some(pe => col.groupIds.includes(String(pe.deduction_group ?? '')));
   });
@@ -505,9 +569,14 @@ const generatePayroll = asyncHandler(async (req, res) => {
     const salaryMap = salaryByEmp[eid] || {};
     const cache = {};
     for (const col of allCols) {
-      // Skip group-specific columns for employees not in any of the column's groups.
-      // A column with no groups is universal and always runs.
-      if (col.groupIds.length && !col.groupIds.includes(String(pe.deduction_group ?? ''))) continue;
+      if (runCols) {
+        // The run's own list decides, for everyone in the run (legacy behaviour).
+        if (!runCols.has(String(col.id))) continue;
+      } else if (col.groupIds.length && !col.groupIds.includes(String(pe.deduction_group ?? ''))) {
+        // Skip group-specific columns for employees not in any of the column's groups.
+        // A column with no groups is universal and always runs.
+        continue;
+      }
       const amount = calcColumn(col, salaryMap, allCols, savedCalcs, pe.employee, pe.deduction_exemptions, cache, { compNameById });
       values.push(Prisma.sql`(${BigInt(id)}, ${BigInt(pe.employee)}, ${parseInt(col.id)}, ${String(amount)})`);
     }
@@ -696,13 +765,17 @@ const getPayrollData = asyncHandler(async (req, res) => {
 // plus each column's computed value per employee; used for troubleshooting incorrect payroll results.
 const debugPayrollRun = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const [run] = await query`SELECT id, pay_frequency, deduction_group FROM payrollruns WHERE id = ${BigInt(id)} LIMIT 1`;
+  const [run] = await query`SELECT id, pay_frequency, deduction_group, columns FROM payrollruns WHERE id = ${BigInt(id)} LIMIT 1`;
   if (!run) return respond.notFound(res, 'Run not found');
 
+  // Same column selection as generatePayroll.
+  const runCols = parseRunColumns(run.columns);
+  const runColIds = runCols ? [...runCols].map(Number).filter(Number.isFinite) : [];
+  const listedFilter = runColIds.length ? Prisma.sql`OR id IN (${Prisma.join(runColIds)})` : Prisma.empty;
   const allCols = await query`
     SELECT id, name, calculation_function,
             payment_deduction, colorder, default_value, calculation_rule
-     FROM payrollcolumns WHERE enabled='Yes' ORDER BY COALESCE(colorder, 99999), id`;
+     FROM payrollcolumns WHERE enabled='Yes' ${listedFilter} ORDER BY COALESCE(colorder, 99999), id`;
   await attachColumnGroups(allCols);
   const { compNameById } = await attachColumnRefs(allCols);
 
@@ -724,7 +797,8 @@ const debugPayrollRun = asyncHandler(async (req, res) => {
     const cache = {};
     const colResults = [];
     for (const col of allCols) {
-      if (col.groupIds.length && !col.groupIds.includes(String(pe.deduction_group ?? ''))) continue;
+      if (runCols ? !runCols.has(String(col.id))
+                  : (col.groupIds.length && !col.groupIds.includes(String(pe.deduction_group ?? '')))) continue;
       const amount = calcColumn(col, salaryMap, allCols, savedCalcs, pe.employee, pe.deduction_exemptions, cache, { compNameById });
       colResults.push({ id: col.id, name: col.name, salary_components: (col.componentNames || []).join(','), default_value: col.default_value, calculation_function: col.calculation_function, amount });
     }
@@ -1518,11 +1592,14 @@ const duplicatePayrollRun = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [run] = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
+  // The column list is copied too: a duplicate must calculate the same columns as its source, or
+  // its net pay drifts (it would fall back to every enabled column in the group).
   await exec`
-    INSERT INTO payrollruns (name, pay_frequency, date_start, date_end, deduction_group, payment_type_id, status)
+    INSERT INTO payrollruns (name, pay_frequency, date_start, date_end, deduction_group, payment_type_id, status, columns)
      VALUES (${`${run.name} (Copy)`}, ${run.pay_frequency ? parseInt(run.pay_frequency) : null},
              ${toDate(run.date_start)}, ${toDate(run.date_end)},
-             ${run.deduction_group ? BigInt(run.deduction_group) : null}, ${run.payment_type_id ? BigInt(run.payment_type_id) : null}, 'Draft')`;
+             ${run.deduction_group ? BigInt(run.deduction_group) : null}, ${run.payment_type_id ? BigInt(run.payment_type_id) : null}, 'Draft',
+             ${run.columns ?? null})`;
   const rows = await query`${RUNS_SELECT} ORDER BY pr.id DESC LIMIT 1`;
   logActivity({ module: 'Payroll', action: 'duplicate_run', entityId: String(id), entityName: run.name, ...fromReq(req) });
   respond.created(res, 'Run duplicated', rows[0] || null);

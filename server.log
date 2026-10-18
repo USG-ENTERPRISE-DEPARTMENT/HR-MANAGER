@@ -451,3 +451,108 @@ prisma:query
       UNIQUE KEY uq_ltg (leave_type_id, leave_group_id)
     )
   
+2026-10-18T09:36:08.159Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T09:36:08.230Z OUT ← GET http://localhost:11434/api/tags → 200 72ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T09:36:24.924Z IN  GET /v1/api/hr/user/refresh-token → 200 1602ms user=- ip=::1
+2026-10-18T09:36:25.921Z IN  GET /v1/api/hr/settings/modules → 200 455ms user=- ip=::1
+2026-10-18T09:36:27.446Z IN  GET /v1/api/hr/settings/controls → 200 1978ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:28.822Z IN  POST /v1/api/hr/realtime/ticket → 200 1027ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:30.257Z IN  POST /v1/api/hr/realtime/ticket → 200 2459ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:31.494Z IN  GET /v1/api/hr/notifications → 200 3697ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:33.100Z IN  GET /v1/api/hr/dashboard/summary → 200 5301ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:33.138Z IN  GET /v1/api/hr/notifications → 304 1639ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:36.069Z IN  GET /v1/api/hr/dashboard/summary → 304 2964ms user=superadmin@usg.com ip=::1
+2026-10-18T09:36:50.264Z IN  GET /v1/api/hr/notifications → 304 1810ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:09.407Z IN  GET /v1/api/hr/notifications → 304 954ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:29.799Z IN  GET /v1/api/hr/notifications → 304 1341ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:30.745Z IN  GET /v1/api/hr/notifications → 304 940ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:31.593Z IN  GET /v1/api/hr/notifications → 304 844ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:39.240Z IN  GET /v1/api/hr/settings/app-setup → 200 1478ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:39.941Z IN  GET /v1/api/hr/payroll/calc-groups → 200 2176ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:40.168Z IN  GET /v1/api/hr/payroll/pay-frequencies → 200 2404ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:40.958Z IN  GET /v1/api/hr/salary/payment-types → 200 1714ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:41.627Z IN  GET /v1/api/hr/payroll/payslip-templates → 200 1682ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:41.727Z IN  GET /v1/api/hr/payroll/runs → 200 3964ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:42.645Z IN  GET /v1/api/hr/settings/app-setup → 304 1679ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:43.101Z IN  GET /v1/api/hr/payroll/calc-groups → 304 1469ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:43.319Z IN  GET /v1/api/hr/payroll/pay-frequencies → 304 1584ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:44.234Z IN  GET /v1/api/hr/payroll/columns → 200 4058ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:44.614Z IN  GET /v1/api/hr/salary/payment-types → 304 1964ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:44.956Z IN  GET /v1/api/hr/payroll/payslip-templates → 304 1850ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:45.309Z IN  GET /v1/api/hr/payroll/runs → 304 1986ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:47.514Z IN  GET /v1/api/hr/payroll/columns → 304 3275ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:50.108Z IN  GET /v1/api/hr/notifications → 304 1655ms user=superadmin@usg.com ip=::1
+2026-10-18T09:37:55.122Z IN  GET /v1/api/hr/notifications → 304 995ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:02.527Z IN  GET /v1/api/hr/payroll/runs/212/data → 200 3511ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:08.682Z IN  GET /v1/api/hr/notifications → 304 891ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:23.813Z IN  POST /v1/api/hr/payroll/runs/212/generate → 200 11487ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:26.092Z IN  GET /v1/api/hr/payroll/pay-frequencies → 304 1959ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:26.323Z IN  GET /v1/api/hr/payroll/calc-groups → 304 2188ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:27.447Z IN  GET /v1/api/hr/payroll/runs → 304 3621ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:27.564Z IN  GET /v1/api/hr/salary/payment-types → 304 1468ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:27.840Z IN  GET /v1/api/hr/payroll/payslip-templates → 304 1510ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:29.209Z IN  GET /v1/api/hr/payroll/calc-groups → 304 1619ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:29.211Z IN  GET /v1/api/hr/payroll/pay-frequencies → 304 1758ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:29.660Z IN  GET /v1/api/hr/payroll/runs/212/data → 200 5836ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:29.790Z IN  GET /v1/api/hr/payroll/runs → 304 1943ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:30.334Z IN  GET /v1/api/hr/salary/payment-types → 304 1113ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:31.188Z IN  GET /v1/api/hr/notifications → 304 1965ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:31.642Z IN  GET /v1/api/hr/payroll/payslip-templates → 304 1970ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:32.825Z IN  GET /v1/api/hr/payroll/runs → 304 3029ms user=superadmin@usg.com ip=::1
+2026-10-18T09:38:49.772Z IN  GET /v1/api/hr/notifications → 304 1320ms user=superadmin@usg.com ip=::1
+2026-10-18T09:39:09.453Z IN  GET /v1/api/hr/notifications → 304 999ms user=superadmin@usg.com ip=::1
+2026-10-18T09:39:20.779Z IN  GET /v1/api/hr/notifications → 304 1383ms user=superadmin@usg.com ip=::1
+2026-10-18T09:39:29.102Z IN  GET /v1/api/hr/notifications → 304 1296ms user=superadmin@usg.com ip=::1
+2026-10-18T09:39:49.558Z IN  GET /v1/api/hr/notifications → 304 1767ms user=superadmin@usg.com ip=::1
+2026-10-18T09:40:08.798Z IN  GET /v1/api/hr/notifications → 304 1008ms user=superadmin@usg.com ip=::1
+2026-10-18T09:40:28.796Z IN  GET /v1/api/hr/notifications → 304 1005ms user=superadmin@usg.com ip=::1
+2026-10-18T09:40:48.798Z IN  GET /v1/api/hr/notifications → 304 1003ms user=superadmin@usg.com ip=::1
+2026-10-18T09:41:08.793Z IN  GET /v1/api/hr/notifications → 304 996ms user=superadmin@usg.com ip=::1
+2026-10-18T09:41:28.859Z IN  GET /v1/api/hr/notifications → 304 1060ms user=superadmin@usg.com ip=::1
+2026-10-18T09:41:50.018Z IN  GET /v1/api/hr/notifications → 304 2224ms user=superadmin@usg.com ip=::1
+2026-10-18T09:42:08.800Z IN  GET /v1/api/hr/notifications → 304 1011ms user=superadmin@usg.com ip=::1
+2026-10-18T09:42:29.541Z IN  GET /v1/api/hr/notifications → 304 1072ms user=superadmin@usg.com ip=::1
+2026-10-18T09:42:49.496Z IN  GET /v1/api/hr/notifications → 304 1040ms user=superadmin@usg.com ip=::1
+2026-10-18T09:43:09.464Z IN  GET /v1/api/hr/notifications → 304 1007ms user=superadmin@usg.com ip=::1
+2026-10-18T09:43:29.460Z IN  GET /v1/api/hr/notifications → 304 999ms user=superadmin@usg.com ip=::1
+2026-10-18T09:44:29.429Z IN  GET /v1/api/hr/notifications → 304 973ms user=superadmin@usg.com ip=::1
+2026-10-18T09:45:09.530Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T09:45:09.587Z OUT ← GET http://localhost:11434/api/tags → 200 57ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T09:45:30.772Z IN  GET /v1/api/hr/notifications → 304 2310ms user=superadmin@usg.com ip=::1
+2026-10-18T09:46:29.620Z IN  GET /v1/api/hr/notifications → 304 1162ms user=superadmin@usg.com ip=::1
+2026-10-18T09:47:29.547Z IN  GET /v1/api/hr/notifications → 304 1081ms user=superadmin@usg.com ip=::1
+2026-10-18T09:48:29.441Z IN  GET /v1/api/hr/notifications → 304 980ms user=superadmin@usg.com ip=::1
+2026-10-18T09:49:39.382Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T09:49:39.418Z OUT ← GET http://localhost:11434/api/tags → 200 37ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T09:50:47.524Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T09:50:47.563Z OUT ← GET http://localhost:11434/api/tags → 200 40ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T09:51:11.567Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T09:51:11.604Z OUT ← GET http://localhost:11434/api/tags → 200 37ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T09:51:30.175Z IN  GET /v1/api/hr/notifications → 200 1716ms user=superadmin@usg.com ip=::1
+2026-10-18T09:51:46.768Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T09:51:46.811Z OUT ← GET http://localhost:11434/api/tags → 200 44ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T09:52:30.188Z IN  GET /v1/api/hr/notifications → 304 1719ms user=superadmin@usg.com ip=::1
+2026-10-18T09:53:30.454Z IN  GET /v1/api/hr/notifications → 304 1985ms user=superadmin@usg.com ip=::1
+2026-10-18T09:54:30.056Z IN  GET /v1/api/hr/notifications → 304 1599ms user=superadmin@usg.com ip=::1
+2026-10-18T09:55:30.535Z IN  GET /v1/api/hr/notifications → 304 2083ms user=superadmin@usg.com ip=::1
+2026-10-18T09:56:30.042Z IN  GET /v1/api/hr/notifications → 304 1578ms user=superadmin@usg.com ip=::1
+2026-10-18T10:00:02.900Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T10:00:02.921Z OUT ← GET http://localhost:11434/api/tags → 200 21ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T10:00:31.393Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T10:00:31.424Z OUT ← GET http://localhost:11434/api/tags → 200 31ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}

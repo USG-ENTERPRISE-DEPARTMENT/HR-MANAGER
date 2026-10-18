@@ -3155,6 +3155,9 @@ model payrollruns {
   // of every past run that matched it — including Completed runs already reconciled with the bank.
   // Null on runs finalised before this existed; those still resolve live.
   template_snapshot String?             @db.Text
+  // The run's own payroll-column list (JSON array of payrollcolumns ids), as the legacy payroll stored
+  // on every run. Generate calculates only these when set; NULL = every enabled column in the group.
+  columns           String?             @db.Text
 }
 
 // Per-run snapshot of the configured multi-stage approval flow + each stage's outcome. Written when a
