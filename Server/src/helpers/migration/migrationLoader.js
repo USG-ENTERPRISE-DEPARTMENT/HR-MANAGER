@@ -384,7 +384,28 @@ class MigrationRun {
       const roles = await copy('roles',
         ['id', 'name', 'guard_name', 'description', 'is_system', 'status', 'created_at', 'updated_at']);
       const perms = await copy('permissions', ['id', 'name', 'guard_name', 'created_at', 'updated_at']);
-      const rhp = await copy('role_has_permissions', ['permission_id', 'role_id'], 'role_id');
+
+      // role_has_permissions is joined BY NAME, not copied by id. The target is not empty by now:
+      // the seed step and the manual migrations (employee transfers, PC codes…) create permissions
+      // and roles under their own ids, so for those names the id-preserving copy above was a no-op
+      // and the reference ids do not exist here. Copying the pairs verbatim then broke
+      // role_has_permissions_permission_id_fkey and stopped the whole migration on a fresh database.
+      const idByName = async (table) => new Map((await this.tgt(`SELECT id, name FROM ${table}`))
+        .map(r => [String(r.name), String(r.id)]));
+      const tgtPerm = await idByName('permissions');
+      const tgtRole = await idByName('roles');
+      const refPairs = (await ref.query(`
+        SELECT p.name AS perm, r.name AS role FROM role_has_permissions rp
+          JOIN permissions p ON p.id = rp.permission_id JOIN roles r ON r.id = rp.role_id`)).rows;
+      const pairRows = [];
+      let unmatchedPairs = 0;
+      for (const { perm, role } of refPairs) {
+        const p = tgtPerm.get(String(perm)), r = tgtRole.get(String(role));
+        if (p && r) pairRows.push([p, r]); else unmatchedPairs++;
+      }
+      const rhp = await this.insertMany('role_has_permissions', ['permission_id', 'role_id'], pairRows,
+        'ON CONFLICT DO NOTHING');
+      if (unmatchedPairs) e.notes.push(`${unmatchedPairs} role-permission link(s) skipped — role or permission not found by name`);
 
       // Sequences must be moved past the copied ids, or the next insert collides.
       for (const t of ['roles', 'permissions']) {
@@ -432,13 +453,18 @@ class MigrationRun {
 
         if (userId) {
           // Same roles the account holds in the reference database.
+          // Matched by role NAME — see role_has_permissions above: a role the target already had
+          // keeps its own id, so the reference role_id may not exist here.
           const refRoles = (await ref.query(
-            `SELECT role_id FROM model_has_roles WHERE model_id = $1 AND model_type = 'users'`,
+            `SELECT r.name FROM model_has_roles m JOIN roles r ON r.id = m.role_id
+              WHERE m.model_id = $1 AND m.model_type = 'users'`,
             [admin.id])).rows;
           for (const r of refRoles) {
+            const roleId = tgtRole.get(String(r.name));
+            if (!roleId) { e.notes.push(`Admin role "${r.name}" not found in the target — not assigned`); continue; }
             await this.tgt(
               `INSERT INTO model_has_roles (role_id, model_type, model_id)
-               VALUES ($1,'users',$2) ON CONFLICT DO NOTHING`, [r.role_id, userId]);
+               VALUES ($1,'users',$2) ON CONFLICT DO NOTHING`, [roleId, userId]);
           }
           await this.tgt(
             `SELECT setval(pg_get_serial_sequence('users','id'), GREATEST((SELECT MAX(id) FROM users), 1))`)
