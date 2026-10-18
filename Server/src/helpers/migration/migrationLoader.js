@@ -1468,6 +1468,35 @@ class MigrationRun {
       }
     }
 
+    // ── Rule-base components the legacy data never names ──
+    //
+    // These allowance columns carry a rule (X + X×0.265, X×1.15, …) but an EMPTY salary_components
+    // list, so nothing above links them and every amount computes as 0 — yet legacy paid them. The
+    // legacy engine found X itself, and how is not recorded anywhere in its data. Each pair below was
+    // proven by recomputing every employee's value from the component through the rule and comparing
+    // with what legacy paid: 442/442 on AUG 2026 Permanent, 75/75 on AUG 2026 Contract, the
+    // Management Special Allowance on every Management run. Matched by NAME on both sides (the ids
+    // are the target's), and skipped if either side is missing rather than guessed.
+    const RULE_BASE_LINKS = [
+      ['Displacement',               'Displacement Allowance'],
+      ['Duty',                       'Duty Allowance'],
+      ['Special Allowance',          'Sundry/Special Allowance'],
+      ['Special Allowance - MGT',    'Sundry/Special Allowance'],
+      ['Word Proc Allowance',        'Word Processing Allowance'],
+      ['Prev Allowances - Contract', 'Allowances - Contract'],
+    ];
+    const lower = (s) => String(s ?? '').trim().toLowerCase();
+    const tgtColByName  = new Map((await this.tgt('SELECT id, name FROM payrollcolumns')).map(r => [lower(r.name), r.id]));
+    const tgtCompByName = new Map((await this.tgt('SELECT id, name FROM salarycomponent')).map(r => [lower(r.name), r.id]));
+    let ruleBaseMissing = 0;
+    for (const [colName, compName] of RULE_BASE_LINKS) {
+      const colId = tgtColByName.get(lower(colName));
+      const compId = tgtCompByName.get(lower(compName));
+      if (!colId || !compId) { ruleBaseMissing++; continue; }
+      compRows.push([Number(colId), String(compId)]);
+    }
+    if (ruleBaseMissing) e.notes.push(`${ruleBaseMissing} verified rule-base link(s) skipped — column or component not found by name`);
+
     const comps = await this.insertMany('payrollcolumn_components',
       ['payrollcolumn_id', 'component_id'], compRows,
       'ON CONFLICT (payrollcolumn_id, component_id) DO NOTHING', 'payrollcolumnrefs');
