@@ -444,12 +444,11 @@ export function LeaveSetup() {
 
   useEffect(() => { setEllPage(1); }, [ellSearch, ellStatus]);
 
-  const ELL_STATUSES = ['Pending Approval', 'Pending Financial Approval', 'Pending HR Approval', 'Approved', 'Draft', 'Rejected', 'Cancelled', 'GL Scheduled'];
+  const ELL_STATUSES = ['Pending Approval', 'Pending HR Approval', 'Approved', 'Draft', 'Rejected', 'Cancelled', 'GL Scheduled'];
 
   const STATUS_PILL: Record<string, string> = {
     'Pending':              'bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--text-secondary)]',
     'Pending Approval':     'bg-amber-500/10 text-amber-700 border border-amber-200/50',
-    'Pending Financial Approval': 'bg-blue-500/10 text-blue-700 border border-blue-200/50',
     'Pending HR Approval':  'bg-purple-500/10 text-purple-700 border border-purple-200/50',
     'Approved':             'pill-success',
     'Rejected':             'pill-danger',
@@ -1032,8 +1031,6 @@ export function LeaveSetup() {
                                 ? <span className="pill bg-blue-500/10 text-blue-700 border border-blue-200/50 text-[10px]">Scheduled</span>
                               : as === 'Failed GL Posting'
                                 ? <span className="pill bg-red-500/10 text-red-700 border border-red-200/50 text-[10px]">GL Failed</span>
-                              : as === 'Pending Financial Approval'
-                                ? <span className="pill bg-amber-500/10 text-amber-700 border border-amber-200/50 text-[10px]">Fin. Approval</span>
                               : as === 'Already Paid This Period'
                                 ? <span className="pill bg-slate-100 text-slate-500 border border-slate-200 text-[10px]">Already Paid</span>
                               : as === 'Pre-enable Skip'
@@ -1207,7 +1204,7 @@ export function LeaveSetup() {
                     const label = status === 'Pre-enable Skip' ? 'Not Eligible (pre-dates enablement)' : status;
                     const cls = status === 'Paid' || status === 'GL Scheduled'
                       ? 'pill-success'
-                      : status === 'Financial Rejected'
+                      : status === 'Failed GL Posting'
                         ? 'pill-danger'
                         : status === 'Pre-enable Skip'
                           ? 'bg-slate-100 text-slate-500 border border-slate-200'

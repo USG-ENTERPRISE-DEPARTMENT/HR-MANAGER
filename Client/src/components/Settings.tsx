@@ -12,7 +12,6 @@ import {
 import { Modules } from './Modules';
 import { PayrollApprovalFlow } from './PayrollApprovalFlow';
 import { MedicalApprovalFlow } from './MedicalApprovalFlow';
-import { LeaveApprovalFlow } from './LeaveApprovalFlow';
 import { EmployeeApprovalFlow } from './EmployeeApprovalFlow';
 import { EmployeeTransferApprovalFlow } from './EmployeeTransferApprovalFlow';
 import {
@@ -621,7 +620,6 @@ function ApprovalsSection({
 }: any) {
   const [showFlowEditor, setShowFlowEditor] = useState(false);
   const [showMedicalFlowEditor, setShowMedicalFlowEditor] = useState(false);
-  const [showLeaveFlowEditor, setShowLeaveFlowEditor] = useState(false);
   const [showEmployeeFlowEditor, setShowEmployeeFlowEditor] = useState(false);
   const [showTransferFlowEditor, setShowTransferFlowEditor] = useState(false);
   return (
@@ -762,18 +760,7 @@ function ApprovalsSection({
           checked={supervisorApproval}
           onChange={(v) => { setSupervisorApproval(v); saveFlowSettings(v); }}
         />
-        <div className="px-5 py-3 border-t border-[var(--border)]">
-          <p className="text-[12px] text-[var(--text-muted)] mb-2 leading-relaxed">
-            Add amount-based financial sign-off <strong>after</strong> normal approval: define stages, each with an
-            approver and an amount range. A leave's allowance is routed only through the stages whose range covers
-            its payout; amounts below every range skip financial approval and go straight to GL.
-          </p>
-          <button type="button" onClick={() => setShowLeaveFlowEditor(true)} className="secondary-btn text-[13px]">
-            <ShieldCheck size={14} /> Configure Approval Flow
-          </button>
-        </div>
       </SectionCard>
-      {showLeaveFlowEditor && <LeaveApprovalFlow onClose={() => setShowLeaveFlowEditor(false)} />}
 
       <SectionCard icon={<GraduationCap size={13} />} title="Training Approval Flow">
         <div className="px-5 py-3 border-b border-[var(--border)]">

@@ -576,14 +576,13 @@ const MODULES: HelpModule[] = [
             type: 'table',
             headers: ['Approval step', 'Status shown', 'Who acts'],
             rows: [
-              ['1. Employee submits', 'Pending Approval, Pending Financial Approval, or Pending HR Approval', 'The configured supervisor option, allowance, and financial stages determine the first required approver'],
-              ['2. Supervisor approves (when enabled)', 'Pending Financial Approval or Pending HR Approval', 'The employee’s supervisor acts first only when supervisor approval is enabled and a supervisor is assigned'],
-              ['3. Finance approves (when required)', 'Pending Financial Approval', 'Configured role/user stages approve the allowance in order; a financial rejection rejects the entire leave'],
-              ['4. Admin HR approves', 'Approved', 'Admin HR is always the final leave approver'],
-              ['5. Allowance is scheduled', 'GL Scheduled', 'An eligible cleared allowance waits for the leave start date before GL posting'],
+              ['1. Employee submits', 'Pending Approval or Pending HR Approval', 'The supervisor approval setting determines the first required approver'],
+              ['2. Supervisor approves (when enabled)', 'Pending HR Approval', 'The employee’s supervisor acts first only when supervisor approval is enabled and a supervisor is assigned'],
+              ['3. Admin HR approves', 'Approved', 'Admin HR is always the final leave approver'],
+              ['4. Allowance is scheduled', 'GL Scheduled', 'An eligible allowance waits for the leave start date before GL posting'],
             ],
           },
-          { type: 'tip', body: 'If there is no allowance, no matching financial stage, or no financial approver configured, finance is skipped and the request goes to Admin HR. Pending approvers are notified in-app when the request reaches their stage.' },
+          { type: 'tip', body: 'If supervisor approval is off or the employee has no supervisor, the request goes straight to Admin HR. Pending approvers are notified in-app when the request reaches their stage.' },
         ],
       },
       {
@@ -691,8 +690,7 @@ const MODULES: HelpModule[] = [
             rows: [
               ['Draft',               'Saved but not yet submitted for approval'],
               ['Pending Approval',    'Sent to your supervisor for first-level approval'],
-              ['Pending Financial Approval', 'Allowance is waiting for its configured financial approver(s)'],
-              ['Pending HR Approval', 'Passed the required supervisor and financial tiers and is waiting for Admin HR sign-off'],
+              ['Pending HR Approval', 'Passed supervisor approval (when required) and is waiting for Admin HR sign-off'],
               ['Approved',            'Fully approved — balance has been deducted'],
               ['GL Scheduled',        'HR approved the leave and its eligible allowance is waiting for the leave start date before GL posting'],
               ['Paid',                'The approved allowance was posted successfully'],
@@ -708,7 +706,7 @@ const MODULES: HelpModule[] = [
         summary: 'Review and action leave requests from your team or the approval queue.',
         icon: CheckCircle2,
         content: [
-          { type: 'text', body: 'When supervisor approval is enabled and the employee has a supervisor, the supervisor acts first. Requests with an allowance then pass through configured financial role/user stages. If supervisor approval is off, the employee has no supervisor, there is no allowance, or no financial stage applies, unnecessary tiers are skipped. Admin HR is always the final approver. A financial rejection rejects the entire leave.' },
+          { type: 'text', body: 'When supervisor approval is enabled and the employee has a supervisor, the supervisor acts first. If supervisor approval is off or the employee has no supervisor, that tier is skipped. Admin HR is always the final approver, and HR approval also clears any leave allowance for GL posting.' },
           {
             type: 'steps', heading: 'Approving as a supervisor',
             steps: [
@@ -1347,7 +1345,7 @@ const MODULES: HelpModule[] = [
               ['Employee Transfer Approval', 'Use a transfer-specific chain, or enable "Use Employee Approval Flow" to inherit the employee stages'],
               ['Payroll Approval', 'Submitted payroll runs pass through the configured ordered stages before finalisation'],
               ['Medical Approval', 'Staff, dependent, and hospital requests follow the configured medical stages'],
-              ['Leave Approval', 'Optional supervisor approval is followed by applicable financial stages, then mandatory final Admin HR approval'],
+              ['Leave Approval', 'Optional supervisor approval, then mandatory final Admin HR approval'],
               ['Training Approval', 'Choose direct HR routing or supervisor-first routing according to the training setup'],
             ],
           },

@@ -592,8 +592,6 @@ router.get   ('/leave/approval-settings',             leave.getApprovalFlowSetti
 router.put   ('/leave/approval-settings',             permissionGuard('manage_settings'), leave.updateApprovalFlowSettings);
 
 // Multi-stage, amount-range financial approval flow (replaces the old single threshold)
-router.get   ('/leave/approval-flow',                 leave.getLeaveApprovalFlow);
-router.put   ('/leave/approval-flow',                 permissionGuard('manage_settings'), leave.saveLeaveApprovalFlow);
 
 router.get   ('/leave/calendar-settings',             leave.getCalendarSettings);
 router.put   ('/leave/calendar-settings',             permissionGuard('manage_settings'), leave.updateCalendarSettings);
@@ -626,9 +624,6 @@ router.post  ('/leave/leaves/:id/approve',           leave.approveLeave);
 router.post  ('/leave/leaves/:id/reject',            leave.rejectLeave);
 router.post  ('/leave/leaves/:id/cancel',            leave.cancelLeave);
 router.post  ('/leave/leaves/:id/finalize',          leave.finalizeLeave);
-router.post  ('/leave/leaves/:id/approve-allowance', leave.approveAllowanceLeave);
-router.post  ('/leave/leaves/:id/reject-allowance',  leave.rejectAllowanceLeave);
-router.get   ('/leave/leaves/:id/stages',            leave.getLeaveStages);
 router.post  ('/leave/leaves/:id/retry-gl',          leave.retryLeaveGL);
 
 // ─────────────────────────────────────────────

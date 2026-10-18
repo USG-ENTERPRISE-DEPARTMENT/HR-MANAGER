@@ -36,7 +36,6 @@ const STATUS_PILL: Record<string, string> = {
   Draft:             'bg-slate-100 border border-slate-200 text-slate-500',
   Pending:           'bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--text-secondary)]',
   'Pending Approval': 'bg-amber-500/10 text-amber-700 border border-amber-200/50',
-  'Pending Financial Approval': 'bg-blue-500/10 text-blue-700 border border-blue-200/50',
   'Pending HR Approval': 'bg-purple-500/10 text-purple-700 border border-purple-200/50',
   Approved:          'pill pill-success',
   Rejected:          'pill pill-danger',

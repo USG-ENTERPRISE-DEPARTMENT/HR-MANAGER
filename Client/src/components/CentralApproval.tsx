@@ -410,31 +410,19 @@ function MedicalDetail({ rec, onApprove, onReject, onClose, busy }: {
 }
 
 // ── Leave detail panel ────────────────────────────────────────────────────────
-function LeaveApprovalDetail({ item, onApprove, onReject, onApproveAllowance, onRejectAllowance, onClose, busy }: {
+function LeaveApprovalDetail({ item, onApprove, onReject, onClose, busy }: {
   item: ApprovalItem;
   onApprove: () => void;
   onReject: (reason: string) => void;
-  onApproveAllowance: () => void;
-  onRejectAllowance: (reason: string) => void;
   onClose: () => void;
   busy: boolean;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason]       = useState('');
-  const [stages, setStages]       = useState<any[]>([]);
   const l = item.raw;
-  const isPendingFinancial = l._isPendingFinancial as boolean;
-  const canAct = l._canActAllowance !== false; // undefined (non-financial) or true → allowed
-  const amount    = parseFloat(l.amount    ?? 0) || 0;
+  // HR's final approval is what releases the allowance, so show it whenever the leave carries one.
+  const amount    = l.req_allowance === 'Yes' ? (parseFloat(l.amount ?? 0) || 0) : 0;
   const taxAmount = parseFloat(l.leave_tax ?? 0) || 0;
-
-  // Load the financial-approval stage chain for a pending-financial leave.
-  useEffect(() => {
-    if (isPendingFinancial) {
-      api.get(`/leave/leaves/${item.id}/stages`).then(r => setStages(r.data?.data ?? [])).catch(() => setStages([]));
-    }
-  }, [isPendingFinancial, item.id]);
-  const currentStage = stages.find(s => s.status === 'Pending') ?? null;
 
   const rows = [
     ['Employee',    l.employee_name    || '—'],
@@ -456,9 +444,7 @@ function LeaveApprovalDetail({ item, onApprove, onReject, onApproveAllowance, on
         </div>
         <div>
           <p className="font-bold text-[var(--text-primary)]">{l.employee_name}</p>
-          <p className="text-xs text-[var(--text-muted)]">
-            {isPendingFinancial ? 'Leave allowance pending financial approval' : 'Leave application pending approval'}
-          </p>
+          <p className="text-xs text-[var(--text-muted)]">Leave application pending approval</p>
         </div>
       </div>
 
@@ -471,7 +457,7 @@ function LeaveApprovalDetail({ item, onApprove, onReject, onApproveAllowance, on
         ))}
       </dl>
 
-      {isPendingFinancial && amount > 0 && (
+      {amount > 0 && (
         <div className="rounded-lg bg-purple-50 border border-purple-100 px-4 py-3 space-y-1">
           <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider mb-2">Allowance Summary</p>
           <div className="flex justify-between text-[13px]">
@@ -485,32 +471,6 @@ function LeaveApprovalDetail({ item, onApprove, onReject, onApproveAllowance, on
           <div className="flex justify-between text-[13px] border-t border-purple-100 pt-1 mt-1">
             <span className="font-semibold text-[var(--text-primary)]">Net Payout</span>
             <span className="font-bold text-purple-700">{(amount - taxAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          </div>
-        </div>
-      )}
-
-      {isPendingFinancial && stages.length > 0 && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-          <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Approval flow</p>
-          <div className="space-y-1.5">
-            {stages.map((st: any) => {
-              const done = st.status === 'Approved';
-              const rej  = st.status === 'Rejected';
-              const cur  = !done && !rej && currentStage?.id === st.id;
-              const color = rej ? 'var(--danger)' : done ? 'var(--success)' : cur ? 'var(--warning)' : 'var(--text-muted)';
-              return (
-                <div key={st.id} className="flex items-center gap-2 text-[12px]">
-                  <span className="shrink-0" style={{ color }}>
-                    {done ? <Check size={13} /> : rej ? <XCircle size={13} /> : <Clock size={13} />}
-                  </span>
-                  <span className="font-medium text-[var(--text-primary)]">{st.stage_name}</span>
-                  <span className="text-[var(--text-muted)]">
-                    · {st.approver_type === 'user' ? '' : 'Role: '}{st.approver_label || st.approver_type}
-                    {st.status !== 'Pending' && ` · ${st.status}`}
-                  </span>
-                </div>
-              );
-            })}
           </div>
         </div>
       )}
@@ -532,34 +492,7 @@ function LeaveApprovalDetail({ item, onApprove, onReject, onApproveAllowance, on
 
       <div className="flex justify-end gap-3 pt-2 border-t border-[var(--border)]">
         <button className="secondary-btn" onClick={onClose} disabled={busy}>Cancel</button>
-        {isPendingFinancial ? (
-          !canAct ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium"
-              style={{ background: 'var(--warning-dim)', color: 'var(--warning)', border: '1px solid var(--warning)' }}>
-              <Clock size={13} className="shrink-0" />
-              {currentStage ? `Awaiting ${currentStage.approver_label || currentStage.approver_type} — "${currentStage.stage_name}"` : 'Awaiting a different approver'}
-            </div>
-          ) : rejecting ? (
-            <>
-              <button className="secondary-btn" onClick={() => setRejecting(false)} disabled={busy}>Back</button>
-              <button className="primary-btn !bg-red-600 hover:!bg-red-700"
-                onClick={() => onRejectAllowance(reason)} disabled={busy || !reason.trim()}>
-                <XCircle size={14} /><span>{busy ? 'Rejecting…' : 'Confirm Reject'}</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="secondary-btn !border-red-500 !text-red-600 hover:!bg-red-50"
-                onClick={() => setRejecting(true)} disabled={busy}>
-                <XCircle size={14} /><span>Reject</span>
-              </button>
-              <button className="primary-btn !bg-purple-600 hover:!bg-purple-700" onClick={onApproveAllowance} disabled={busy}>
-                <Check size={14} />
-                <span>{busy ? 'Approving…' : 'Approve Allowance'}</span>
-              </button>
-            </>
-          )
-        ) : rejecting ? (
+        {rejecting ? (
           <>
             <button className="secondary-btn" onClick={() => setRejecting(false)} disabled={busy}>Back</button>
             <button className="primary-btn !bg-red-600 hover:!bg-red-700"
@@ -751,28 +684,6 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
     } finally { setBusy(false); }
   }
 
-  async function approveLeaveAllowance() {
-    setBusy(true);
-    try {
-      await api.post(`/leave/leaves/${item.id}/approve-allowance`);
-      toast.success('Financial approval recorded');
-      onDone(item.id);
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Approval failed');
-    } finally { setBusy(false); }
-  }
-
-  async function rejectLeaveAllowance(reason: string) {
-    setBusy(true);
-    try {
-      await api.post(`/leave/leaves/${item.id}/reject-allowance`, { reason });
-      toast.success('Financial approval rejected — leave rejected');
-      onDone(item.id);
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Rejection failed');
-    } finally { setBusy(false); }
-  }
-
   return (
     <>
       <div className="fixed inset-0 bg-slate-900/30 z-40 backdrop-blur-sm" onClick={onClose} />
@@ -801,8 +712,6 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
               item={item}
               onApprove={approveLeave}
               onReject={rejectLeave}
-              onApproveAllowance={approveLeaveAllowance}
-              onRejectAllowance={rejectLeaveAllowance}
               onClose={onClose}
               busy={busy}
             />
@@ -988,8 +897,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
       if (leaveRes.status === 'fulfilled') {
         const leaves: any[] = (leaveRes as any).value.data.data ?? [];
         leaves.forEach((l: any) => {
-          const isPendingFinancial = l.allowance_status === 'Pending Financial Approval';
-          const allowanceNote = isPendingFinancial && l.amount
+          const allowanceNote = l.req_allowance === 'Yes' && parseFloat(l.amount) > 0
             ? ` — Allowance: ${parseFloat(l.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
             : '';
           pending.push({
@@ -998,8 +906,8 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
             title:       l.employee_name ?? 'Employee',
             subtitle:    `${l.leave_type_name ?? ''} — ${l.day_count ?? 0} day(s)${allowanceNote}`,
             submittedAt: l.posted_date ?? null,
-            status:      isPendingFinancial ? 'Pending Financial Approval' : (l.status ?? ''),
-            raw:         { ...l, _isPendingFinancial: isPendingFinancial },
+            status:      l.status ?? '',
+            raw:         l,
           });
         });
       }

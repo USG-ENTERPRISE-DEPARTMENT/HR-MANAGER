@@ -20,7 +20,7 @@ function leaveChipStyle(color: string | null | undefined, pending = false): Reac
 }
 
 function isPending(leave: any) {
-  return leave.status === 'Pending Approval' || leave.status === 'Pending Financial Approval' || leave.status === 'Pending HR Approval';
+  return leave.status === 'Pending Approval' || leave.status === 'Pending HR Approval';
 }
 
 export function LeaveCalendar() {
