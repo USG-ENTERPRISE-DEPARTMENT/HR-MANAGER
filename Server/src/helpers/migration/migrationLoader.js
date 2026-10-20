@@ -371,19 +371,34 @@ class MigrationRun {
     }
 
     try {
-      const copy = async (table, columns, orderBy = 'id') => {
-        const rows = (await ref.query(`SELECT ${columns.join(',')} FROM ${table} ORDER BY ${orderBy}`)).rows;
-        if (!rows.length) return 0;
-        // Ids are preserved: role_has_permissions and model_has_roles join on them, and keeping
-        // them identical to the reference database makes the two comparable.
-        const n = await this.insertMany(table, columns,
-          rows.map(r => columns.map(c => r[c])), 'ON CONFLICT DO NOTHING');
+      // Copied BY NAME. Every reference name the target lacks is inserted, keeping the reference id
+      // when it is free and taking a fresh one when the target already uses that id for something
+      // else. A plain id-keeping ON CONFLICT DO NOTHING silently dropped any permission whose id was
+      // taken — on a fresh migration that lost all six user-management permissions (create_users,
+      // view_users …), so no role could manage users.
+      const copyByName = async (table, columns) => {
+        const rows = (await ref.query(`SELECT ${columns.join(',')} FROM ${table} ORDER BY id`)).rows;
+        const have = await this.tgt(`SELECT id, name FROM ${table}`);
+        const names = new Set(have.map(r => String(r.name)));
+        const ids = new Set(have.map(r => String(r.id)));
+        const keepId = [], freshId = [];
+        for (const r of rows) {
+          if (names.has(String(r.name))) continue;
+          if (ids.has(String(r.id))) freshId.push(r); else { keepId.push(r); ids.add(String(r.id)); }
+        }
+        let n = await this.insertMany(table, columns, keepId.map(r => columns.map(c => r[c])), 'ON CONFLICT DO NOTHING');
+        if (freshId.length) {
+          // Move the sequence past every id in use first, so the fresh ids cannot collide.
+          await this.tgt(`SELECT setval(pg_get_serial_sequence('${table}','id'), GREATEST((SELECT MAX(id) FROM ${table}), 1))`).catch(() => {});
+          const noId = columns.filter(c => c !== 'id');
+          n += await this.insertMany(table, noId, freshId.map(r => noId.map(c => r[c])), 'ON CONFLICT DO NOTHING');
+        }
         return n;
       };
 
-      const roles = await copy('roles',
+      const roles = await copyByName('roles',
         ['id', 'name', 'guard_name', 'description', 'is_system', 'status', 'created_at', 'updated_at']);
-      const perms = await copy('permissions', ['id', 'name', 'guard_name', 'created_at', 'updated_at']);
+      const perms = await copyByName('permissions', ['id', 'name', 'guard_name', 'created_at', 'updated_at']);
 
       // role_has_permissions is joined BY NAME, not copied by id. The target is not empty by now:
       // the seed step and the manual migrations (employee transfers, PC codes…) create permissions

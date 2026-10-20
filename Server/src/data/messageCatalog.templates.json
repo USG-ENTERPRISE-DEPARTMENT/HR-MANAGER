@@ -16,6 +16,7 @@
   { "key": "employee.sync_failed", "category": "Employee", "kind": "template", "default": "Sync failed: {error}", "placeholders": ["error"] },
   { "key": "leave.type_restricted", "category": "Leave", "kind": "template", "default": "This leave type is restricted to {label} employees", "placeholders": ["label"] },
   { "key": "leave.insufficient_balance", "category": "Leave", "kind": "template", "default": "Insufficient leave balance. Requested {requested} day(s), available {available} day(s)", "placeholders": ["requested", "available"] },
+  { "key": "leave.overlap", "category": "Leave", "kind": "template", "default": "These dates overlap with an existing {leave_type} application from {from} to {to} (status: {status}, ref {reference}) — they clash from {clash_date}. Cancel or change that application, or choose other dates.", "placeholders": ["leave_type", "from", "to", "status", "reference", "clash_date"] },
   { "key": "medical.year_closed", "category": "Medical", "kind": "template", "default": "Medical year \"{period}\" has already been closed", "placeholders": ["period"] },
   { "key": "medical.year_started", "category": "Medical", "kind": "template", "default": "New medical year started — utilization reset for {count} employee(s)", "placeholders": ["count"] },
   { "key": "performance.added_to_cycle", "category": "Performance", "kind": "template", "default": "{count} employee(s) added to cycle", "placeholders": ["count"] },

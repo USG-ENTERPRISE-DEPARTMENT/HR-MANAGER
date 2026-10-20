@@ -1734,12 +1734,6 @@
     "default": "The selected date range contains no working days (weekends or public holidays only)"
   },
   {
-    "key": "The selected dates overlap with an existing leave application",
-    "category": "Leave",
-    "kind": "static",
-    "default": "The selected dates overlap with an existing leave application"
-  },
-  {
     "key": "This leave was approved before allowance was enabled and is not eligible for payout",
     "category": "Leave",
     "kind": "static",

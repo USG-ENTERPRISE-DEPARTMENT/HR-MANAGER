@@ -1643,14 +1643,30 @@ exports.applyLeave = asyncHandler(async (req, res) => {
 
 
   // ── Overlap check (any active leave on these dates) ───────────────────────
+  // Says WHICH leave clashes — type, dates, status and reference — so the applicant can find it and
+  // cancel or change it, instead of hunting through their history for the culprit.
   const overlaps = await prisma.$queryRaw`
-    SELECT id FROM employeeleaves
-     WHERE employee=${toBigInt(employee)}
-       AND status NOT IN ('Rejected','Cancelled')
-       AND date_end >= ${dStart} AND date_start <= ${dEnd}
+    SELECT el.id, el.date_start, el.date_end, el.status, COALESCE(lt.name, el.leave_name, 'Leave') AS leave_type
+      FROM employeeleaves el LEFT JOIN leavetypes lt ON lt.id = el.leave_type
+     WHERE el.employee=${toBigInt(employee)}
+       AND el.status NOT IN ('Rejected','Cancelled')
+       AND el.date_end >= ${dStart} AND el.date_start <= ${dEnd}
+     ORDER BY el.date_start
      LIMIT 1`.catch(() => []);
-  if (overlaps.length > 0)
-    return respond.badReq(res, 'The selected dates overlap with an existing leave application');
+  if (overlaps.length > 0) {
+    const o = overlaps[0];
+    const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    // The first day both ranges share — the date the applicant has to move off.
+    const clash = new Date(Math.max(new Date(o.date_start).getTime(), Date.UTC(dStart.getFullYear(), dStart.getMonth(), dStart.getDate())));
+    return respond.badReq(res, tmsg('leave.overlap', {
+      leave_type: o.leave_type,
+      from:       fmt(o.date_start),
+      to:         fmt(o.date_end),
+      status:     o.status ?? 'Draft',
+      reference:  String(o.id),
+      clash_date: fmt(clash),
+    }));
+  }
 
   // ── Allowance settings + once-per-period check ────────────────────────────
   const allowSettings    = await getAllowanceSettings();
@@ -1910,7 +1926,7 @@ exports.rejectLeave = asyncHandler(async (req, res) => {
 
   // Release once-per-period allowance slot so a future application can claim it
   if (leaveData?.amount && parseFloat(leaveData.amount) > 0) {
-    await prisma.$executeRaw`UPDATE employeeleaves SET amount=NULL, req_allowance=NULL WHERE id=${id}`.catch(() => {});
+    await prisma.$executeRaw`UPDATE employeeleaves SET amount=NULL, leave_tax=NULL, req_allowance=NULL WHERE id=${id}`.catch(() => {});
   }
 
   await writeLog(id, req.user.id, reason ? `Rejected: ${reason}` : 'Rejected', prevStatus, 'Rejected');
@@ -1942,7 +1958,7 @@ exports.cancelLeave = asyncHandler(async (req, res) => {
 
   // Release once-per-period allowance slot so a future application can claim it
   if (cancelData?.amount && parseFloat(cancelData.amount) > 0) {
-    await prisma.$executeRaw`UPDATE employeeleaves SET amount=NULL, req_allowance=NULL WHERE id=${id}`.catch(() => {});
+    await prisma.$executeRaw`UPDATE employeeleaves SET amount=NULL, leave_tax=NULL, req_allowance=NULL WHERE id=${id}`.catch(() => {});
   }
 
   await writeLog(id, req.user.id, 'Cancelled', 'Approved', 'Cancelled');
