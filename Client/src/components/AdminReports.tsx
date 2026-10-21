@@ -171,11 +171,11 @@ export function AdminReports() {
   const [empReportLoading, setEmpReportLoading] = useState(false);
   const [pdfBusy, setPdfBusy]           = useState(false);
   const [empFilters, setEmpFilters] = useState({
-    department: '', jobTitle: '', employmentStatus: '', lifecycleStatus: '',
+    department: '', jobTitle: '', payGrade: '', employmentStatus: '', lifecycleStatus: '',
     hireFrom: '', hireTo: '',
   });
   const setEmpFilter = (k: keyof typeof empFilters, v: string) => setEmpFilters(p => ({ ...p, [k]: v }));
-  const clearEmpFilters = () => setEmpFilters({ department: '', jobTitle: '', employmentStatus: '', lifecycleStatus: '', hireFrom: '', hireTo: '' });
+  const clearEmpFilters = () => setEmpFilters({ department: '', jobTitle: '', payGrade: '', employmentStatus: '', lifecycleStatus: '', hireFrom: '', hireTo: '' });
   const empFilterCount = Object.values(empFilters).filter(Boolean).length;
 
   function ensureEmployees() {
@@ -197,11 +197,14 @@ export function AdminReports() {
   const deptOpts   = useMemo(() => uniqOpts(empData.map((e: any) => e.department?.title)), [empData]);
   const jtOpts     = useMemo(() => uniqOpts(empData.map((e: any) => e.jobTitle?.label)), [empData]);
   const empStOpts  = useMemo(() => uniqOpts(empData.map((e: any) => e.employmentStatus?.label)), [empData]);
+  // /employees returns the pay grade as its name (e.paygrade).
+  const pgOpts     = useMemo(() => uniqOpts(empData.map((e: any) => e.paygrade)), [empData]);
   const lifeOpts   = useMemo(() => uniqOpts(empData.map((e: any) => e.lifecycleStatus)), [empData]);
 
   const empFiltered = useMemo(() => empData.filter((e: any) => {
     if (empFilters.department       && e.department?.title       !== empFilters.department)       return false;
     if (empFilters.jobTitle         && e.jobTitle?.label         !== empFilters.jobTitle)         return false;
+    if (empFilters.payGrade         && e.paygrade                !== empFilters.payGrade)         return false;
     if (empFilters.employmentStatus && e.employmentStatus?.label !== empFilters.employmentStatus) return false;
     if (empFilters.lifecycleStatus  && e.lifecycleStatus         !== empFilters.lifecycleStatus)  return false;
     const hire = e.hireDate ? String(e.hireDate).slice(0, 10) : '';
@@ -210,7 +213,7 @@ export function AdminReports() {
     return true;
   }), [empData, empFilters]);
 
-  const EMP_HEADERS = ['Employee ID', 'Name', 'Gender', 'Work Email', 'Phone', 'Department', 'Branch', 'Job Title', 'Employment Status', 'Staff Level', 'Hire Date', 'Status'];
+  const EMP_HEADERS = ['Employee ID', 'Name', 'Gender', 'Work Email', 'Phone', 'Department', 'Branch', 'Job Title', 'Pay Grade', 'Employment Status', 'Staff Level', 'Hire Date', 'Status'];
   const empRow = (e: any) => [
     e.employee_id ?? '',
     `${e.firstName ?? ''} ${e.lastName ?? ''}`.trim(),
@@ -220,6 +223,7 @@ export function AdminReports() {
     e.department?.title ?? '',
     e.branch?.title ?? '',
     e.jobTitle?.label ?? '',
+    e.paygrade ?? '',
     e.employmentStatus?.label ?? '',
     e.staffLevel?.label ?? '',
     e.hireDate ? String(e.hireDate).slice(0, 10) : '',
@@ -230,6 +234,7 @@ export function AdminReports() {
     const parts: string[] = [];
     if (empFilters.department)       parts.push(`Department: ${empFilters.department}`);
     if (empFilters.jobTitle)         parts.push(`Job Title: ${empFilters.jobTitle}`);
+    if (empFilters.payGrade)         parts.push(`Pay Grade: ${empFilters.payGrade}`);
     if (empFilters.employmentStatus) parts.push(`Employment: ${empFilters.employmentStatus}`);
     if (empFilters.lifecycleStatus)  parts.push(`Status: ${empFilters.lifecycleStatus}`);
     if (empFilters.hireFrom || empFilters.hireTo) parts.push(`Hired: ${empFilters.hireFrom || '…'} → ${empFilters.hireTo || '…'}`);
@@ -772,6 +777,11 @@ export function AdminReports() {
                     <label className="label">Job Title</label>
                     <SearchSelect value={empFilters.jobTitle} onChange={v => setEmpFilter('jobTitle', v)}
                       options={[{ id: '', label: 'All job titles' }, ...jtOpts]} placeholder="All job titles" />
+                  </div>
+                  <div className="w-44">
+                    <label className="label">Pay Grade</label>
+                    <SearchSelect value={empFilters.payGrade} onChange={v => setEmpFilter('payGrade', v)}
+                      options={[{ id: '', label: 'All pay grades' }, ...pgOpts]} placeholder="All pay grades" />
                   </div>
                   <div className="w-44">
                     <label className="label">Employment Status</label>

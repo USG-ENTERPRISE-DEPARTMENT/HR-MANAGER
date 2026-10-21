@@ -237,12 +237,13 @@ export function LeaveSetup() {
   const saveHoliday = async (data: any) => {
     const payload = { name: data.name, dateh: data.date, status: data.status ?? 'Full_Day' };
     try {
+      // The server's message says how many existing leave applications the holiday recalculated.
       if (editHoliday) {
-        await api.put(`/leave/holidays/${editHoliday.id}`, payload);
-        toast.success('Holiday updated');
+        const r = await api.put(`/leave/holidays/${editHoliday.id}`, payload);
+        toast.success(r.data?.message ?? 'Holiday updated');
       } else {
-        await api.post('/leave/holidays', payload);
-        toast.success('Holiday created');
+        const r = await api.post('/leave/holidays', payload);
+        toast.success(r.data?.message ?? 'Holiday created');
       }
       fetchHolidays();
     } catch (e: any) {
@@ -253,10 +254,10 @@ export function LeaveSetup() {
   };
 
   const deleteHoliday = (id: string) => {
-    askConfirm('Delete Holiday', 'This holiday will be permanently removed.', async () => {
+    askConfirm('Delete Holiday', 'This holiday will be permanently removed. Leave applications covering its date will count it as a working day again.', async () => {
       try {
-        await api.delete(`/leave/holidays/${id}`);
-        toast.success('Deleted');
+        const r = await api.delete(`/leave/holidays/${id}`);
+        toast.success(r.data?.message ?? 'Deleted');
         fetchHolidays();
       } catch { toast.error('Failed to delete'); }
     }, { label: 'Delete' });

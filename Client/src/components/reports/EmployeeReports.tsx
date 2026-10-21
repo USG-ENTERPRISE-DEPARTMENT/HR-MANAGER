@@ -22,7 +22,9 @@ function useEmployees() {
   }, []);
   const deptOpts = useMemo(() => uniqOpts(data.map((e: any) => e.department?.title)), [data]);
   const branchOpts = useMemo(() => uniqOpts(data.map((e: any) => e.branch?.title)), [data]);
-  return { data, loading, deptOpts, branchOpts };
+  // /employees returns the pay grade as its name (e.paygrade).
+  const pgOpts = useMemo(() => uniqOpts(data.map((e: any) => e.paygrade)), [data]);
+  return { data, loading, deptOpts, branchOpts, pgOpts };
 }
 
 const byName = (a: any, b: any) => fullName(a).localeCompare(fullName(b));
@@ -30,8 +32,8 @@ const byName = (a: any, b: any) => fullName(a).localeCompare(fullName(b));
 // Active = employed today: joined on or before today, no termination on or before today, and not
 // separated or still awaiting approval. Mirrors the legacy joined-date / termination-date rule.
 export function ActiveEmployeesReport({ onClose, canExport }: { onClose: () => void; canExport: boolean }) {
-  const { data, loading, deptOpts, branchOpts } = useEmployees();
-  const [f, setF] = useState({ department: '', branch: '' });
+  const { data, loading, deptOpts, branchOpts, pgOpts } = useEmployees();
+  const [f, setF] = useState({ department: '', branch: '', payGrade: '' });
   const asOf = today();
 
   const active = useMemo(() => data.filter((e: any) => {
@@ -45,7 +47,8 @@ export function ActiveEmployeesReport({ onClose, canExport }: { onClose: () => v
 
   const HEADERS = ['Employee ID', 'Name', 'Department', 'Branch', 'Job Title', 'Employment Status', 'Pay Grade', 'Hire Date', 'Supervisor', 'Status'];
   const rows = useMemo(() => active
-    .filter((e: any) => (!f.department || e.department?.title === f.department) && (!f.branch || e.branch?.title === f.branch))
+    .filter((e: any) => (!f.department || e.department?.title === f.department) && (!f.branch || e.branch?.title === f.branch)
+      && (!f.payGrade || e.paygrade === f.payGrade))
     .sort(byName)
     .map((e: any) => [
       e.employee_id ?? '', fullName(e), e.department?.title ?? '', e.branch?.title ?? '', e.jobTitle?.label ?? '',
@@ -59,31 +62,32 @@ export function ActiveEmployeesReport({ onClose, canExport }: { onClose: () => v
       filters={[
         { key: 'department', label: 'Department', type: 'select', options: deptOpts, allLabel: 'All departments' },
         { key: 'branch', label: 'Branch', type: 'select', options: branchOpts, allLabel: 'All branches' },
+        { key: 'payGrade', label: 'Pay Grade', type: 'select', options: pgOpts, allLabel: 'All pay grades' },
       ]}
-      values={f} onFilterChange={(k, v) => setF(p => ({ ...p, [k]: v }))} onClear={() => setF({ department: '', branch: '' })}
+      values={f} onFilterChange={(k, v) => setF(p => ({ ...p, [k]: v }))} onClear={() => setF({ department: '', branch: '', payGrade: '' })}
       headers={HEADERS} rows={rows} total={active.length}
-      summary={`As at ${asOf}  ·  ` + filterSummary([['Department', f.department], ['Branch', f.branch]], 'All departments and branches')}
+      summary={`As at ${asOf}  ·  ` + filterSummary([['Department', f.department], ['Branch', f.branch], ['Pay Grade', f.payGrade]], 'All departments and branches')}
       emptyMessage={data.length ? 'No active employees match the selected filters.' : 'No employee data found.'}
     />
   );
 }
 
 export function NewHiresReport({ onClose, canExport }: { onClose: () => void; canExport: boolean }) {
-  const { data, loading, deptOpts } = useEmployees();
-  const [f, setF] = useState({ department: '', from: yearStart(), to: today() });
+  const { data, loading, deptOpts, pgOpts } = useEmployees();
+  const [f, setF] = useState({ department: '', payGrade: '', from: yearStart(), to: today() });
 
-  const HEADERS = ['Employee ID', 'Name', 'Department', 'Branch', 'Job Title', 'Employment Status', 'Hire Date', 'Supervisor', 'Status'];
+  const HEADERS = ['Employee ID', 'Name', 'Department', 'Branch', 'Job Title', 'Employment Status', 'Pay Grade', 'Hire Date', 'Supervisor', 'Status'];
   const hired = useMemo(() => data.filter((e: any) => {
     const hire = day(e.hireDate);
     return hire && (!f.from || hire >= f.from) && (!f.to || hire <= f.to);
   }), [data, f.from, f.to]);
   const rows = useMemo(() => hired
-    .filter((e: any) => !f.department || e.department?.title === f.department)
+    .filter((e: any) => (!f.department || e.department?.title === f.department) && (!f.payGrade || e.paygrade === f.payGrade))
     .sort((a: any, b: any) => day(a.hireDate).localeCompare(day(b.hireDate)) || byName(a, b))
     .map((e: any) => [
       e.employee_id ?? '', fullName(e), e.department?.title ?? '', e.branch?.title ?? '', e.jobTitle?.label ?? '',
-      e.employmentStatus?.label ?? '', day(e.hireDate), e.supervisor?.name ?? '', e.lifecycleStatus ?? '',
-    ] as Cell[]), [hired, f.department]);
+      e.employmentStatus?.label ?? '', e.paygrade ?? '', day(e.hireDate), e.supervisor?.name ?? '', e.lifecycleStatus ?? '',
+    ] as Cell[]), [hired, f.department, f.payGrade]);
 
   return (
     <ReportModal
@@ -91,21 +95,22 @@ export function NewHiresReport({ onClose, canExport }: { onClose: () => void; ca
       loading={loading} loadingText="Loading employee data…"
       filters={[
         { key: 'department', label: 'Department', type: 'select', options: deptOpts, allLabel: 'All departments' },
+        { key: 'payGrade', label: 'Pay Grade', type: 'select', options: pgOpts, allLabel: 'All pay grades' },
         { key: 'from', label: 'Joined From', type: 'date' },
         { key: 'to', label: 'Joined To', type: 'date' },
       ]}
       values={f} onFilterChange={(k, v) => setF(p => ({ ...p, [k]: v }))}
-      onClear={() => setF(p => ({ ...p, department: '' }))}
+      onClear={() => setF(p => ({ ...p, department: '', payGrade: '' }))}
       headers={HEADERS} rows={rows} total={hired.length}
-      summary={filterSummary([['Joined', `${f.from || '…'} → ${f.to || '…'}`], ['Department', f.department]], '')}
+      summary={filterSummary([['Joined', `${f.from || '…'} → ${f.to || '…'}`], ['Department', f.department], ['Pay Grade', f.payGrade]], '')}
       emptyMessage="No employees joined in this period."
     />
   );
 }
 
 export function TerminatedEmployeesReport({ onClose, canExport }: { onClose: () => void; canExport: boolean }) {
-  const { data, loading, deptOpts } = useEmployees();
-  const [f, setF] = useState({ department: '', status: '', from: yearStart(), to: today() });
+  const { data, loading, deptOpts, pgOpts } = useEmployees();
+  const [f, setF] = useState({ department: '', payGrade: '', status: '', from: yearStart(), to: today() });
 
   // Separated staff: a termination date, or a Terminated/Resigned lifecycle. The period filters on
   // the termination date, so staff separated without one are listed only when no period is set.
@@ -121,14 +126,15 @@ export function TerminatedEmployeesReport({ onClose, canExport }: { onClose: () 
     const y = (new Date(to).getTime() - new Date(from).getTime()) / (365.25 * 86400000);
     return y >= 0 ? y.toFixed(1) : '';
   };
-  const HEADERS = ['Employee ID', 'Name', 'Department', 'Job Title', 'Hire Date', 'Termination Date', 'Years of Service', 'Status', 'Reason'];
+  const HEADERS = ['Employee ID', 'Name', 'Department', 'Job Title', 'Pay Grade', 'Hire Date', 'Termination Date', 'Years of Service', 'Status', 'Reason'];
   const rows = useMemo(() => separated
-    .filter((e: any) => (!f.department || e.department?.title === f.department) && (!f.status || e.lifecycleStatus === f.status))
+    .filter((e: any) => (!f.department || e.department?.title === f.department) && (!f.status || e.lifecycleStatus === f.status)
+      && (!f.payGrade || e.paygrade === f.payGrade))
     .sort((a: any, b: any) => day(a.termination_date).localeCompare(day(b.termination_date)) || byName(a, b))
     .map((e: any) => [
-      e.employee_id ?? '', fullName(e), e.department?.title ?? '', e.jobTitle?.label ?? '', day(e.hireDate),
+      e.employee_id ?? '', fullName(e), e.department?.title ?? '', e.jobTitle?.label ?? '', e.paygrade ?? '', day(e.hireDate),
       day(e.termination_date), years(day(e.hireDate), day(e.termination_date)), e.lifecycleStatus ?? '', e.actionReason ?? '',
-    ] as Cell[]), [separated, f.department, f.status]);
+    ] as Cell[]), [separated, f.department, f.status, f.payGrade]);
 
   return (
     <ReportModal
@@ -136,15 +142,16 @@ export function TerminatedEmployeesReport({ onClose, canExport }: { onClose: () 
       loading={loading} loadingText="Loading employee data…"
       filters={[
         { key: 'department', label: 'Department', type: 'select', options: deptOpts, allLabel: 'All departments' },
+        { key: 'payGrade', label: 'Pay Grade', type: 'select', options: pgOpts, allLabel: 'All pay grades' },
         { key: 'status', label: 'Status', type: 'select', width: 'w-40', allLabel: 'All',
           options: [{ id: 'TERMINATED', label: 'Terminated' }, { id: 'RESIGNED', label: 'Resigned' }] },
         { key: 'from', label: 'Left From', type: 'date' },
         { key: 'to', label: 'Left To', type: 'date' },
       ]}
       values={f} onFilterChange={(k, v) => setF(p => ({ ...p, [k]: v }))}
-      onClear={() => setF(p => ({ ...p, department: '', status: '' }))}
+      onClear={() => setF(p => ({ ...p, department: '', payGrade: '', status: '' }))}
       headers={HEADERS} rows={rows} total={separated.length}
-      summary={filterSummary([['Left', (f.from || f.to) ? `${f.from || '…'} → ${f.to || '…'}` : ''], ['Department', f.department], ['Status', f.status]], 'All separated employees')}
+      summary={filterSummary([['Left', (f.from || f.to) ? `${f.from || '…'} → ${f.to || '…'}` : ''], ['Department', f.department], ['Pay Grade', f.payGrade], ['Status', f.status]], 'All separated employees')}
       emptyMessage="No employees left in this period."
     />
   );

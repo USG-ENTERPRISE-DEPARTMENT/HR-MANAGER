@@ -120,6 +120,57 @@ function leaveDaysWrite(leaveId, days) {
 exports.getWorkingDays = getWorkingDays;
 exports.leaveDaysWrite = leaveDaysWrite;
 
+/**
+ * Re-count the working days of every live leave that covers any of `dates` ('YYYY-MM-DD'), after a
+ * holiday was added, moved, re-typed or removed. A leave's days are stored once, at application, so
+ * without this a holiday declared later never reached leaves already applied for — an approved
+ * leave over the new holiday still deducted that day from the balance.
+ *
+ * Applies to every status except Rejected and Cancelled (Draft, pending and Approved alike, past
+ * or future). Only leaves whose day list actually changes are rewritten; each change is logged in the
+ * leave's history and the employee is notified. Never throws — a holiday save must not fail because
+ * a recalculation did; failures are logged and counted instead.
+ */
+async function recalcLeavesForHolidayDates(dates, actorUserId, holidayName) {
+  const ds = [...new Set(dates.filter(Boolean).map(d => String(d).slice(0, 10)))];
+  const out = { checked: 0, changed: 0, failed: 0 };
+  if (!ds.length) return out;
+  const conds = ds.map(d => Prisma.sql`(date_start <= ${new Date(d)} AND date_end >= ${new Date(d)})`);
+  const leaves = await prisma.$queryRaw`
+    SELECT id, employee, status, date_start, date_end FROM employeeleaves
+     WHERE status NOT IN ('Rejected','Cancelled') AND (${Prisma.join(conds, ' OR ')})`.catch(() => []);
+  const ymd = (d) => new Date(d).toISOString().slice(0, 10);
+  for (const l of leaves) {
+    out.checked++;
+    try {
+      const fresh = await getWorkingDays(ymd(l.date_start), ymd(l.date_end));
+      const stored = await prisma.$queryRaw`
+        SELECT leave_date FROM employeeleavedays WHERE employee_leave = ${l.id} ORDER BY leave_date`;
+      const key = (arr) => arr.join(',');
+      if (key(stored.map(r => ymd(r.leave_date))) === key(fresh.map(d => d.date))) continue;
+      await prisma.$transaction([
+        prisma.$executeRaw`DELETE FROM employeeleavedays WHERE employee_leave = ${l.id}`,
+        leaveDaysWrite(l.id, fresh),
+      ]);
+      out.changed++;
+      const note = `Holiday "${holidayName}" — working days recalculated: ${stored.length} → ${fresh.length}`;
+      await writeLog(l.id, actorUserId, note, l.status, l.status);
+      notifyEmployee(l.employee, {
+        message: `Your leave from ${ymd(l.date_start)} to ${ymd(l.date_end)} now counts ${fresh.length} working day(s) (was ${stored.length}) because of the "${holidayName}" holiday`,
+        action: 'LeaveManagement', type: 'leave', fromUser: actorUserId,
+      });
+    } catch (err) {
+      out.failed++;
+      console.error(`[leave] holiday recalculation failed for leave ${l.id}:`, err.message);
+    }
+  }
+  return out;
+}
+
+/** "N leave(s) updated" suffix for a holiday response, or '' when nothing changed. */
+const recalcNote = (r) => (r.changed ? ` — ${r.changed} leave application(s) recalculated` : '') +
+  (r.failed ? ` (${r.failed} could not be recalculated — see server log)` : '');
+
 // Postgres folds unquoted camelCase columns to lowercase, so `SELECT paygradeId` comes back as
 // `paygradeid` and `row.paygradeId` is undefined — every paygrade/department/service-days check then
 // fails. Employee profile queries alias these to snake_case; this restores the keys the checks read.
@@ -656,10 +707,15 @@ async function syncLeaveTypeGroups(leaveTypeId, groupIds) {
 // 20261014_employeeleavelog_status_varchar): as the original enum they rejected every insert, and with
 // the error swallowed no history was ever recorded. Failures are now logged — a history write must
 // never block the approval itself, but it must not disappear silently either.
+// Log ids were Date.now(): two entries in the same millisecond (a holiday recalculating several
+// leaves at once) collided on the primary key and the second was silently lost. ms × 1000 + a
+// rolling counter stays unique within the process and sorts after every older id.
+let logSeq = 0;
 async function writeLog(leaveId, userId, data, statusFrom, statusTo) {
   try {
+    logSeq = (logSeq + 1) % 1000;
     await prisma.$executeRaw`INSERT INTO employeeleavelog (id, employee_leave, user_id, data, status_from, status_to, created)
-      VALUES (${BigInt(Date.now())}, ${toBigInt(leaveId)}, ${toBigInt(userId)}, ${String(data).slice(0, 500)},
+      VALUES (${BigInt(Date.now()) * 1000n + BigInt(logSeq)}, ${toBigInt(leaveId)}, ${toBigInt(userId)}, ${String(data).slice(0, 500)},
               ${statusFrom != null ? String(statusFrom).slice(0, 40) : null}, ${statusTo != null ? String(statusTo).slice(0, 40) : null}, NOW())`;
   } catch (err) {
     console.error(`[leave] could not write history for leave ${leaveId} (${statusFrom} → ${statusTo}):`, err.message);
@@ -1040,8 +1096,10 @@ exports.createHoliday = asyncHandler(async (req, res) => {
   if (!name || !dateh) return respond.badReq(res, 'Name and date are required');
   const id = BigInt(Date.now());
   await prisma.$executeRaw`INSERT INTO holidays (id, name, dateh, status) VALUES (${id}, ${name}, ${new Date(dateh)}, ${enumSql(/half/i.test(String(status||'')) ? 'Half Day' : 'Full Day', ['Full Day','Half Day'], 'Full Day')})`;
-  logActivity({ module: 'Leave Setup', action: 'create_holiday', entityId: id.toString(), entityName: name, ...fromReq(req) });
-  respond.created(res, 'Holiday created', { id: id.toString(), name, dateh, status: status ?? 'Full_Day' });
+  // Takes effect on leaves already applied for / approved that cover this date.
+  const recalc = await recalcLeavesForHolidayDates([dateh], req.user?.id, name);
+  logActivity({ module: 'Leave Setup', action: 'create_holiday', entityId: id.toString(), entityName: name, ...fromReq(req), details: recalc });
+  respond.created(res, `Holiday created${recalcNote(recalc)}`, { id: id.toString(), name, dateh, status: status ?? 'Full_Day', recalculated: recalc });
 });
 
 // PUT /leave/holidays/:id — update a holiday's name, date, or full/half-day status.
@@ -1053,18 +1111,25 @@ exports.updateHoliday = asyncHandler(async (req, res) => {
   if (dateh  !== undefined) parts.push(Prisma.sql`dateh=${new Date(dateh)}`);
   if (status !== undefined) parts.push(Prisma.sql`status=${enumSql(/half/i.test(String(status||'')) ? 'Half Day' : 'Full Day', ['Full Day','Half Day'], 'Full Day')}`);
   if (!parts.length) return respond.badReq(res, 'No fields to update');
+  const [before] = await prisma.$queryRaw`SELECT name, dateh FROM holidays WHERE id=${id}`.catch(() => []);
   await prisma.$executeRaw`UPDATE holidays SET ${Prisma.join(parts, ', ')} WHERE id=${id}`;
-  logActivity({ module: 'Leave Setup', action: 'update_holiday', entityId: req.params.id, entityName: name ?? req.params.id, ...fromReq(req) });
-  respond.ok(res, 'Holiday updated');
+  // Moving a holiday frees its OLD date and takes the NEW one — leaves on either side are recounted.
+  const recalc = await recalcLeavesForHolidayDates(
+    [before?.dateh ? new Date(before.dateh).toISOString() : null, dateh], req.user?.id, name ?? before?.name ?? 'holiday');
+  logActivity({ module: 'Leave Setup', action: 'update_holiday', entityId: req.params.id, entityName: name ?? req.params.id, ...fromReq(req), details: recalc });
+  respond.ok(res, `Holiday updated${recalcNote(recalc)}`, { recalculated: recalc });
 });
 
 // DELETE /leave/holidays/:id — permanently remove a public holiday.
 exports.deleteHoliday = asyncHandler(async (req, res) => {
   const hid = toBigInt(req.params.id);
-  const delHol = await prisma.$queryRaw`SELECT name FROM holidays WHERE id=${hid}`.catch(() => []);
+  const delHol = await prisma.$queryRaw`SELECT name, dateh FROM holidays WHERE id=${hid}`.catch(() => []);
   await prisma.$executeRaw`DELETE FROM holidays WHERE id=${hid}`;
-  logActivity({ module: 'Leave Setup', action: 'delete_holiday', entityId: req.params.id, entityName: delHol[0]?.name ?? req.params.id, ...fromReq(req) });
-  respond.ok(res, 'Holiday deleted');
+  // The date becomes a working day again for leaves that cover it.
+  const recalc = await recalcLeavesForHolidayDates(
+    [delHol[0]?.dateh ? new Date(delHol[0].dateh).toISOString() : null], req.user?.id, delHol[0]?.name ?? 'holiday');
+  logActivity({ module: 'Leave Setup', action: 'delete_holiday', entityId: req.params.id, entityName: delHol[0]?.name ?? req.params.id, ...fromReq(req), details: recalc });
+  respond.ok(res, `Holiday deleted${recalcNote(recalc)}`, { recalculated: recalc });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1217,6 +1282,8 @@ exports.removeLeaveGroupPaygrade = asyncHandler(async (req, res) => {
 // GET /leave/rules[?leave_type=] — list leave rules with type/job title/employment status labels; optionally filtered by leave type.
 exports.getLeaveRules = asyncHandler(async (req, res) => {
   const where = req.query.leave_type ? Prisma.sql`WHERE lr.leave_type=${toBigInt(req.query.leave_type)}` : Prisma.empty;
+  // job_title/employment_status are varchar but codelistvalue.id is an integer; Postgres refuses
+  // `integer = varchar`, and the swallowed error left the grid empty. CONCAT works on both providers.
   const rows = await prisma.$queryRaw`
     SELECT lr.*,
             lt.name AS leave_type_name,
@@ -1225,10 +1292,10 @@ exports.getLeaveRules = asyncHandler(async (req, res) => {
             es.label  AS employment_status_name
      FROM leaverules lr
      LEFT JOIN leavetypes   lt ON lt.id  = lr.leave_type
-     LEFT JOIN codelistvalue jt ON jt.id = lr.job_title
-     LEFT JOIN codelistvalue es ON es.id = lr.employment_status
+     LEFT JOIN codelistvalue jt ON CONCAT(jt.id, '') = lr.job_title
+     LEFT JOIN codelistvalue es ON CONCAT(es.id, '') = lr.employment_status
      ${where}
-     ORDER BY lr.id DESC`.catch(() => []);
+     ORDER BY lr.id DESC`.catch((e) => { console.error('[leave rules] list query failed:', e.message); return []; });
   respond.ok(res, 'Leave rules', s(rows));
 });
 
