@@ -489,8 +489,10 @@ exports.updateLeaveAllowanceSettings = asyncHandler(async (req, res) => {
 
 // ── Approval flow settings (category='leave_approval_flow') ──────────────────
 
-const FLOW_KEYS     = ['leave_supervisor_approval'];
-const FLOW_DEFAULTS = { leave_supervisor_approval: 'No' };
+// leave_min_service_months: months of service an employee must complete (counted from the hire date
+// to the leave START date) before ANY leave type can be taken. Company policy is 12; 0 switches it off.
+const FLOW_KEYS     = ['leave_supervisor_approval', 'leave_min_service_months'];
+const FLOW_DEFAULTS = { leave_supervisor_approval: 'No', leave_min_service_months: '12' };
 
 async function getApprovalFlowSettings() {
   const rows = await prisma.settings
@@ -508,12 +510,49 @@ exports.getApprovalFlowSettings = asyncHandler(async (req, res) => {
 
 // PUT /leave/approval-flow-settings — save leave approval flow settings (e.g. require supervisor sign-off).
 exports.updateApprovalFlowSettings = asyncHandler(async (req, res) => {
+  if (req.body.leave_min_service_months !== undefined) {
+    const m = Number(req.body.leave_min_service_months);
+    if (!Number.isInteger(m) || m < 0 || m > 120)
+      return respond.badReq(res, 'Minimum service must be a whole number of months between 0 and 120');
+  }
   for (const key of FLOW_KEYS) {
     if (req.body[key] === undefined) continue;
     await upsertSettingShared(null, key, 'leave_approval_flow', String(req.body[key]));
   }
   respond.ok(res, 'Approval flow settings saved');
 });
+
+/** The date an employee completes `months` of service: hire date + months, as a UTC calendar date.
+ *  A hire on the 31st rolls to the month's last day (31 Jan + 1 month = 28/29 Feb), never into March. */
+function serviceCompleteDate(hireDate, months) {
+  const h = new Date(hireDate);
+  const y = h.getUTCFullYear(), m = h.getUTCMonth() + months, d = h.getUTCDate();
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(d, lastDay)));
+}
+
+/**
+ * Length-of-service gate for leave. Returns an error message, or null when the employee may take
+ * leave starting on `leaveStart` ('YYYY-MM-DD'). Applies to every leave type and every caller —
+ * HR and admins included; there is no override. An employee with no hire date on record is refused
+ * and pointed at HR, since eligibility cannot be worked out without it.
+ */
+async function serviceEligibilityError(employeeId, leaveStart) {
+  const months = Number((await getApprovalFlowSettings()).leave_min_service_months) || 0;
+  if (months <= 0) return null;
+  const [emp] = await prisma.$queryRaw`
+    SELECT hireDate AS hire_date, TRIM(CONCAT_WS(' ', firstName, lastName)) AS name
+      FROM employee WHERE id = ${toBigInt(employeeId)}`.catch(() => []);
+  const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  if (!emp?.hire_date) return tmsg('leave.no_hire_date', { name: emp?.name || 'This employee' });
+  const eligible = serviceCompleteDate(emp.hire_date, months);
+  const start = new Date(`${String(leaveStart).slice(0, 10)}T00:00:00Z`);
+  if (start >= eligible) return null;
+  return tmsg('leave.min_service', {
+    months, name: emp.name || 'This employee',
+    hire_date: fmt(emp.hire_date), eligible_from: fmt(eligible),
+  });
+}
 
 /**
  * Send a leave to Admin HR — after the supervisor tier, or immediately when that tier is skipped.
@@ -1562,6 +1601,10 @@ exports.applyLeave = asyncHandler(async (req, res) => {
   if (!emp.id) return respond.badReq(res, 'Employee not found');
   if (emp.status !== '1') return respond.badReq(res, 'Cannot apply leave for an inactive employee');
 
+  // ── Length of service (every leave type, no override) ─────────────────────
+  const serviceErr = await serviceEligibilityError(employee, date_start);
+  if (serviceErr) return respond.badReq(res, serviceErr);
+
   // ── Gender restriction check ──────────────────────────────────────────────
   const typeGender = (typeRow.gender ?? 'All');
   if (typeGender !== 'All' && emp.gender_code !== typeGender) {
@@ -1747,13 +1790,21 @@ exports.applyLeave = asyncHandler(async (req, res) => {
 // Recalculates and replaces all day entries when dates change.
 exports.updateLeave = asyncHandler(async (req, res) => {
   const id = toBigInt(req.params.id);
-  const rows = await prisma.$queryRaw`SELECT id, status FROM employeeleaves WHERE id=${id}`.catch(() => []);
+  // date_start/date_end are read below when only one end of the range is edited — selecting just
+  // id/status made that path throw on `current.date_start.toISOString()`.
+  const rows = await prisma.$queryRaw`SELECT id, status, employee, date_start, date_end FROM employeeleaves WHERE id=${id}`.catch(() => []);
   const current = rows[0] ?? null;
   if (!current) return respond.notFound(res, 'Leave not found');
   if (!['Pending', 'Draft'].includes(current.status))
     return respond.badReq(res, 'Only Pending or Draft leaves can be edited');
 
   const { leave_type, leave_period, date_start, date_end, details, req_allowance, position } = req.body;
+
+  // Moving the start date earlier must not get round the length-of-service rule.
+  if (date_start) {
+    const serviceErr = await serviceEligibilityError(current.employee, date_start);
+    if (serviceErr) return respond.badReq(res, serviceErr);
+  }
   const typeRow = leave_type
     ? await prisma.leavetypes.findUnique({ where: { id: toBigInt(leave_type) } }).catch(() => null)
     : null;
@@ -1995,6 +2046,21 @@ exports.getLeaveBalance = asyncHandler(async (req, res) => {
      WHERE e.id=${toBigInt(employeeId)}`.catch(() => []);
   const emp = withProfileKeys(empRows[0]) ?? {};
 
+  // Length-of-service eligibility — the same rule applyLeave enforces, surfaced on every balance row
+  // so screens can say "eligible from …" before the employee tries to apply. Applies to all types.
+  const minServiceMonths = Number((await getApprovalFlowSettings()).leave_min_service_months) || 0;
+  const eligibleFromDate = minServiceMonths > 0 && emp.hireDate ? serviceCompleteDate(emp.hireDate, minServiceMonths) : null;
+  const service = {
+    min_service_months:  minServiceMonths,
+    // null when no rule applies; otherwise the first date leave may START.
+    service_eligible_from: eligibleFromDate ? eligibleFromDate.toISOString().slice(0, 10) : null,
+    // 'eligible' | 'not_yet' | 'no_hire_date' (no rule → 'eligible').
+    service_status: minServiceMonths <= 0 ? 'eligible'
+      : !emp.hireDate ? 'no_hire_date'
+      : eligibleFromDate <= new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())) ? 'eligible'
+      : 'not_yet',
+  };
+
   const [allTypes, rules, groupAssignments] = await Promise.all([
     prisma.$queryRaw`SELECT * FROM leavetypes ORDER BY name`.catch(() => []),
     prisma.$queryRaw`SELECT * FROM leaverules`.catch(() => []),
@@ -2111,6 +2177,7 @@ exports.getLeaveBalance = asyncHandler(async (req, res) => {
         allowance_gross:             typeAllowance ? Math.round((aNet + aTax) * 100) / 100 : null,
         allowance_annual_factor:     typeAllowance ? (allowSettings.leave_allow_annual_factor ?? '0.3') : null,
         allowance_tax_rate:          typeAllowance ? (allowSettings.leave_allow_tax_rate      ?? '0.3') : null,
+        ...service,
       };
     })
   );

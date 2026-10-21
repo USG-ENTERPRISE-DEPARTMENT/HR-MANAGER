@@ -56,6 +56,8 @@ export function LeaveManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [leaves, setLeaves]         = useState<any[]>([]);
   const [balance, setBalance]       = useState<any[]>([]);
+  // The service rule is the same on every balance row (it is per employee, not per type).
+  const serviceRule = balance[0] as { min_service_months: number; service_eligible_from: string | null; service_status: 'eligible' | 'not_yet' | 'no_hire_date' } | undefined;
   const [balanceDetail, setBalanceDetail] = useState<any>(null);
   const [loading, setLoading]       = useState(false);
 
@@ -709,12 +711,24 @@ const fetchSubordinateEmployees = useCallback(() => {
                   Assign Leave
                 </button>
               ) : (activeTab === 'All my Leave' || activeTab === 'Pending Leave') ? (
-                <button className="primary-btn shrink-0" onClick={() => setShowApply(true)}>
+                <button className="primary-btn shrink-0" onClick={() => setShowApply(true)}
+                  disabled={serviceRule?.service_status === 'no_hire_date'}
+                  title={serviceRule?.service_status === 'no_hire_date' ? 'Your hire date is missing — contact HR' : undefined}>
                   Apply Leave
                 </button>
               ) : undefined
             }
           />
+
+          {/* Length-of-service rule (every leave type) — the server enforces it; this only explains it. */}
+          {(activeTab === 'All my Leave' || activeTab === 'Pending Leave') && serviceRule && serviceRule.service_status !== 'eligible' && (
+            <div className="mx-5 mt-3 rounded-lg border px-4 py-2.5 text-[12px] leading-relaxed"
+              style={{ background: 'var(--warning-dim)', color: 'var(--warning)', borderColor: 'var(--warning)' }}>
+              {serviceRule.service_status === 'no_hire_date'
+                ? 'Your hire date is not on record, so leave eligibility cannot be confirmed. Please contact HR to update your hire date before applying.'
+                : `Leave can only be taken after ${serviceRule.min_service_months} months of service. You can apply now for leave starting on or after ${formatDmy(serviceRule.service_eligible_from, '')}.`}
+            </div>
+          )}
 
           <div className="overflow-x-auto flex-1">
             <table className="w-full border-collapse">

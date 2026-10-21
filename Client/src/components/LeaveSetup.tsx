@@ -485,7 +485,7 @@ export function LeaveSetup() {
         ) : null}
       </div>
 
-      <div className={`bg-[var(--surface)] border border-[var(--border)] rounded-[16px] flex flex-col ${activeTab === 'Leave Groups' ? 'flex-1 min-h-0 overflow-hidden' : 'min-h-[500px] overflow-hidden'}`}>
+      <div className={`bg-[var(--surface)] border border-[var(--border)] rounded-[16px] flex flex-col ${activeTab === 'Leave Groups' || activeTab === 'Work Week' ? 'flex-1 min-h-0 overflow-hidden' : 'min-h-[500px] overflow-hidden'}`}>
 
         {/* ── Leave Types ── */}
         {activeTab === 'Leave Types' && (() => {
@@ -639,12 +639,15 @@ export function LeaveSetup() {
 
         {/* ── Work Week ── */}
         {activeTab === 'Work Week' && (
-          <div className="flex flex-col">
-            <div className="flex flex-col border-b border-[var(--border)]">
+          // Fills the card; the day list scrolls between the fixed header and the Save bar. Without
+          // min-h-0 + overflow-y-auto the card's overflow-hidden clipped the list with no scrollbar.
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex flex-col border-b border-[var(--border)] shrink-0">
               <div className="p-4 sm:p-5">
                 <h3 className="font-bold text-[var(--text-primary)]">Work Week Setup</h3>
               </div>
             </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
               <div className="grid grid-cols-[120px_1fr] gap-y-4 items-center">
                 {DAY_ORDER.map(day => (
@@ -663,8 +666,9 @@ export function LeaveSetup() {
                 ))}
               </div>
             </div>
+            </div>
             {can(PERMISSIONS.MANAGE_WORK_WEEK) && (
-              <div className="px-4 py-4 border-t border-[var(--border)] flex items-center justify-start bg-[var(--surface-hover)]">
+              <div className="px-4 py-4 border-t border-[var(--border)] flex items-center justify-start bg-[var(--surface-hover)] shrink-0">
                 <button className="primary-btn shrink-0" onClick={saveWorkWeek} disabled={savingWorkWeek}>
                   <Check size={14} /> {savingWorkWeek ? 'Saving…' : 'Save Settings'}
                 </button>

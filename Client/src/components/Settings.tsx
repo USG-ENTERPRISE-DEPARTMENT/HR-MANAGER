@@ -616,6 +616,7 @@ function ApprovalsSection({
   medicalApproval, setMedicalApproval,
   medicalSelfApproval, setMedicalSelfApproval,
   supervisorApproval, setSupervisorApproval, saveFlowSettings,
+  minServiceMonths, setMinServiceMonths, saveMinServiceMonths,
   trainingApprovalFlow, setTrainingApprovalFlow, saveTrainingFlowSettings,
 }: any) {
   const [showFlowEditor, setShowFlowEditor] = useState(false);
@@ -760,6 +761,24 @@ function ApprovalsSection({
           checked={supervisorApproval}
           onChange={(v) => { setSupervisorApproval(v); saveFlowSettings(v); }}
         />
+        <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-[var(--text-primary)]">Minimum service before leave</p>
+            <p className="text-[12px] text-[var(--text-muted)] leading-relaxed mt-0.5">
+              Applies to every leave type, with no override. Leave may start only once the employee has
+              completed this many months from their hire date; employees with no hire date are asked to
+              contact HR. Set 0 to switch the rule off.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <input type="number" min="0" max="120" step="1"
+              className={`${inputClass} w-20 text-right`}
+              value={minServiceMonths}
+              onChange={e => setMinServiceMonths(e.target.value)}
+              onBlur={() => saveMinServiceMonths(minServiceMonths)} />
+            <span className="text-[13px] text-[var(--text-muted)]">months</span>
+          </div>
+        </div>
       </SectionCard>
 
       <SectionCard icon={<GraduationCap size={13} />} title="Training Approval Flow">
@@ -1288,6 +1307,7 @@ function ControlsTab() {
 
   // ── Leave settings state (backend) ───────────────────────────────────────
   const [supervisorApproval, setSupervisorApproval] = useState(false);
+  const [minServiceMonths, setMinServiceMonths] = useState('12');
   const [allowSettings, setAllowSettings]           = useState<Record<string, string>>({
     leave_allow_enabled: 'No',
     leave_allow_tax_gl: '',
@@ -1344,6 +1364,7 @@ function ControlsTab() {
     api.get('/leave/approval-settings').then(r => {
       const d = r.data.data ?? {};
       setSupervisorApproval(d.leave_supervisor_approval === 'Yes');
+      if (d.leave_min_service_months != null) setMinServiceMonths(String(d.leave_min_service_months));
     }).catch(() => {});
 
     api.get('/training/settings').then(r => {
@@ -1412,6 +1433,12 @@ function ControlsTab() {
     api.put('/leave/approval-settings', {
       leave_supervisor_approval: sv ? 'Yes' : 'No',
     }).catch(() => {});
+  }
+
+  function saveMinServiceMonths(val: string) {
+    api.put('/leave/approval-settings', { leave_min_service_months: val })
+      .then(() => toast.success(Number(val) > 0 ? `Leave requires ${val} months of service` : 'Minimum service rule switched off'))
+      .catch((e: any) => toast.error(e.response?.data?.message ?? 'Failed to save minimum service'));
   }
 
   function saveTrainingFlowSettings(flow: string) {
@@ -1502,6 +1529,8 @@ function ControlsTab() {
             medicalSelfApproval={medicalSelfApproval} setMedicalSelfApproval={setMedicalSelfApproval}
             supervisorApproval={supervisorApproval}         setSupervisorApproval={setSupervisorApproval}
             saveFlowSettings={saveFlowSettings}
+            minServiceMonths={minServiceMonths}           setMinServiceMonths={setMinServiceMonths}
+            saveMinServiceMonths={saveMinServiceMonths}
             trainingApprovalFlow={trainingApprovalFlow}   setTrainingApprovalFlow={setTrainingApprovalFlow}
             saveTrainingFlowSettings={saveTrainingFlowSettings}
           />

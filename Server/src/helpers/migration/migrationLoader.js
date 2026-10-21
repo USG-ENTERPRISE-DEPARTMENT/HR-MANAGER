@@ -1024,6 +1024,16 @@ class MigrationRun {
   async loadPayrollRuns() {
     const e = this.step('payrollruns', 'Payroll runs');
 
+    // payrollruns.columns comes from a manual migration (20261018_payrollruns_columns). A target
+    // migrated without it failed this step — or, migrated before it existed, kept every run's list
+    // empty, so new runs calculated every enabled column and net pay drifted. Add it if missing.
+    const [hasColumns] = await this.tgt(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'payrollruns' AND column_name = 'columns'`);
+    if (!hasColumns) {
+      await this.tgt(`ALTER TABLE payrollruns ADD COLUMN IF NOT EXISTS columns TEXT NULL`);
+      e.notes.push('payrollruns.columns was missing on the target and has been added');
+    }
+
     // Runs have no natural unique key in the target, so they are matched on (name, date_start).
     // Batched like everything else — a per-row insert-then-select took ~1s per run.
     const existing = await this.tgt(`SELECT id, name, date_start FROM payrollruns`);

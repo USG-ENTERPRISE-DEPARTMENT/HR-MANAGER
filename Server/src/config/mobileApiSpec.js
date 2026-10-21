@@ -352,13 +352,13 @@ const spec = {
       }),
       post: op({
         tag: 'Leave', summary: 'Apply for leave',
-        description: 'Creates the request as a Draft. Call `/leave/{id}/submit` to send it for approval. The leave period is resolved from the dates; a `leave_period` in the body is ignored.',
+        description: 'Creates the request as a Draft. Call `/leave/{id}/submit` to send it for approval. The leave period is resolved from the dates; a `leave_period` in the body is ignored. Refused with 400 when the leave would start before the employee completes the minimum service (default 12 months from the hire date, every leave type), or when no hire date is on record — the message says which, and from when.',
         body: { $ref: '#/components/schemas/LeaveApplication' },
         response: { $ref: '#/components/schemas/Leave' },
       }),
     },
     '/leave/types':   { get: op({ tag: 'Leave', summary: 'List available leave types', response: { type: 'array', items: { type: 'object' } } }) },
-    '/leave/balance': { get: op({ tag: 'Leave', summary: 'Get own leave balance', description: 'Entitlement, days taken and remaining for each leave type.', response: { type: 'object' } }) },
+    '/leave/balance': { get: op({ tag: 'Leave', summary: 'Get own leave balance', description: 'Entitlement, days taken and remaining for each leave type. Each row also carries the length-of-service rule: `min_service_months` (company setting, 0 = off), `service_eligible_from` (YYYY-MM-DD, first date leave may START) and `service_status` (`eligible` | `not_yet` | `no_hire_date` — the last means HR must set the hire date). Use it to disable applying and say from when.', response: { type: 'object' } }) },
     '/leave/{id}': {
       put:    op({ tag: 'Leave', summary: 'Edit an own draft leave request', params: [pathId], body: { $ref: '#/components/schemas/LeaveApplication' }, response: { $ref: '#/components/schemas/Leave' } }),
       delete: op({ tag: 'Leave', summary: 'Delete an own draft leave request', params: [pathId], response: { type: 'object' } }),
