@@ -69,6 +69,12 @@ export const PERMISSIONS = {
   MANAGE_LEAVE_RULES:                 'manage_leave_rules',
   MANAGE_LEAVE_APPROVALS:             'manage_leave_approvals',
 
+  // ── Out of Station allowance ───────────────────────────────
+  // Requesting is open to everyone (like leave); these gate the HR side.
+  VIEW_OUT_OF_STATION:                'view_out_of_station',
+  APPROVE_OUT_OF_STATION:             'approve_out_of_station',
+  MANAGE_OUT_OF_STATION:              'manage_out_of_station',
+
   // ── Salary ─────────────────────────────────────────────────
   VIEW_SALARY_SETUP:                  'view_salary_setup',
   MANAGE_SALARY_COMPONENT_TYPES:      'manage_salary_component_types',
@@ -170,7 +176,7 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   QualificationSetups:['manage_app_settings'],
   LeavingSettings:    ['manage_app_settings'],
   AdminReports:       ['generate_reports'],
-  CentralApproval:    ['approve_employees', 'approve_payroll', 'approve_medical', 'approve_employee_transfers'],
+  CentralApproval:    ['approve_employees', 'approve_payroll', 'approve_medical', 'approve_employee_transfers', 'approve_out_of_station'],
   UserReports:        [],  // Personal reports - open to all
 
   // ── Management ────────────────────────────────────────────────
@@ -187,6 +193,7 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   LeaveSetup:         ['view_leave_setup', 'manage_leave_types', 'manage_leave_periods', 'manage_holidays'],
   LeaveCalendar:      [],  // Personal calendar - open to all
   LeaveManagement:    [],  // Personal leave management - open to all
+  OutOfStation:       [],  // Out of Station requests - open to all; HR tabs gated inside the page
 
   // Payroll
   Payroll:            ['view_payroll', 'process_payroll', 'approve_payroll', 'manage_payroll_employees'],

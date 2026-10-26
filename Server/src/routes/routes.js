@@ -94,6 +94,7 @@ const {
 const med      = require('../controllers/medicalController');
 const leave    = require('../controllers/leaveController');
 const transfer = require('../controllers/employeeTransferController');
+const oos      = require('../controllers/outOfStationController');
 const appCfg   = require('../controllers/settingsController');
 const apiInteg = require('../controllers/apiIntegrationController');
 
@@ -625,6 +626,31 @@ router.post  ('/leave/leaves/:id/reject',            leave.rejectLeave);
 router.post  ('/leave/leaves/:id/cancel',            leave.cancelLeave);
 router.post  ('/leave/leaves/:id/finalize',          leave.finalizeLeave);
 router.post  ('/leave/leaves/:id/retry-gl',          leave.retryLeaveGL);
+
+// ─────────────────────────────────────────────
+// Out of Station allowance
+// Requesting is open to everyone, like leave; the controller checks who may act on each request
+// (self, supervisor, HR). Setup is gated here.
+// ─────────────────────────────────────────────
+router.get   ('/out-of-station/settings',               oos.getSettings);
+router.put   ('/out-of-station/settings',               permissionGuard('manage_out_of_station'), oos.saveSettings);
+router.get   ('/out-of-station/rates',                  oos.getRates);
+router.put   ('/out-of-station/rates',                  permissionGuard('manage_out_of_station'), oos.saveRates);
+router.get   ('/out-of-station/employees',              oos.getRequestableEmployees);
+router.post  ('/out-of-station/quote',                  oos.quote);
+router.get   ('/out-of-station/approvals',              oos.listApprovals);
+router.get   ('/out-of-station/requests',               oos.listRequests);
+router.post  ('/out-of-station/requests',               oos.createRequest);
+router.get   ('/out-of-station/requests/:id',           oos.getRequest);
+router.put   ('/out-of-station/requests/:id',           oos.updateRequest);
+router.delete('/out-of-station/requests/:id',           oos.deleteRequest);
+router.get   ('/out-of-station/requests/:id/history',   oos.getHistory);
+router.post  ('/out-of-station/requests/:id/submit',    oos.submit);
+router.post  ('/out-of-station/requests/:id/approve',   oos.approve);
+router.post  ('/out-of-station/requests/:id/reject',    oos.reject);
+router.post  ('/out-of-station/requests/:id/cancel',    oos.cancel);
+router.post  ('/out-of-station/requests/:id/retry-gl',  oos.retryGL);
+router.post  ('/out-of-station/requests/:id/post',      oos.post);
 
 // ─────────────────────────────────────────────
 // Recruitment

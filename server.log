@@ -556,3 +556,1009 @@ prisma:query
     headers: {"Accept":"application/json, text/plain, */*"}
 2026-10-18T10:00:31.424Z OUT ← GET http://localhost:11434/api/tags → 200 31ms
     response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T11:02:43.511Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T11:02:43.566Z OUT ← GET http://localhost:11434/api/tags → 200 56ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T11:04:04.763Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T11:04:04.790Z OUT ← GET http://localhost:11434/api/tags → 200 28ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T11:04:16.372Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T11:04:16.404Z OUT ← GET http://localhost:11434/api/tags → 200 33ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-18T11:25:27.452Z IN  POST /v1/api/hr/realtime/ticket → 200 4888ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:27.458Z IN  GET /v1/api/hr/notifications → 304 4936ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:29.202Z IN  GET /v1/api/hr/user/refresh-token → 200 3107ms user=- ip=::1
+2026-10-18T11:25:29.695Z IN  GET /v1/api/hr/settings/modules → 304 481ms user=- ip=::1
+2026-10-18T11:25:30.908Z IN  GET /v1/api/hr/settings/controls → 304 1693ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:32.877Z IN  POST /v1/api/hr/realtime/ticket → 200 1468ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:33.723Z IN  POST /v1/api/hr/realtime/ticket → 200 2312ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:34.529Z IN  GET /v1/api/hr/notifications → 200 3116ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:34.984Z IN  GET /v1/api/hr/payroll/calc-groups → 304 2099ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:36.310Z IN  GET /v1/api/hr/payroll/pay-frequencies → 304 4276ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:36.878Z IN  GET /v1/api/hr/salary/payment-types → 304 3149ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:37.207Z IN  GET /v1/api/hr/settings/app-setup → 304 5178ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:37.566Z IN  GET /v1/api/hr/payroll/payslip-templates → 304 3030ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:39.700Z IN  GET /v1/api/hr/payroll/runs → 200 7669ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:39.740Z IN  GET /v1/api/hr/payroll/calc-groups → 304 2169ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:40.090Z IN  GET /v1/api/hr/notifications → 304 2880ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:41.125Z IN  GET /v1/api/hr/payroll/pay-frequencies → 304 1414ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:41.235Z IN  GET /v1/api/hr/salary/payment-types → 304 1487ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:41.239Z IN  GET /v1/api/hr/payroll/columns → 200 6247ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:41.348Z IN  GET /v1/api/hr/settings/app-setup → 304 1253ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:42.933Z IN  GET /v1/api/hr/payroll/payslip-templates → 304 1803ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:44.707Z IN  GET /v1/api/hr/payroll/runs → 304 3464ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:45.602Z IN  GET /v1/api/hr/payroll/columns → 304 4354ms user=superadmin@usg.com ip=::1
+2026-10-18T11:25:54.082Z IN  GET /v1/api/hr/notifications → 304 2623ms user=superadmin@usg.com ip=::1
+2026-10-18T11:26:12.958Z IN  GET /v1/api/hr/notifications → 304 1497ms user=superadmin@usg.com ip=::1
+2026-10-18T11:26:33.727Z IN  GET /v1/api/hr/notifications → 304 2273ms user=superadmin@usg.com ip=::1
+2026-10-18T11:26:53.402Z IN  GET /v1/api/hr/notifications → 304 1943ms user=superadmin@usg.com ip=::1
+2026-10-18T11:27:12.639Z IN  GET /v1/api/hr/notifications → 304 1181ms user=superadmin@usg.com ip=::1
+2026-10-18T11:27:33.005Z IN  GET /v1/api/hr/notifications → 304 1558ms user=superadmin@usg.com ip=::1
+2026-10-18T11:27:52.685Z IN  GET /v1/api/hr/notifications → 304 1237ms user=superadmin@usg.com ip=::1
+2026-10-18T11:28:12.630Z IN  GET /v1/api/hr/notifications → 304 1177ms user=superadmin@usg.com ip=::1
+2026-10-18T11:28:32.645Z IN  GET /v1/api/hr/notifications → 304 1187ms user=superadmin@usg.com ip=::1
+2026-10-18T11:30:01.253Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-18T11:30:01.400Z OUT ← GET http://localhost:11434/api/tags → 200 148ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T11:48:53.110Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T11:48:53.171Z OUT ← GET http://localhost:11434/api/tags → 200 62ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T11:49:17.321Z IN  GET /v1/api/hr/user/refresh-token → 200 6529ms user=- ip=::1
+2026-10-19T11:49:31.386Z IN  POST /v1/api/hr/login → 200 8573ms user=- ip=::1
+2026-10-19T11:49:32.152Z IN  GET /v1/api/hr/settings/modules → 200 752ms user=- ip=::1
+2026-10-19T11:49:35.138Z IN  POST /v1/api/hr/realtime/ticket → 200 3633ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:35.363Z IN  POST /v1/api/hr/realtime/ticket → 200 3842ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:35.947Z IN  GET /v1/api/hr/settings/controls → 200 4545ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:36.438Z IN  GET /v1/api/hr/documents/usg_logo.png → 404 2ms user=- ip=::1
+2026-10-19T11:49:37.100Z IN  GET /v1/api/hr/notifications → 200 5576ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:39.240Z IN  GET /v1/api/hr/dashboard/summary → 200 7714ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:39.787Z IN  GET /v1/api/hr/settings/app-setup → 200 3332ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:39.966Z IN  GET /v1/api/hr/system/code-lists → 200 3510ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:40.631Z IN  GET /v1/api/hr/notifications → 304 3518ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:42.503Z IN  GET /v1/api/hr/settings/app-setup → 304 2700ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:43.714Z IN  GET /v1/api/hr/system/code-lists → 304 3736ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:44.410Z IN  GET /v1/api/hr/dashboard/summary → 304 5158ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:46.596Z IN  GET /v1/api/hr/notifications → 304 4489ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:46.606Z IN  POST /v1/api/hr/migration/preflight → 400 2002ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:46.607Z IN  POST /v1/api/hr/migration/preflight → 400 2001ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:46.980Z IN  GET /v1/api/hr/migration/job → 200 2372ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:49.162Z IN  GET /v1/api/hr/migration/job → 304 2176ms user=superadmin@usg.com ip=::1
+2026-10-19T11:49:56.948Z IN  GET /v1/api/hr/notifications → 304 5447ms user=superadmin@usg.com ip=::1
+2026-10-19T11:50:10.460Z IN  GET /v1/api/hr/notifications → 304 3855ms user=superadmin@usg.com ip=::1
+2026-10-19T11:50:13.088Z IN  POST /v1/api/hr/migration/preflight → 200 3906ms user=superadmin@usg.com ip=::1
+2026-10-19T11:50:14.961Z IN  GET /v1/api/hr/notifications → 304 3457ms user=superadmin@usg.com ip=::1
+2026-10-19T11:50:33.845Z IN  POST /v1/api/hr/migration/dry-run → 200 16821ms user=superadmin@usg.com ip=::1
+2026-10-19T11:50:35.171Z IN  GET /v1/api/hr/notifications → 304 3669ms user=superadmin@usg.com ip=::1
+2026-10-19T11:50:55.233Z IN  GET /v1/api/hr/notifications → 304 3738ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:06.057Z IN  POST /v1/api/hr/migration/execute → 202 2568ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:06.284Z IN  GET /v1/api/hr/notifications → 304 3017ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:08.951Z IN  GET /v1/api/hr/migration/job → 200 2888ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:11.568Z IN  GET /v1/api/hr/migration/job → 200 2613ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:13.914Z IN  GET /v1/api/hr/migration/job → 200 2338ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:14.863Z IN  GET /v1/api/hr/notifications → 304 3373ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:16.240Z IN  GET /v1/api/hr/migration/job → 200 2322ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:18.700Z IN  GET /v1/api/hr/migration/job → 200 2455ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:20.975Z IN  GET /v1/api/hr/migration/job → 200 2270ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:23.705Z IN  GET /v1/api/hr/migration/job → 200 2725ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:25.919Z IN  GET /v1/api/hr/migration/job → 200 2210ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:28.081Z IN  GET /v1/api/hr/migration/job → 200 2156ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:30.263Z IN  GET /v1/api/hr/migration/job → 200 2176ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:32.514Z IN  GET /v1/api/hr/migration/job → 200 2243ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:34.734Z IN  GET /v1/api/hr/migration/job → 200 2215ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:35.643Z IN  GET /v1/api/hr/notifications → 304 4143ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:36.934Z IN  GET /v1/api/hr/migration/job → 200 2194ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:39.114Z IN  GET /v1/api/hr/migration/job → 200 2175ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:41.446Z IN  GET /v1/api/hr/migration/job → 200 2324ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:43.635Z IN  GET /v1/api/hr/migration/job → 200 2185ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:43.817Z IN  GET /v1/api/hr/migration/job → 200 2719ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:45.624Z IN  GET /v1/api/hr/migration/job → 200 2527ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:45.801Z IN  GET /v1/api/hr/migration/job → 200 2161ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:47.237Z IN  GET /v1/api/hr/migration/job → 200 2139ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:48.684Z IN  GET /v1/api/hr/migration/job → 200 2877ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:49.509Z IN  GET /v1/api/hr/migration/job → 200 2412ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:50.511Z IN  GET /v1/api/hr/migration/job → 200 2427ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:50.718Z IN  GET /v1/api/hr/migration/job → 200 2029ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:51.972Z IN  GET /v1/api/hr/migration/job → 200 1873ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:52.514Z IN  GET /v1/api/hr/migration/job → 200 1791ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:53.842Z IN  GET /v1/api/hr/migration/job → 200 1747ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:54.253Z IN  GET /v1/api/hr/migration/job → 200 1735ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:54.254Z IN  GET /v1/api/hr/notifications → 304 2754ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:55.934Z IN  GET /v1/api/hr/migration/job → 200 1836ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:56.112Z IN  GET /v1/api/hr/migration/job → 200 1854ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:58.152Z IN  GET /v1/api/hr/migration/job → 200 2054ms user=superadmin@usg.com ip=::1
+2026-10-19T11:51:58.153Z IN  GET /v1/api/hr/migration/job → 200 2036ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:00.003Z IN  GET /v1/api/hr/migration/job → 200 1846ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:00.735Z IN  GET /v1/api/hr/migration/job → 200 2637ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:02.125Z IN  GET /v1/api/hr/migration/job → 200 2118ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:03.262Z IN  GET /v1/api/hr/migration/job → 200 2164ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:04.044Z IN  GET /v1/api/hr/migration/job → 200 1948ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:04.780Z IN  GET /v1/api/hr/migration/job → 200 2645ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:06.107Z IN  GET /v1/api/hr/migration/job → 200 2012ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:06.701Z IN  GET /v1/api/hr/migration/job → 200 1917ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:07.824Z IN  GET /v1/api/hr/migration/job → 200 1727ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:08.454Z IN  GET /v1/api/hr/migration/job → 200 1750ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:10.022Z IN  GET /v1/api/hr/migration/job → 200 1926ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:10.598Z IN  GET /v1/api/hr/migration/job → 200 2138ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:12.191Z IN  GET /v1/api/hr/migration/job → 200 2094ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:12.547Z IN  GET /v1/api/hr/migration/job → 200 1945ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:14.169Z IN  GET /v1/api/hr/notifications → 304 2672ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:14.351Z IN  GET /v1/api/hr/migration/job → 200 2256ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:14.754Z IN  GET /v1/api/hr/migration/job → 200 2202ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:16.323Z IN  GET /v1/api/hr/migration/job → 200 2240ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:16.859Z IN  GET /v1/api/hr/migration/job → 200 2100ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:18.073Z IN  GET /v1/api/hr/migration/job → 200 1977ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:18.971Z IN  GET /v1/api/hr/migration/job → 200 2107ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:20.104Z IN  GET /v1/api/hr/migration/job → 200 2010ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:21.105Z IN  GET /v1/api/hr/migration/job → 200 2128ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:21.850Z IN  GET /v1/api/hr/migration/job → 200 1753ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:23.187Z IN  GET /v1/api/hr/migration/job → 200 2076ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:23.188Z IN  GET /v1/api/hr/migration/job → 200 2092ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:25.422Z IN  GET /v1/api/hr/migration/job → 200 2340ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:25.600Z IN  GET /v1/api/hr/migration/job → 200 2406ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:27.036Z IN  GET /v1/api/hr/migration/job → 200 1941ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:27.634Z IN  GET /v1/api/hr/migration/job → 200 2027ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:29.606Z IN  GET /v1/api/hr/migration/job → 200 1967ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:29.607Z IN  GET /v1/api/hr/migration/job → 200 2513ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:30.845Z IN  GET /v1/api/hr/migration/job → 200 1761ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:31.255Z IN  GET /v1/api/hr/migration/job → 200 1641ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:32.751Z IN  GET /v1/api/hr/migration/job → 200 1655ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:32.972Z IN  GET /v1/api/hr/migration/job → 200 1708ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:34.666Z IN  GET /v1/api/hr/migration/job → 200 1680ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:35.098Z IN  GET /v1/api/hr/notifications → 304 3600ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:35.740Z IN  GET /v1/api/hr/migration/job → 200 1650ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:37.138Z IN  GET /v1/api/hr/migration/job → 200 2428ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:38.752Z IN  GET /v1/api/hr/migration/job → 200 2652ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:39.799Z IN  GET /v1/api/hr/migration/job → 200 2703ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:39.978Z IN  GET /v1/api/hr/migration/job → 200 2811ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:41.594Z IN  GET /v1/api/hr/migration/job → 200 2506ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:42.219Z IN  GET /v1/api/hr/migration/job → 200 2243ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:43.107Z IN  GET /v1/api/hr/migration/job → 200 2001ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:43.946Z IN  GET /v1/api/hr/migration/job → 200 1722ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:44.138Z IN  GET /v1/api/hr/migration/job → 200 2050ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:45.612Z IN  GET /v1/api/hr/migration/job → 200 1659ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:46.611Z IN  GET /v1/api/hr/migration/job → 200 1523ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:47.197Z IN  GET /v1/api/hr/migration/job → 200 1577ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:49.073Z IN  GET /v1/api/hr/migration/job → 200 1969ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:49.252Z IN  GET /v1/api/hr/migration/job → 200 2050ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:51.251Z IN  GET /v1/api/hr/migration/job → 200 2145ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:51.973Z IN  GET /v1/api/hr/migration/job → 200 2716ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:53.784Z IN  GET /v1/api/hr/migration/job → 200 2697ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:53.961Z IN  GET /v1/api/hr/migration/job → 200 1982ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:54.319Z IN  GET /v1/api/hr/notifications → 304 2824ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:55.776Z IN  GET /v1/api/hr/migration/job → 200 2672ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:56.138Z IN  GET /v1/api/hr/migration/job → 200 2171ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:56.923Z IN  GET /v1/api/hr/migration/job → 200 1836ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:57.825Z IN  GET /v1/api/hr/migration/job → 200 1739ms user=superadmin@usg.com ip=::1
+2026-10-19T11:52:58.181Z IN  GET /v1/api/hr/migration/job → 200 2038ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:00.337Z IN  GET /v1/api/hr/migration/job → 200 2235ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:00.913Z IN  GET /v1/api/hr/migration/job → 200 2725ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:02.023Z IN  GET /v1/api/hr/migration/job → 200 1920ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:02.206Z IN  GET /v1/api/hr/notifications → 304 3277ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:02.926Z IN  GET /v1/api/hr/migration/job → 200 2008ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:04.218Z IN  GET /v1/api/hr/migration/job → 200 2118ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:05.123Z IN  GET /v1/api/hr/migration/job → 200 2193ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:05.915Z IN  GET /v1/api/hr/migration/job → 200 1814ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:06.992Z IN  GET /v1/api/hr/migration/job → 200 1890ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:07.729Z IN  GET /v1/api/hr/migration/job → 200 2602ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:09.586Z IN  GET /v1/api/hr/migration/job → 200 2500ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:09.814Z IN  GET /v1/api/hr/migration/job → 200 2080ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:10.835Z IN  GET /v1/api/hr/migration/job → 200 1749ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:11.432Z IN  GET /v1/api/hr/migration/job → 200 1612ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:12.625Z IN  GET /v1/api/hr/migration/job → 200 1526ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:13.127Z IN  GET /v1/api/hr/migration/job → 200 1692ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:13.976Z IN  GET /v1/api/hr/notifications → 304 2492ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:14.624Z IN  GET /v1/api/hr/migration/job → 200 1537ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:14.803Z IN  GET /v1/api/hr/migration/job → 200 1670ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:16.777Z IN  GET /v1/api/hr/migration/job → 200 1970ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:18.279Z IN  GET /v1/api/hr/migration/job → 200 2191ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:18.514Z IN  GET /v1/api/hr/migration/job → 200 1732ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:19.932Z IN  GET /v1/api/hr/migration/job → 200 1832ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:21.498Z IN  GET /v1/api/hr/migration/job → 200 2979ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:22.450Z IN  GET /v1/api/hr/migration/job → 200 2351ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:23.033Z IN  GET /v1/api/hr/migration/job → 200 1947ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:23.938Z IN  GET /v1/api/hr/migration/job → 200 2436ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:25.216Z IN  GET /v1/api/hr/migration/job → 200 2117ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:26.124Z IN  GET /v1/api/hr/migration/job → 200 2181ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:27.445Z IN  GET /v1/api/hr/migration/job → 200 2346ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:28.000Z IN  GET /v1/api/hr/migration/job → 200 1901ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:28.002Z IN  GET /v1/api/hr/migration/job → 200 1870ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:29.810Z IN  GET /v1/api/hr/migration/job → 200 1804ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:31.144Z IN  GET /v1/api/hr/migration/job → 200 2050ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:31.865Z IN  GET /v1/api/hr/migration/job → 200 2051ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:33.023Z IN  GET /v1/api/hr/migration/job → 200 1940ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:33.578Z IN  GET /v1/api/hr/migration/job → 200 1708ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:34.486Z IN  GET /v1/api/hr/notifications → 304 3001ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:34.684Z IN  GET /v1/api/hr/migration/job → 200 1584ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:35.482Z IN  GET /v1/api/hr/migration/job → 200 1900ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:36.743Z IN  GET /v1/api/hr/migration/job → 200 1663ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:37.659Z IN  GET /v1/api/hr/migration/job → 200 2172ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:39.051Z IN  GET /v1/api/hr/migration/job → 200 1963ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:40.282Z IN  GET /v1/api/hr/migration/job → 200 2618ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:41.506Z IN  GET /v1/api/hr/migration/job → 200 2425ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:41.735Z IN  GET /v1/api/hr/migration/job → 200 1645ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:42.389Z IN  GET /v1/api/hr/migration/job → 200 2106ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:44.110Z IN  GET /v1/api/hr/migration/job → 200 2032ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:44.474Z IN  GET /v1/api/hr/migration/job → 200 2080ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:45.895Z IN  GET /v1/api/hr/migration/job → 200 1803ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:46.516Z IN  GET /v1/api/hr/migration/job → 200 2021ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:47.804Z IN  GET /v1/api/hr/migration/job → 200 1715ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:48.511Z IN  GET /v1/api/hr/migration/job → 200 1954ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:50.275Z IN  GET /v1/api/hr/migration/job → 200 1723ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:52.303Z IN  GET /v1/api/hr/migration/job → 200 4198ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:52.529Z IN  GET /v1/api/hr/migration/job → 200 2455ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:53.355Z IN  GET /v1/api/hr/migration/job → 200 3076ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:54.040Z IN  GET /v1/api/hr/migration/job → 200 1732ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:54.595Z IN  GET /v1/api/hr/notifications → 304 3116ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:55.329Z IN  GET /v1/api/hr/migration/job → 200 1964ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:55.515Z IN  GET /v1/api/hr/migration/job → 200 2428ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:56.983Z IN  GET /v1/api/hr/migration/job → 200 1904ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:57.343Z IN  GET /v1/api/hr/migration/job → 200 2007ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:59.077Z IN  GET /v1/api/hr/migration/job → 200 1993ms user=superadmin@usg.com ip=::1
+2026-10-19T11:53:59.256Z IN  GET /v1/api/hr/migration/job → 200 1905ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:00.918Z IN  GET /v1/api/hr/migration/job → 200 1838ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:01.098Z IN  GET /v1/api/hr/migration/job → 200 1836ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:03.019Z IN  GET /v1/api/hr/migration/job → 200 1929ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:03.233Z IN  GET /v1/api/hr/migration/job → 200 2129ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:05.143Z IN  GET /v1/api/hr/migration/job → 200 2056ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:05.748Z IN  GET /v1/api/hr/migration/job → 200 2510ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:06.823Z IN  GET /v1/api/hr/migration/job → 200 1729ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:07.782Z IN  GET /v1/api/hr/migration/job → 200 2028ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:09.268Z IN  GET /v1/api/hr/migration/job → 200 2183ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:10.041Z IN  GET /v1/api/hr/migration/job → 200 2255ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:12.068Z IN  GET /v1/api/hr/migration/job → 200 2980ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:12.248Z IN  GET /v1/api/hr/migration/job → 200 2203ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:13.700Z IN  GET /v1/api/hr/migration/job → 200 2607ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:13.922Z IN  GET /v1/api/hr/migration/job → 200 1828ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:14.149Z IN  GET /v1/api/hr/migration/job → 200 1897ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:14.991Z IN  GET /v1/api/hr/notifications → 304 3508ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:16.159Z IN  GET /v1/api/hr/migration/job → 200 2065ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:16.338Z IN  GET /v1/api/hr/migration/job → 200 2183ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:17.902Z IN  GET /v1/api/hr/migration/job → 200 1825ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:18.083Z IN  GET /v1/api/hr/migration/job → 200 1739ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:20.324Z IN  GET /v1/api/hr/migration/job → 200 2250ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:20.538Z IN  GET /v1/api/hr/migration/job → 200 2450ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:22.732Z IN  GET /v1/api/hr/migration/job → 200 2642ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:22.962Z IN  GET /v1/api/hr/migration/job → 200 2419ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:24.253Z IN  GET /v1/api/hr/migration/job → 200 2174ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:25.127Z IN  GET /v1/api/hr/migration/job → 200 2161ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:26.412Z IN  GET /v1/api/hr/migration/job → 200 2317ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:27.020Z IN  GET /v1/api/hr/migration/job → 200 1926ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:27.776Z IN  GET /v1/api/hr/migration/job → 200 2645ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:29.528Z IN  GET /v1/api/hr/migration/job → 200 2449ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:31.603Z IN  GET /v1/api/hr/migration/job → 200 3819ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:32.212Z IN  GET /v1/api/hr/migration/job → 200 3136ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:34.984Z IN  GET /v1/api/hr/migration/job → 200 3892ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:35.183Z IN  GET /v1/api/hr/migration/job → 200 2967ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:35.377Z IN  GET /v1/api/hr/notifications → 304 3769ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:36.380Z IN  GET /v1/api/hr/migration/job → 200 6289ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:36.923Z IN  GET /v1/api/hr/migration/job → 200 1735ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:37.363Z IN  GET /v1/api/hr/migration/job → 200 1981ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:37.592Z IN  GET /v1/api/hr/migration/job → 200 2604ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:38.615Z IN  GET /v1/api/hr/migration/job → 200 2229ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:39.150Z IN  GET /v1/api/hr/migration/job → 200 2062ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:40.741Z IN  GET /v1/api/hr/migration/job → 200 2122ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:42.033Z IN  GET /v1/api/hr/migration/job → 200 1944ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:43.483Z IN  GET /v1/api/hr/migration/job → 200 2724ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:44.076Z IN  GET /v1/api/hr/migration/job → 200 1972ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:44.255Z IN  GET /v1/api/hr/migration/job → 200 6165ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:45.292Z IN  GET /v1/api/hr/migration/job → 200 1805ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:47.110Z IN  GET /v1/api/hr/migration/job → 200 2008ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:47.313Z IN  GET /v1/api/hr/migration/job → 200 4212ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:48.554Z IN  GET /v1/api/hr/migration/job → 200 3258ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:48.774Z IN  GET /v1/api/hr/migration/job → 200 1669ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:49.938Z IN  GET /v1/api/hr/migration/job → 200 1849ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:50.478Z IN  GET /v1/api/hr/migration/job → 200 1919ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:51.802Z IN  GET /v1/api/hr/migration/job → 200 1713ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:52.463Z IN  GET /v1/api/hr/migration/job → 200 1981ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:54.377Z IN  GET /v1/api/hr/migration/job → 200 1910ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:54.740Z IN  GET /v1/api/hr/migration/job → 200 2637ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:56.009Z IN  GET /v1/api/hr/notifications → 304 4520ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:56.369Z IN  GET /v1/api/hr/migration/job → 200 1986ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:56.597Z IN  GET /v1/api/hr/migration/job → 200 2494ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:58.206Z IN  GET /v1/api/hr/migration/job → 200 2104ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:58.207Z IN  GET /v1/api/hr/migration/job → 200 1834ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:59.994Z IN  GET /v1/api/hr/migration/job → 200 1901ms user=superadmin@usg.com ip=::1
+2026-10-19T11:54:59.994Z IN  GET /v1/api/hr/migration/job → 200 1783ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:02.453Z IN  GET /v1/api/hr/migration/job → 200 2454ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:03.179Z IN  GET /v1/api/hr/migration/job → 200 2089ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:03.977Z IN  GET /v1/api/hr/migration/job → 200 1895ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:04.521Z IN  GET /v1/api/hr/migration/job → 200 2061ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:05.865Z IN  GET /v1/api/hr/migration/job → 200 1778ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:06.529Z IN  GET /v1/api/hr/migration/job → 200 2003ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:08.071Z IN  GET /v1/api/hr/migration/job → 200 1981ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:09.351Z IN  GET /v1/api/hr/migration/job → 200 2818ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:10.191Z IN  GET /v1/api/hr/migration/job → 200 2099ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:10.826Z IN  GET /v1/api/hr/migration/job → 200 1732ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:11.740Z IN  GET /v1/api/hr/migration/job → 200 2386ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:13.006Z IN  GET /v1/api/hr/migration/job → 200 1913ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:13.905Z IN  GET /v1/api/hr/migration/job → 200 2161ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:15.168Z IN  GET /v1/api/hr/migration/job → 200 2067ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:15.540Z IN  GET /v1/api/hr/notifications → 304 4046ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:16.347Z IN  GET /v1/api/hr/migration/job → 200 2437ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:17.641Z IN  GET /v1/api/hr/migration/job → 200 2556ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:18.005Z IN  GET /v1/api/hr/migration/job → 200 1919ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:18.412Z IN  GET /v1/api/hr/migration/job → 200 2056ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:19.877Z IN  GET /v1/api/hr/migration/job → 200 1775ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:20.056Z IN  GET /v1/api/hr/migration/job → 200 1637ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:22.113Z IN  GET /v1/api/hr/migration/job → 200 2052ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:22.829Z IN  GET /v1/api/hr/migration/job → 200 1727ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:24.122Z IN  GET /v1/api/hr/migration/job → 200 2022ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:24.301Z IN  GET /v1/api/hr/migration/job → 200 2181ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:25.929Z IN  GET /v1/api/hr/migration/job → 200 1826ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:26.290Z IN  GET /v1/api/hr/migration/job → 200 1983ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:28.013Z IN  GET /v1/api/hr/migration/job → 200 1912ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:28.377Z IN  GET /v1/api/hr/migration/job → 200 2083ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:30.028Z IN  GET /v1/api/hr/migration/job → 200 1926ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:30.388Z IN  GET /v1/api/hr/migration/job → 200 2007ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:32.817Z IN  GET /v1/api/hr/migration/job → 200 2719ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:32.993Z IN  GET /v1/api/hr/migration/job → 200 2600ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:34.318Z IN  GET /v1/api/hr/migration/job → 200 2233ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:34.781Z IN  GET /v1/api/hr/migration/job → 200 1783ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:35.180Z IN  GET /v1/api/hr/notifications → 304 3678ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:35.912Z IN  GET /v1/api/hr/migration/job → 200 1814ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:36.663Z IN  GET /v1/api/hr/migration/job → 200 1877ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:38.032Z IN  GET /v1/api/hr/migration/job → 200 1931ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:38.646Z IN  GET /v1/api/hr/migration/job → 200 1977ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:39.751Z IN  GET /v1/api/hr/migration/job → 200 1666ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:40.318Z IN  GET /v1/api/hr/migration/job → 200 1665ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:42.052Z IN  GET /v1/api/hr/migration/job → 200 1956ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:42.231Z IN  GET /v1/api/hr/migration/job → 200 1905ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:44.081Z IN  GET /v1/api/hr/migration/job → 200 1996ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:44.272Z IN  GET /v1/api/hr/migration/job → 200 2036ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:46.232Z IN  GET /v1/api/hr/migration/job → 200 2147ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:46.430Z IN  GET /v1/api/hr/migration/job → 200 2154ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:47.898Z IN  GET /v1/api/hr/migration/job → 200 1801ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:48.586Z IN  GET /v1/api/hr/migration/job → 200 2153ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:50.284Z IN  GET /v1/api/hr/migration/job → 200 2182ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:50.510Z IN  GET /v1/api/hr/migration/job → 200 1920ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:52.266Z IN  GET /v1/api/hr/migration/job → 200 1752ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:52.449Z IN  GET /v1/api/hr/migration/job → 200 2366ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:54.275Z IN  GET /v1/api/hr/migration/job → 200 2004ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:54.632Z IN  GET /v1/api/hr/notifications → 304 3139ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:54.632Z IN  GET /v1/api/hr/migration/job → 200 2534ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:55.902Z IN  GET /v1/api/hr/migration/job → 200 1817ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:56.260Z IN  GET /v1/api/hr/migration/job → 200 1981ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:58.284Z IN  GET /v1/api/hr/migration/job → 200 2201ms user=superadmin@usg.com ip=::1
+2026-10-19T11:55:58.466Z IN  GET /v1/api/hr/migration/job → 200 2201ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:00.010Z IN  GET /v1/api/hr/migration/job → 200 1915ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:00.366Z IN  GET /v1/api/hr/migration/job → 200 1895ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:02.071Z IN  GET /v1/api/hr/migration/job → 200 1977ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:02.260Z IN  GET /v1/api/hr/migration/job → 200 1888ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:04.619Z IN  GET /v1/api/hr/migration/job → 200 2529ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:04.799Z IN  GET /v1/api/hr/migration/job → 200 2532ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:06.237Z IN  GET /v1/api/hr/migration/job → 200 2152ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:06.844Z IN  GET /v1/api/hr/migration/job → 200 2039ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:08.294Z IN  GET /v1/api/hr/migration/job → 200 2211ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:08.504Z IN  GET /v1/api/hr/migration/job → 200 1653ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:10.046Z IN  GET /v1/api/hr/migration/job → 200 1964ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:10.768Z IN  GET /v1/api/hr/migration/job → 200 2258ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:12.049Z IN  GET /v1/api/hr/migration/job → 200 1950ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:12.595Z IN  GET /v1/api/hr/migration/job → 200 1822ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:14.111Z IN  GET /v1/api/hr/migration/job → 200 2021ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:14.514Z IN  GET /v1/api/hr/migration/job → 200 1912ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:14.514Z IN  GET /v1/api/hr/notifications → 304 3020ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:16.206Z IN  GET /v1/api/hr/migration/job → 200 1686ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:16.206Z IN  GET /v1/api/hr/migration/job → 200 2107ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:17.862Z IN  GET /v1/api/hr/migration/job → 200 1776ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:17.863Z IN  GET /v1/api/hr/migration/job → 200 1652ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:19.606Z IN  GET /v1/api/hr/migration/job → 200 1738ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:21.274Z IN  GET /v1/api/hr/migration/job → 200 2193ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:21.632Z IN  GET /v1/api/hr/migration/job → 200 2023ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:23.490Z IN  GET /v1/api/hr/migration/job → 200 2396ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:23.709Z IN  GET /v1/api/hr/migration/job → 200 2073ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:24.700Z IN  GET /v1/api/hr/migration/job → 200 1614ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:25.631Z IN  GET /v1/api/hr/migration/job → 200 1915ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:27.023Z IN  GET /v1/api/hr/migration/job → 200 1938ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:27.607Z IN  GET /v1/api/hr/migration/job → 200 1970ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:28.812Z IN  GET /v1/api/hr/migration/job → 200 1717ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:29.575Z IN  GET /v1/api/hr/migration/job → 200 1962ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:31.384Z IN  GET /v1/api/hr/migration/job → 200 2302ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:31.605Z IN  GET /v1/api/hr/migration/job → 200 2024ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:32.798Z IN  GET /v1/api/hr/migration/job → 200 1704ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:33.540Z IN  GET /v1/api/hr/migration/job → 200 1930ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:34.275Z IN  GET /v1/api/hr/notifications → 304 2779ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:35.003Z IN  GET /v1/api/hr/migration/job → 200 1905ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:36.270Z IN  GET /v1/api/hr/migration/job → 200 2723ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:36.921Z IN  GET /v1/api/hr/migration/job → 200 1823ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:38.197Z IN  GET /v1/api/hr/migration/job → 200 2097ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:38.198Z IN  GET /v1/api/hr/migration/job → 200 1920ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:40.037Z IN  GET /v1/api/hr/migration/job → 200 1832ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:40.475Z IN  GET /v1/api/hr/migration/job → 200 2391ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:42.169Z IN  GET /v1/api/hr/migration/job → 200 2127ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:43.089Z IN  GET /v1/api/hr/migration/job → 200 1995ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:44.008Z IN  GET /v1/api/hr/migration/job → 200 1832ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:44.009Z IN  GET /v1/api/hr/migration/job → 200 1928ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:45.682Z IN  GET /v1/api/hr/migration/job → 200 1670ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:46.907Z IN  GET /v1/api/hr/migration/job → 200 1816ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:47.754Z IN  GET /v1/api/hr/migration/job → 200 2067ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:48.742Z IN  GET /v1/api/hr/migration/job → 200 1662ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:49.383Z IN  GET /v1/api/hr/migration/job → 200 1623ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:50.926Z IN  GET /v1/api/hr/migration/job → 200 1846ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:51.683Z IN  GET /v1/api/hr/migration/job → 200 2295ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:53.160Z IN  GET /v1/api/hr/migration/job → 200 2080ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:53.785Z IN  GET /v1/api/hr/migration/job → 200 2099ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:55.522Z IN  GET /v1/api/hr/migration/job → 200 1728ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:55.525Z IN  GET /v1/api/hr/notifications → 304 4027ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:55.717Z IN  GET /v1/api/hr/migration/job → 200 2635ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:56.920Z IN  GET /v1/api/hr/migration/job → 200 1828ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:57.128Z IN  GET /v1/api/hr/migration/job → 200 1600ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:59.018Z IN  GET /v1/api/hr/migration/job → 200 1936ms user=superadmin@usg.com ip=::1
+2026-10-19T11:56:59.198Z IN  GET /v1/api/hr/migration/job → 200 2067ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:01.441Z IN  GET /v1/api/hr/migration/job → 200 2359ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:01.621Z IN  GET /v1/api/hr/migration/job → 200 2418ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:03.258Z IN  GET /v1/api/hr/migration/job → 200 2165ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:03.259Z IN  GET /v1/api/hr/migration/job → 200 1630ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:05.073Z IN  GET /v1/api/hr/migration/job → 200 1809ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:05.277Z IN  GET /v1/api/hr/migration/job → 200 2184ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:06.978Z IN  GET /v1/api/hr/migration/job → 200 1897ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:08.124Z IN  GET /v1/api/hr/migration/job → 200 2030ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:08.719Z IN  GET /v1/api/hr/migration/job → 200 1734ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:09.752Z IN  GET /v1/api/hr/migration/job → 200 1672ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:11.273Z IN  GET /v1/api/hr/migration/job → 200 2547ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:12.633Z IN  GET /v1/api/hr/migration/job → 200 2553ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:13.059Z IN  GET /v1/api/hr/migration/job → 200 1974ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:13.238Z IN  GET /v1/api/hr/migration/job → 200 1956ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:15.284Z IN  GET /v1/api/hr/migration/job → 200 2193ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:15.284Z IN  GET /v1/api/hr/notifications → 304 3794ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:15.472Z IN  GET /v1/api/hr/migration/job → 200 2229ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:17.756Z IN  GET /v1/api/hr/migration/job → 200 2668ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:18.229Z IN  GET /v1/api/hr/migration/job → 200 2752ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:20.237Z IN  GET /v1/api/hr/migration/job → 200 3150ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:21.696Z IN  GET /v1/api/hr/migration/job → 200 3609ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:21.697Z IN  GET /v1/api/hr/migration/job → 200 3460ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:23.152Z IN  GET /v1/api/hr/migration/job → 200 3073ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:23.683Z IN  GET /v1/api/hr/migration/job → 200 2591ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:24.233Z IN  GET /v1/api/hr/migration/job → 200 2527ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:26.284Z IN  GET /v1/api/hr/migration/job → 200 2190ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:27.377Z IN  GET /v1/api/hr/migration/job → 200 4286ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:28.550Z IN  GET /v1/api/hr/migration/job → 200 4311ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:29.071Z IN  GET /v1/api/hr/migration/job → 200 2991ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:29.436Z IN  GET /v1/api/hr/migration/job → 200 2344ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:31.065Z IN  GET /v1/api/hr/migration/job → 200 2986ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:31.544Z IN  GET /v1/api/hr/migration/job → 200 2986ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:32.962Z IN  GET /v1/api/hr/migration/job → 200 2870ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:34.067Z IN  GET /v1/api/hr/migration/job → 200 2977ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:34.381Z IN  GET /v1/api/hr/migration/job → 200 2832ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:35.377Z IN  GET /v1/api/hr/notifications → 304 3882ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:35.558Z IN  GET /v1/api/hr/migration/job → 200 2467ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:36.278Z IN  GET /v1/api/hr/migration/job → 200 1881ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:36.279Z IN  GET /v1/api/hr/migration/job → 200 2187ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:38.109Z IN  GET /v1/api/hr/migration/job → 200 1818ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:38.300Z IN  GET /v1/api/hr/migration/job → 200 2219ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:39.807Z IN  GET /v1/api/hr/migration/job → 200 1692ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:39.986Z IN  GET /v1/api/hr/migration/job → 200 1882ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:42.688Z IN  GET /v1/api/hr/migration/job → 200 2870ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:43.804Z IN  GET /v1/api/hr/migration/job → 200 2707ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:44.763Z IN  GET /v1/api/hr/migration/job → 200 2667ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:45.177Z IN  GET /v1/api/hr/migration/job → 200 2483ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:46.309Z IN  GET /v1/api/hr/migration/job → 200 2210ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:46.673Z IN  GET /v1/api/hr/migration/job → 200 1491ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:46.877Z IN  GET /v1/api/hr/migration/job → 200 1781ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:48.516Z IN  GET /v1/api/hr/migration/job → 200 1837ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:49.881Z IN  GET /v1/api/hr/migration/job → 200 1786ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:50.518Z IN  GET /v1/api/hr/migration/job → 200 1998ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:51.906Z IN  GET /v1/api/hr/migration/job → 200 1811ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:52.721Z IN  GET /v1/api/hr/migration/job → 200 2197ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:53.871Z IN  GET /v1/api/hr/migration/job → 200 1777ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:54.054Z IN  GET /v1/api/hr/notifications → 304 2554ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:54.473Z IN  GET /v1/api/hr/migration/job → 200 1745ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:55.818Z IN  GET /v1/api/hr/migration/job → 200 1689ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:56.180Z IN  GET /v1/api/hr/migration/job → 200 1701ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:58.298Z IN  GET /v1/api/hr/migration/job → 200 2200ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:59.061Z IN  GET /v1/api/hr/migration/job → 200 2873ms user=superadmin@usg.com ip=::1
+2026-10-19T11:57:59.889Z IN  GET /v1/api/hr/migration/job → 200 1793ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:01.227Z IN  GET /v1/api/hr/migration/job → 200 2157ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:01.853Z IN  GET /v1/api/hr/migration/job → 200 1755ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:02.647Z IN  GET /v1/api/hr/migration/job → 200 1414ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:02.831Z IN  GET /v1/api/hr/migration/job → 200 1719ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:04.418Z IN  GET /v1/api/hr/migration/job → 200 1764ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:06.223Z IN  GET /v1/api/hr/migration/job → 200 2112ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:06.583Z IN  GET /v1/api/hr/migration/job → 200 2158ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:08.026Z IN  GET /v1/api/hr/migration/job → 200 1931ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:08.573Z IN  GET /v1/api/hr/migration/job → 200 1982ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:10.010Z IN  GET /v1/api/hr/migration/job → 200 1902ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:10.727Z IN  GET /v1/api/hr/migration/job → 200 2149ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:12.205Z IN  GET /v1/api/hr/migration/job → 200 2093ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:12.841Z IN  GET /v1/api/hr/migration/job → 200 2107ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:14.464Z IN  GET /v1/api/hr/notifications → 304 2969ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:14.647Z IN  GET /v1/api/hr/migration/job → 200 2541ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:14.830Z IN  GET /v1/api/hr/migration/job → 200 1984ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:16.331Z IN  GET /v1/api/hr/migration/job → 200 2241ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:16.984Z IN  GET /v1/api/hr/migration/job → 200 2148ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:17.821Z IN  GET /v1/api/hr/migration/job → 200 1713ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:19.080Z IN  GET /v1/api/hr/migration/job → 200 2090ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:19.665Z IN  GET /v1/api/hr/migration/job → 200 1572ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:21.237Z IN  GET /v1/api/hr/migration/job → 200 2153ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:22.029Z IN  GET /v1/api/hr/migration/job → 200 1919ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:23.003Z IN  GET /v1/api/hr/migration/job → 200 1894ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:23.004Z IN  GET /v1/api/hr/migration/job → 200 1762ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:24.747Z IN  GET /v1/api/hr/migration/job → 200 1739ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:26.012Z IN  GET /v1/api/hr/migration/job → 200 1911ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:26.918Z IN  GET /v1/api/hr/migration/job → 200 2167ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:28.271Z IN  GET /v1/api/hr/migration/job → 200 2163ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:29.628Z IN  GET /v1/api/hr/migration/job → 200 2704ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:30.533Z IN  GET /v1/api/hr/migration/job → 200 2438ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:31.286Z IN  GET /v1/api/hr/migration/job → 200 2192ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:31.643Z IN  GET /v1/api/hr/migration/job → 200 2010ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:33.076Z IN  GET /v1/api/hr/migration/job → 200 1980ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:33.850Z IN  GET /v1/api/hr/migration/job → 200 2203ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:34.668Z IN  GET /v1/api/hr/notifications → 304 3178ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:34.903Z IN  GET /v1/api/hr/migration/job → 200 1815ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:35.685Z IN  GET /v1/api/hr/migration/job → 200 1830ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:37.172Z IN  GET /v1/api/hr/migration/job → 200 2079ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:37.709Z IN  GET /v1/api/hr/migration/job → 200 2020ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:39.041Z IN  GET /v1/api/hr/migration/job → 200 1945ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:39.715Z IN  GET /v1/api/hr/migration/job → 200 2002ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:41.036Z IN  GET /v1/api/hr/migration/job → 200 1943ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:41.817Z IN  GET /v1/api/hr/migration/job → 200 2099ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:42.814Z IN  GET /v1/api/hr/migration/job → 200 1722ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:43.425Z IN  GET /v1/api/hr/migration/job → 200 1602ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:45.237Z IN  GET /v1/api/hr/migration/job → 200 2145ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:46.131Z IN  GET /v1/api/hr/migration/job → 200 2700ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:47.278Z IN  GET /v1/api/hr/migration/job → 200 2186ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:47.832Z IN  GET /v1/api/hr/migration/job → 200 1698ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:47.833Z IN  GET /v1/api/hr/migration/job → 200 1741ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:49.670Z IN  GET /v1/api/hr/migration/job → 200 1828ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:51.011Z IN  GET /v1/api/hr/migration/job → 200 1905ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:53.055Z IN  GET /v1/api/hr/migration/job → 200 1948ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:54.111Z IN  GET /v1/api/hr/migration/job → 200 4437ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:54.492Z IN  GET /v1/api/hr/migration/job → 200 2387ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:55.308Z IN  GET /v1/api/hr/notifications → 304 3815ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:56.107Z IN  GET /v1/api/hr/migration/job → 200 3014ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:56.722Z IN  GET /v1/api/hr/migration/job → 200 2607ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:56.923Z IN  GET /v1/api/hr/migration/job → 200 2426ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:59.168Z IN  GET /v1/api/hr/migration/job → 200 3060ms user=superadmin@usg.com ip=::1
+2026-10-19T11:58:59.596Z IN  GET /v1/api/hr/migration/job → 200 2665ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:00.417Z IN  GET /v1/api/hr/migration/job → 200 2313ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:01.193Z IN  GET /v1/api/hr/migration/job → 200 2089ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:01.830Z IN  GET /v1/api/hr/migration/job → 200 2223ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:03.709Z IN  GET /v1/api/hr/migration/job → 200 2610ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:04.090Z IN  GET /v1/api/hr/migration/job → 200 2253ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:04.877Z IN  GET /v1/api/hr/migration/job → 200 1772ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:06.420Z IN  GET /v1/api/hr/migration/job → 200 2326ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:06.600Z IN  GET /v1/api/hr/migration/job → 200 2507ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:08.665Z IN  GET /v1/api/hr/migration/job → 200 2242ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:08.946Z IN  GET /v1/api/hr/migration/job → 200 2840ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:10.667Z IN  GET /v1/api/hr/migration/job → 200 1997ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:10.881Z IN  GET /v1/api/hr/migration/job → 200 2789ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:12.071Z IN  GET /v1/api/hr/migration/job → 200 1980ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:12.248Z IN  GET /v1/api/hr/migration/job → 200 1576ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:14.097Z IN  GET /v1/api/hr/migration/job → 200 1999ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:14.296Z IN  GET /v1/api/hr/migration/job → 200 2043ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:14.484Z IN  GET /v1/api/hr/notifications → 304 2993ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:15.998Z IN  GET /v1/api/hr/migration/job → 200 1897ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:16.195Z IN  GET /v1/api/hr/migration/job → 200 1895ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:18.031Z IN  GET /v1/api/hr/migration/job → 200 1926ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:18.260Z IN  GET /v1/api/hr/migration/job → 200 2061ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:20.130Z IN  GET /v1/api/hr/migration/job → 200 2028ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:20.308Z IN  GET /v1/api/hr/migration/job → 200 2042ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:21.987Z IN  GET /v1/api/hr/migration/job → 200 1676ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:22.166Z IN  GET /v1/api/hr/migration/job → 200 2068ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:24.146Z IN  GET /v1/api/hr/migration/job → 200 2152ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:24.930Z IN  GET /v1/api/hr/migration/job → 200 1825ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:26.010Z IN  GET /v1/api/hr/migration/job → 200 1859ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:26.231Z IN  GET /v1/api/hr/migration/job → 200 2127ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:27.837Z IN  GET /v1/api/hr/migration/job → 200 1821ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:29.254Z IN  GET /v1/api/hr/migration/job → 200 2157ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:29.898Z IN  GET /v1/api/hr/migration/job → 200 2055ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:31.224Z IN  GET /v1/api/hr/migration/job → 200 2121ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:31.760Z IN  GET /v1/api/hr/migration/job → 200 1858ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:33.088Z IN  GET /v1/api/hr/migration/job → 200 1988ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:33.865Z IN  GET /v1/api/hr/migration/job → 200 2099ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:34.921Z IN  GET /v1/api/hr/migration/job → 200 1828ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:34.921Z IN  GET /v1/api/hr/notifications → 304 2696ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:35.557Z IN  GET /v1/api/hr/migration/job → 200 1687ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:37.094Z IN  GET /v1/api/hr/migration/job → 200 2008ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:37.996Z IN  GET /v1/api/hr/migration/job → 200 2432ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:39.741Z IN  GET /v1/api/hr/migration/job → 200 2644ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:39.965Z IN  GET /v1/api/hr/migration/job → 200 1962ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:42.003Z IN  GET /v1/api/hr/migration/job → 200 2036ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:44.076Z IN  GET /v1/api/hr/migration/job → 200 2070ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:45.082Z IN  GET /v1/api/hr/migration/job → 200 5981ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:45.514Z IN  GET /v1/api/hr/migration/job → 200 4422ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:45.920Z IN  GET /v1/api/hr/migration/job → 200 1836ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:46.847Z IN  GET /v1/api/hr/migration/job → 200 3616ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:48.122Z IN  GET /v1/api/hr/migration/job → 200 2196ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:49.853Z IN  GET /v1/api/hr/migration/job → 200 4622ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:50.076Z IN  GET /v1/api/hr/migration/job → 200 1949ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:50.314Z IN  GET /v1/api/hr/migration/job → 200 3084ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:50.779Z IN  GET /v1/api/hr/migration/job → 200 1552ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:51.966Z IN  GET /v1/api/hr/migration/job → 200 1887ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:53.241Z IN  GET /v1/api/hr/migration/job → 200 2015ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:54.164Z IN  GET /v1/api/hr/migration/job → 200 2191ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:55.112Z IN  GET /v1/api/hr/migration/job → 200 1881ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:56.275Z IN  GET /v1/api/hr/migration/job → 200 2108ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:56.510Z IN  GET /v1/api/hr/notifications → 304 4291ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:57.248Z IN  GET /v1/api/hr/migration/job → 200 2016ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:59.182Z IN  GET /v1/api/hr/migration/job → 200 2901ms user=superadmin@usg.com ip=::1
+2026-10-19T11:59:59.394Z IN  GET /v1/api/hr/migration/job → 200 3177ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:01.053Z IN  GET /v1/api/hr/migration/job → 200 2832ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:01.728Z IN  GET /v1/api/hr/migration/job → 200 2538ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:01.906Z IN  GET /v1/api/hr/migration/job → 200 1691ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:03.274Z IN  GET /v1/api/hr/migration/job → 200 2044ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:03.971Z IN  GET /v1/api/hr/migration/job → 200 2237ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:04.943Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T12:00:04.987Z OUT ← GET http://localhost:11434/api/tags → 200 44ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T12:00:06.465Z IN  GET /v1/api/hr/migration/job → 200 3237ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:06.651Z IN  GET /v1/api/hr/migration/job → 200 2674ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:07.846Z IN  GET /v1/api/hr/migration/job → 200 2629ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:09.039Z IN  GET /v1/api/hr/migration/job → 200 2383ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:09.290Z IN  GET /v1/api/hr/migration/job → 200 3073ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:11.131Z IN  GET /v1/api/hr/migration/job → 200 2901ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:11.519Z IN  GET /v1/api/hr/migration/job → 200 2477ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:12.880Z IN  GET /v1/api/hr/migration/job → 200 2663ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:13.658Z IN  GET /v1/api/hr/migration/job → 200 2442ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:13.866Z IN  GET /v1/api/hr/migration/job → 200 2342ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:15.101Z IN  GET /v1/api/hr/migration/job → 200 1885ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:16.027Z IN  GET /v1/api/hr/migration/job → 200 2156ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:17.129Z IN  GET /v1/api/hr/notifications → 304 4913ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:18.123Z IN  GET /v1/api/hr/migration/job → 200 2909ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:18.571Z IN  GET /v1/api/hr/migration/job → 200 2539ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:19.807Z IN  GET /v1/api/hr/migration/job → 200 2589ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:20.998Z IN  GET /v1/api/hr/migration/job → 200 2421ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:21.939Z IN  GET /v1/api/hr/migration/job → 200 3707ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:22.743Z IN  GET /v1/api/hr/migration/job → 200 2516ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:24.040Z IN  GET /v1/api/hr/migration/job → 200 3036ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:24.503Z IN  GET /v1/api/hr/migration/job → 200 2275ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:25.647Z IN  GET /v1/api/hr/migration/job → 200 2421ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:25.844Z IN  GET /v1/api/hr/migration/job → 200 1800ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:27.281Z IN  GET /v1/api/hr/migration/job → 200 2052ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:27.885Z IN  GET /v1/api/hr/migration/job → 200 2035ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:29.674Z IN  GET /v1/api/hr/migration/job → 200 2443ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:31.324Z IN  GET /v1/api/hr/migration/job → 200 3434ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:32.554Z IN  GET /v1/api/hr/migration/job → 200 3324ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:34.168Z IN  GET /v1/api/hr/migration/job → 200 3939ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:34.662Z IN  GET /v1/api/hr/migration/job → 200 3435ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:34.891Z IN  GET /v1/api/hr/migration/job → 200 3556ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:36.199Z IN  GET /v1/api/hr/migration/job → 200 2025ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:36.813Z IN  GET /v1/api/hr/migration/job → 200 2146ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:37.063Z IN  GET /v1/api/hr/migration/job → 200 2166ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:37.611Z IN  GET /v1/api/hr/notifications → 304 5051ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:38.318Z IN  GET /v1/api/hr/migration/job → 200 2102ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:38.960Z IN  GET /v1/api/hr/migration/job → 200 1892ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:40.782Z IN  GET /v1/api/hr/migration/job → 200 2553ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:41.627Z IN  GET /v1/api/hr/migration/job → 200 2661ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:42.669Z IN  GET /v1/api/hr/migration/job → 200 2453ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:43.135Z IN  GET /v1/api/hr/migration/job → 200 1905ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:44.022Z IN  GET /v1/api/hr/migration/job → 200 2387ms user=superadmin@usg.com ip=::1
+2026-10-19T12:00:45.977Z IN  GET /v1/api/hr/migration/job → 200 1949ms user=superadmin@usg.com ip=::1
+2026-10-19T12:01:34.772Z IN  GET /v1/api/hr/migration/job → 200 2555ms user=superadmin@usg.com ip=::1
+2026-10-19T12:01:36.075Z IN  GET /v1/api/hr/notifications → 304 3855ms user=superadmin@usg.com ip=::1
+2026-10-19T12:02:36.410Z IN  GET /v1/api/hr/migration/job → 200 4183ms user=superadmin@usg.com ip=::1
+2026-10-19T12:02:38.154Z IN  GET /v1/api/hr/notifications → 304 5924ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:34.224Z IN  GET /v1/api/hr/migration/job → 200 6301ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:34.403Z IN  GET /v1/api/hr/notifications → 304 6516ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:34.980Z IN  GET /v1/api/hr/notifications → 200 6980ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:35.616Z IN  GET /v1/api/hr/user/refresh-token → 200 7100ms user=- ip=::1
+2026-10-19T12:22:36.284Z IN  GET /v1/api/hr/settings/modules → 304 650ms user=- ip=::1
+2026-10-19T12:22:41.031Z IN  GET /v1/api/hr/settings/controls → 304 5385ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:41.377Z IN  GET /v1/api/hr/documents/usg_logo.png → 404 4ms user=- ip=::1
+2026-10-19T12:22:42.244Z IN  GET /v1/api/hr/documents/usg_logo.png → 404 2ms user=- ip=::1
+2026-10-19T12:22:44.243Z IN  POST /v1/api/hr/realtime/ticket → 200 2977ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:45.437Z IN  POST /v1/api/hr/realtime/ticket → 200 4175ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:46.080Z IN  GET /v1/api/hr/settings/app-setup → 304 3815ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:46.312Z IN  GET /v1/api/hr/notifications → 200 5048ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:48.184Z IN  GET /v1/api/hr/settings/app-setup → 304 2085ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:48.616Z IN  GET /v1/api/hr/system/code-lists → 304 6346ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:48.812Z IN  GET /v1/api/hr/notifications → 304 2481ms user=superadmin@usg.com ip=::1
+2026-10-19T12:22:49.756Z IN  GET /v1/api/hr/system/code-lists → 304 1131ms user=superadmin@usg.com ip=::1
+2026-10-19T12:23:04.071Z IN  GET /v1/api/hr/notifications → 304 1850ms user=superadmin@usg.com ip=::1
+2026-10-19T12:23:23.786Z IN  GET /v1/api/hr/notifications → 304 1563ms user=superadmin@usg.com ip=::1
+2026-10-19T12:23:43.879Z IN  GET /v1/api/hr/notifications → 304 1647ms user=superadmin@usg.com ip=::1
+2026-10-19T12:24:03.859Z IN  GET /v1/api/hr/notifications → 304 1625ms user=superadmin@usg.com ip=::1
+2026-10-19T12:24:23.867Z IN  GET /v1/api/hr/notifications → 304 1640ms user=superadmin@usg.com ip=::1
+2026-10-19T12:24:43.893Z IN  GET /v1/api/hr/notifications → 304 1663ms user=superadmin@usg.com ip=::1
+2026-10-19T12:25:33.971Z IN  GET /v1/api/hr/notifications → 304 1747ms user=superadmin@usg.com ip=::1
+2026-10-19T12:26:36.752Z IN  GET /v1/api/hr/notifications → 304 4522ms user=superadmin@usg.com ip=::1
+2026-10-19T12:27:35.516Z IN  GET /v1/api/hr/notifications → 304 3289ms user=superadmin@usg.com ip=::1
+2026-10-19T12:28:34.001Z IN  GET /v1/api/hr/notifications → 304 1778ms user=superadmin@usg.com ip=::1
+2026-10-19T12:29:33.840Z IN  GET /v1/api/hr/notifications → 304 1607ms user=superadmin@usg.com ip=::1
+2026-10-19T12:30:04.576Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T12:30:04.675Z OUT ← GET http://localhost:11434/api/tags → 200 99ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T12:30:34.894Z IN  GET /v1/api/hr/notifications → 304 2664ms user=superadmin@usg.com ip=::1
+2026-10-19T12:31:34.004Z IN  GET /v1/api/hr/notifications → 304 1777ms user=superadmin@usg.com ip=::1
+2026-10-19T12:32:34.015Z IN  GET /v1/api/hr/notifications → 304 1783ms user=superadmin@usg.com ip=::1
+2026-10-19T12:33:34.161Z IN  GET /v1/api/hr/notifications → 304 1937ms user=superadmin@usg.com ip=::1
+2026-10-19T12:34:34.627Z IN  GET /v1/api/hr/notifications → 304 2393ms user=superadmin@usg.com ip=::1
+2026-10-19T12:35:36.394Z IN  GET /v1/api/hr/notifications → 304 4169ms user=superadmin@usg.com ip=::1
+2026-10-19T12:36:34.027Z IN  GET /v1/api/hr/notifications → 304 1796ms user=superadmin@usg.com ip=::1
+2026-10-19T12:37:41.673Z IN  GET /v1/api/hr/notifications → 304 4711ms user=superadmin@usg.com ip=::1
+2026-10-19T12:37:45.503Z IN  GET /v1/api/hr/user/refresh-token → 200 8193ms user=- ip=::1
+2026-10-19T12:37:46.599Z IN  GET /v1/api/hr/settings/modules → 304 1072ms user=- ip=::1
+2026-10-19T12:37:50.533Z IN  GET /v1/api/hr/settings/controls → 304 5004ms user=superadmin@usg.com ip=::1
+2026-10-19T12:37:54.932Z IN  GET /v1/api/hr/user/refresh-token → 200 5014ms user=- ip=::1
+2026-10-19T12:37:55.331Z IN  GET /v1/api/hr/settings/modules → 304 379ms user=- ip=::1
+2026-10-19T12:37:56.772Z IN  GET /v1/api/hr/settings/controls → 200 1822ms user=superadmin@usg.com ip=::1
+2026-10-19T12:37:57.044Z IN  GET /v1/api/hr/documents/usg_logo.png → 404 1ms user=- ip=::1
+2026-10-19T12:37:57.224Z IN  GET /v1/api/hr/documents/usg_logo.png → 404 1ms user=- ip=::1
+2026-10-19T12:37:59.175Z IN  POST /v1/api/hr/realtime/ticket → 200 2218ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:02.170Z IN  POST /v1/api/hr/realtime/ticket → 200 5212ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:05.742Z IN  GET /v1/api/hr/settings/app-setup → 304 8500ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:06.039Z IN  GET /v1/api/hr/system/code-lists → 304 8795ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:06.962Z IN  GET /v1/api/hr/notifications → 200 10003ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:09.460Z IN  GET /v1/api/hr/system/code-lists → 304 3410ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:10.055Z IN  GET /v1/api/hr/settings/app-setup → 304 4302ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:11.593Z IN  GET /v1/api/hr/notifications → 304 4620ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:16.089Z IN  GET /v1/api/hr/notifications → 304 4483ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:18.411Z IN  GET /v1/api/hr/notifications → 304 1438ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:38.622Z IN  GET /v1/api/hr/notifications → 304 1633ms user=superadmin@usg.com ip=::1
+2026-10-19T12:38:58.658Z IN  GET /v1/api/hr/notifications → 304 1665ms user=superadmin@usg.com ip=::1
+2026-10-19T12:39:19.083Z IN  GET /v1/api/hr/notifications → 304 2115ms user=superadmin@usg.com ip=::1
+2026-10-19T12:39:38.570Z IN  GET /v1/api/hr/notifications → 304 1605ms user=superadmin@usg.com ip=::1
+2026-10-19T12:39:58.582Z IN  GET /v1/api/hr/notifications → 304 1616ms user=superadmin@usg.com ip=::1
+2026-10-19T12:40:19.602Z IN  GET /v1/api/hr/notifications → 304 2626ms user=superadmin@usg.com ip=::1
+2026-10-19T12:40:40.414Z IN  GET /v1/api/hr/notifications → 304 3187ms user=superadmin@usg.com ip=::1
+2026-10-19T12:40:58.820Z IN  GET /v1/api/hr/notifications → 304 1591ms user=superadmin@usg.com ip=::1
+2026-10-19T12:41:19.019Z IN  GET /v1/api/hr/notifications → 304 1789ms user=superadmin@usg.com ip=::1
+2026-10-19T12:42:34.718Z IN  GET /v1/api/hr/notifications → 304 2477ms user=superadmin@usg.com ip=::1
+2026-10-19T12:43:35.838Z IN  GET /v1/api/hr/notifications → 304 3606ms user=superadmin@usg.com ip=::1
+2026-10-19T12:44:35.511Z IN  GET /v1/api/hr/notifications → 304 3286ms user=superadmin@usg.com ip=::1
+2026-10-19T12:45:35.128Z IN  GET /v1/api/hr/notifications → 304 2892ms user=superadmin@usg.com ip=::1
+2026-10-19T13:30:00.872Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T13:30:00.939Z OUT ← GET http://localhost:11434/api/tags → 200 67ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T14:00:00.560Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T14:00:00.634Z OUT ← GET http://localhost:11434/api/tags → 200 74ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T14:30:00.673Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T14:30:00.752Z OUT ← GET http://localhost:11434/api/tags → 200 78ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T20:49:25.252Z IN  GET /v1/api/hr/notifications → 401 5053ms user=- ip=::1
+2026-10-19T20:49:25.280Z IN  POST /v1/api/hr/realtime/ticket → 401 5015ms user=- ip=::1
+2026-10-19T20:49:25.419Z IN  POST /v1/api/hr/logout → 200 5012ms user=- ip=::1
+2026-10-19T20:49:25.803Z IN  GET /v1/api/hr/user/refresh-token → 403 5021ms user=- ip=::1
+2026-10-19T21:00:10.210Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T21:00:10.261Z OUT ← GET http://localhost:11434/api/tags → 200 51ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T21:30:10.183Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T21:30:10.199Z OUT ← GET http://localhost:11434/api/tags → 200 16ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T22:00:10.304Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T22:00:10.332Z OUT ← GET http://localhost:11434/api/tags → 200 28ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T22:30:10.789Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T22:30:10.815Z OUT ← GET http://localhost:11434/api/tags → 200 26ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T23:00:10.255Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T23:00:10.273Z OUT ← GET http://localhost:11434/api/tags → 200 18ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T23:30:10.573Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-19T23:30:10.654Z OUT ← GET http://localhost:11434/api/tags → 200 81ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-19T23:38:43.394Z IN  GET /v1/api/hr/user/refresh-token → 403 5021ms user=- ip=::1
+2026-10-20T09:30:10.732Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T09:30:10.829Z OUT ← GET http://localhost:11434/api/tags → 200 97ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T09:40:04.857Z IN  POST /v1/api/hr/login → 401 5029ms user=- ip=::1
+2026-10-20T09:40:15.062Z IN  POST /v1/api/hr/login → 401 5017ms user=- ip=::1
+2026-10-20T10:00:10.473Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T10:00:10.530Z OUT ← GET http://localhost:11434/api/tags → 200 57ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T11:00:10.859Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T11:00:10.930Z OUT ← GET http://localhost:11434/api/tags → 200 71ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T12:30:10.659Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T12:30:10.684Z OUT ← GET http://localhost:11434/api/tags → 200 25ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T12:55:31.695Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T12:55:31.797Z OUT ← GET http://localhost:11434/api/tags → 200 104ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T12:57:19.817Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T12:57:19.898Z OUT ← GET http://localhost:11434/api/tags → 200 82ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T13:00:02.689Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T13:00:02.723Z OUT ← GET http://localhost:11434/api/tags → 200 34ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T13:30:00.976Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T13:30:01.004Z OUT ← GET http://localhost:11434/api/tags → 200 28ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T14:38:48.802Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T14:38:49.440Z OUT ← GET http://localhost:11434/api/tags → 200 638ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T15:00:10.821Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T15:00:10.906Z OUT ← GET http://localhost:11434/api/tags → 200 85ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T15:30:10.931Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T15:30:11.010Z OUT ← GET http://localhost:11434/api/tags → 200 79ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T16:30:10.274Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T16:30:10.361Z OUT ← GET http://localhost:11434/api/tags → 200 88ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T20:00:10.114Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T20:00:10.165Z OUT ← GET http://localhost:11434/api/tags → 200 51ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T20:30:10.330Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T20:30:10.371Z OUT ← GET http://localhost:11434/api/tags → 200 41ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T21:00:10.874Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T21:00:10.954Z OUT ← GET http://localhost:11434/api/tags → 200 80ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T21:30:10.782Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T21:30:10.832Z OUT ← GET http://localhost:11434/api/tags → 200 50ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T22:00:10.893Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T22:00:10.954Z OUT ← GET http://localhost:11434/api/tags → 200 61ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-20T22:30:10.173Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-20T22:30:10.231Z OUT ← GET http://localhost:11434/api/tags → 200 58ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T10:30:10.827Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T10:30:10.865Z OUT ← GET http://localhost:11434/api/tags → 200 38ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T11:00:10.796Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T11:00:10.838Z OUT ← GET http://localhost:11434/api/tags → 200 42ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T11:07:40.865Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T11:07:40.932Z OUT ← GET http://localhost:11434/api/tags → 200 68ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T11:08:17.190Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T11:08:17.270Z OUT ← GET http://localhost:11434/api/tags → 200 81ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T11:30:03.561Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T11:30:03.599Z OUT ← GET http://localhost:11434/api/tags → 200 38ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T11:56:08.513Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T11:56:08.612Z OUT ← GET http://localhost:11434/api/tags → 200 101ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T11:59:43.434Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T11:59:43.565Z OUT ← GET http://localhost:11434/api/tags → 200 134ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T12:00:04.046Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T12:00:04.100Z OUT ← GET http://localhost:11434/api/tags → 200 54ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T12:02:48.102Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T12:02:48.186Z OUT ← GET http://localhost:11434/api/tags → 200 85ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T12:30:04.065Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T12:30:04.135Z OUT ← GET http://localhost:11434/api/tags → 200 71ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T13:30:10.548Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T13:30:10.631Z OUT ← GET http://localhost:11434/api/tags → 200 83ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T14:00:05.062Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T14:00:05.139Z OUT ← GET http://localhost:11434/api/tags → 200 77ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T15:30:04.262Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T15:30:04.307Z OUT ← GET http://localhost:11434/api/tags → 200 46ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T16:00:03.883Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T16:00:03.954Z OUT ← GET http://localhost:11434/api/tags → 200 71ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T16:30:04.672Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T16:30:04.830Z OUT ← GET http://localhost:11434/api/tags → 200 158ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T17:00:03.210Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T17:00:03.280Z OUT ← GET http://localhost:11434/api/tags → 200 70ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-21T17:30:04.870Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-21T17:30:04.944Z OUT ← GET http://localhost:11434/api/tags → 200 74ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T11:00:04.175Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T11:00:04.247Z OUT ← GET http://localhost:11434/api/tags → 200 72ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T11:30:04.110Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T11:30:04.171Z OUT ← GET http://localhost:11434/api/tags → 200 61ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T12:00:05.155Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T12:00:05.221Z OUT ← GET http://localhost:11434/api/tags → 200 66ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T12:30:03.877Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T12:30:03.945Z OUT ← GET http://localhost:11434/api/tags → 200 68ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T13:00:10.760Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T13:00:10.785Z OUT ← GET http://localhost:11434/api/tags → 200 26ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T13:30:10.880Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T13:30:10.913Z OUT ← GET http://localhost:11434/api/tags → 200 33ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T14:00:10.488Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T14:00:10.533Z OUT ← GET http://localhost:11434/api/tags → 200 45ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T14:30:10.389Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T14:30:10.728Z OUT ← GET http://localhost:11434/api/tags → 200 338ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T15:00:10.802Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T15:00:10.860Z OUT ← GET http://localhost:11434/api/tags → 200 58ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T15:30:10.412Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T15:30:10.465Z OUT ← GET http://localhost:11434/api/tags → 200 53ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T16:30:10.894Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T16:30:10.934Z OUT ← GET http://localhost:11434/api/tags → 200 41ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T17:00:02.756Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T17:00:02.829Z OUT ← GET http://localhost:11434/api/tags → 200 73ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T17:30:04.024Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T17:30:04.097Z OUT ← GET http://localhost:11434/api/tags → 200 73ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T18:00:03.884Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T18:00:03.951Z OUT ← GET http://localhost:11434/api/tags → 200 67ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T18:30:04.436Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T18:30:04.512Z OUT ← GET http://localhost:11434/api/tags → 200 76ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-22T19:00:05.578Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-22T19:00:05.652Z OUT ← GET http://localhost:11434/api/tags → 200 74ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-23T10:30:10.257Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-23T10:30:10.346Z OUT ← GET http://localhost:11434/api/tags → 200 89ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-23T11:00:10.373Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-23T11:00:10.399Z OUT ← GET http://localhost:11434/api/tags → 200 26ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}
+2026-10-23T11:30:10.674Z OUT → GET http://localhost:11434/api/tags
+    headers: {"Accept":"application/json, text/plain, */*"}
+2026-10-23T11:30:10.704Z OUT ← GET http://localhost:11434/api/tags → 200 30ms
+    response: {"models":[{"name":"nomic-embed-text:latest","model":"nomic-embed-text:latest","modified_at":"2026-06-21T20:00:29.4837016Z","size":274302450,"digest":"0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f","details":{"parent_model":"","format":"gguf","family":"nomic-bert","families":["nomic-bert"],"parameter_size":"137M","quantization_level":"F16","context_length":2048,"embedding_length":768,"runner":"ggml"},"capabilities":["embedding"]},{"name":"llama3.2:3b","model":"llama3.2:3b","modified_at":"2026-06-21T19:53:30.5272944Z","size":2019393189,"digest":"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"3.2B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":3072,"runner":"ggml"},"capabilities":["completion","tools"]}]}

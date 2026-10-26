@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, X, Eye, Users, Banknote, RefreshCw, Check, XCircle, Stethoscope, FileText, Download, CalendarClock, Clock, ArrowRightLeft } from 'lucide-react';
+import { CheckCircle, X, Eye, Users, Banknote, RefreshCw, Check, XCircle, Stethoscope, FileText, Download, CalendarClock, Clock, ArrowRightLeft, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { TableToolbar } from './ui/TableToolbar';
@@ -16,7 +16,7 @@ import { TransferChangeComparison } from './ui/TransferChangeComparison';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
 import { useRealtimeRefresh } from '@/lib/realtime';
 
-type ApprovalModule = 'Employee' | 'Employee Transfer' | 'Payroll' | 'Medical' | 'Leave';
+type ApprovalModule = 'Employee' | 'Employee Transfer' | 'Payroll' | 'Medical' | 'Leave' | 'Out of Station';
 
 // Safely extract a display string from a value that may be a plain string,
 // a code-list-value object {label}, or a structure object {name}.
@@ -67,6 +67,7 @@ function ModulePill({ module }: { module: ApprovalModule }) {
   if (module === 'Employee') return <span className="pill pill-accent text-[11px]"><Users size={10} className="inline mr-1" />Employee</span>;
   if (module === 'Payroll')  return <span className="pill pill-warning text-[11px]"><Banknote size={10} className="inline mr-1" />Payroll</span>;
   if (module === 'Leave')    return <span className="pill text-[11px] bg-purple-500/10 text-purple-700 border border-purple-200/50"><CalendarClock size={10} className="inline mr-1" />Leave</span>;
+  if (module === 'Out of Station') return <span className="pill text-[11px] bg-lime-500/10 text-lime-800 border border-lime-200/50"><MapPin size={10} className="inline mr-1" />Out of Station</span>;
   if (module === 'Employee Transfer') return <span className="pill text-[11px] bg-blue-500/10 text-blue-700 border border-blue-200/50"><ArrowRightLeft size={10} className="inline mr-1" />Transfer</span>;
   return <span className="pill pill-success text-[11px]"><Stethoscope size={10} className="inline mr-1" />Medical</span>;
 }
@@ -516,6 +517,74 @@ function LeaveApprovalDetail({ item, onApprove, onReject, onClose, busy }: {
   );
 }
 
+// ── Out of Station detail panel ───────────────────────────────────────────────
+function OutOfStationApprovalDetail({ item, onApprove, onReject, onClose, busy }: {
+  item: ApprovalItem; onApprove: () => void; onReject: (reason: string) => void; onClose: () => void; busy: boolean;
+}) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason]       = useState('');
+  const r = item.raw;
+  const money = (n: any) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hrStage = r.status === 'Pending HR Approval';
+  const rows = [
+    ['Employee',    r.employee_name || '—'],
+    ['Employee ID', r.employee_code || '—'],
+    ['Request',     r.request_number || '—'],
+    ['Location',    r.location || '—'],
+    ['From',        r.date_start ? formatDmy(r.date_start, '') : '—'],
+    ['To',          r.date_end ? formatDmy(r.date_end, '') : '—'],
+    ['Days',        String(r.days ?? '—')],
+    ['Grade',       r.paygrade_name || '—'],
+    ['Raised by',   r.requested_by_name || '—'],
+    ['Status',      r.status || '—'],
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 pb-3 border-b border-[var(--border)]">
+        <div className="w-10 h-10 rounded-full bg-lime-500/10 flex items-center justify-center"><MapPin size={18} className="text-lime-700" /></div>
+        <div>
+          <p className="font-bold text-[var(--text-primary)]">{r.employee_name}</p>
+          <p className="text-xs text-[var(--text-muted)]">Out of station allowance — {hrStage ? 'HR approval' : 'supervisor approval'}</p>
+        </div>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
+        {rows.map(([label, value]) => (
+          <div key={label}><dt className="text-[11px] text-[var(--text-muted)] font-medium">{label}</dt><dd className="text-[13px] text-[var(--text-primary)] font-semibold mt-0.5">{value}</dd></div>
+        ))}
+      </dl>
+      <div className="rounded-lg bg-lime-50 border border-lime-100 px-4 py-3 space-y-1">
+        <div className="flex justify-between text-[13px]"><span className="text-[var(--text-muted)]">{r.days} day(s) × {money(r.daily_rate)}</span><span className="font-bold text-lime-800">{money(r.amount)}</span></div>
+        {hrStage && <p className="text-[11px] text-[var(--text-muted)]">Approving pays this to the employee's bank account through the GL.</p>}
+      </div>
+      {r.purpose && (
+        <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+          <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Purpose</p>
+          <p className="text-[12px] text-[var(--text-primary)] whitespace-pre-wrap">{r.purpose}</p>
+        </div>
+      )}
+      {rejecting && (
+        <FormField label="Rejection Reason">
+          <CountedTextarea className={inputClass + ' resize-none'} rows={3} maxChars={500} placeholder="Enter reason for rejection…" value={reason} onChange={e => setReason(e.target.value)} />
+        </FormField>
+      )}
+      <div className="flex justify-end gap-3 pt-2 border-t border-[var(--border)]">
+        <button className="secondary-btn" onClick={onClose} disabled={busy}>Cancel</button>
+        {rejecting ? (
+          <>
+            <button className="secondary-btn" onClick={() => setRejecting(false)} disabled={busy}>Back</button>
+            <button className="primary-btn !bg-red-600 hover:!bg-red-700" onClick={() => onReject(reason)} disabled={busy || !reason.trim()}><XCircle size={14} /><span>{busy ? 'Rejecting…' : 'Confirm Reject'}</span></button>
+          </>
+        ) : (
+          <>
+            <button className="secondary-btn !border-red-500 !text-red-600 hover:!bg-red-50" onClick={() => setRejecting(true)} disabled={busy}><XCircle size={14} /><span>Reject</span></button>
+            <button className="primary-btn !bg-green-600 hover:!bg-green-700" onClick={onApprove} disabled={busy}><Check size={14} /><span>{busy ? 'Approving…' : 'Approve'}</span></button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Slide-over panel wrapper ──────────────────────────────────────────────────
 function EmployeeTransferDetail({ transfer, onApprove, onReject, onClose, busy }: {
   transfer: any; onApprove: (comment: string) => void; onReject: (reason: string) => void; onClose: () => void; busy: boolean;
@@ -673,6 +742,30 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
     } finally { setBusy(false); }
   }
 
+  async function approveOutOfStation() {
+    setBusy(true);
+    try {
+      const res = await api.post(`/out-of-station/requests/${item.id}/approve`);
+      const msg: string = res.data?.message || 'Out of station request approved';
+      // HR's approval also posts the allowance; a failed posting comes back as a warning, not an error.
+      if (res.data?.glError || /failed|switched off/i.test(msg)) toast.warning(msg); else toast.success(msg);
+      onDone(item.id);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Approval failed');
+    } finally { setBusy(false); }
+  }
+
+  async function rejectOutOfStation(reason: string) {
+    setBusy(true);
+    try {
+      await api.post(`/out-of-station/requests/${item.id}/reject`, { reason });
+      toast.success('Out of station request rejected');
+      onDone(item.id);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Rejection failed');
+    } finally { setBusy(false); }
+  }
+
   async function rejectLeave(reason: string) {
     setBusy(true);
     try {
@@ -715,6 +808,8 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
               onClose={onClose}
               busy={busy}
             />
+          ) : item.module === 'Out of Station' ? (
+            <OutOfStationApprovalDetail item={item} onApprove={approveOutOfStation} onReject={rejectOutOfStation} onClose={onClose} busy={busy} />
           ) : item.module === 'Employee Transfer' ? (
             <EmployeeTransferDetail transfer={item.raw} onApprove={approveTransfer} onReject={rejectTransfer} onClose={onClose} busy={busy} />
           ) : (
@@ -788,10 +883,12 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
         canSeeMedical ? api.get('/medical/claims')                   : noop,
       ];
 
-      const [empRes, runRes, staffMedRes, depMedRes, claimRes, leaveRes, transferRes] = await Promise.allSettled([
+      const [empRes, runRes, staffMedRes, depMedRes, claimRes, leaveRes, transferRes, oosRes] = await Promise.allSettled([
         ...adminFetches,
         api.get('/leave/central-approval'),
         api.get('/employee-transfers/approvals'),
+        // Only requests the caller may act on: direct reports at the supervisor tier, everyone's at HR.
+        api.get('/out-of-station/approvals'),
       ]);
 
       const pending: ApprovalItem[] = [];
@@ -925,6 +1022,19 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
         }));
       }
 
+      if (oosRes.status === 'fulfilled') {
+        const reqs: any[] = oosRes.value.data?.data ?? [];
+        reqs.forEach((r: any) => pending.push({
+          id: String(r.id),
+          module: 'Out of Station',
+          title: r.employee_name || 'Employee',
+          subtitle: `${r.location || ''} — ${r.days ?? 0} day(s) · ${(Number(r.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+          submittedAt: r.submitted_at || r.created_at || null,
+          status: r.status || 'Pending Approval',
+          raw: r,
+        }));
+      }
+
       pending.sort((a, b) => {
         const aTime = a.submittedAt ? new Date(a.submittedAt).getTime() : Number.NaN;
         const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : Number.NaN;
@@ -950,6 +1060,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
   useRealtimeRefresh('leave',     () => fetchAll(true));
   useRealtimeRefresh('payroll',   () => fetchAll(true));
   useRealtimeRefresh('transfers', () => fetchAll(true));
+  useRealtimeRefresh('outofstation', () => fetchAll(true));
 
   function handleDone(id: string) {
     setItems(prev => prev.filter(i => i.id !== id));

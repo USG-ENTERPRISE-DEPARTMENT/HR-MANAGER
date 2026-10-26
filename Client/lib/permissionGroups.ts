@@ -60,6 +60,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     perms: ['view_leave_setup', 'manage_leave_types', 'manage_leave_periods', 'manage_holidays', 'manage_work_week', 'manage_leave_groups', 'manage_leave_rules', 'manage_leave_approvals'],
   },
   {
+    label: 'Out of Station',
+    color: { active: '#4d7c0f', light: '#f7fee7', text: '#3f6212', border: '#bef264' },
+    perms: ['view_out_of_station', 'approve_out_of_station', 'manage_out_of_station'],
+  },
+  {
     label: 'Salary',
     color: { active: '#b45309', light: '#fefce8', text: '#92400e', border: '#fde68a' },
     perms: ['view_salary_setup', 'manage_salary_component_types', 'manage_salary_components', 'manage_employee_salary_components', 'manage_notch_setup', 'manage_payment_types', 'manage_notch_movements'],
@@ -129,6 +134,9 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   approve_employee_transfers: 'Approve or reject employee transfer requests assigned for approval.',
   manage_employee_transfers: 'Configure transfer approvals and manage, reschedule, cancel, or activate transfers.',
   view_leave_setup: 'Open Leave Setup and view leave configuration and approval records.',
+  view_out_of_station: 'See every out-of-station request and download the allowance schedule.',
+  approve_out_of_station: 'Give the final (HR) approval on out-of-station requests, which pays them through the GL, and retry failed postings.',
+  manage_out_of_station: 'Set the daily rate per grade, the expense GL account and approval options, and raise requests for any employee.',
   view_salary_setup: 'Open Salary Setup and view salary configuration.',
   view_payroll: 'Open Payroll and view payroll employees, runs, and results.',
   process_payroll: 'Create, calculate, and submit payroll runs for processing.',

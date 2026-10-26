@@ -100,6 +100,7 @@ const menuSections: MenuSection[] = [
           { label: 'Manage Leave',    id: 'LeaveSetup'      },
           { label: 'Leave Calendar', id: 'LeaveCalendar'   },
           { label: 'Personal Leave', id: 'LeaveManagement' },
+          { label: 'Out of Station', id: 'OutOfStation'    },
         ],
       },
       {
