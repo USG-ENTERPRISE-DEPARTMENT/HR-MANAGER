@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, CalendarCheck, Banknote, Building2,
   ShieldAlert, PieChart, FolderOpen, Briefcase, GraduationCap,
-  Stethoscope, TrendingUp, Clock,
+  Stethoscope, TrendingUp, Clock, MapPin,
   ArrowUpRight, Search, LayoutGrid, List
 } from 'lucide-react';
 import { usePermission } from '../../hooks/usePermission';
@@ -39,6 +39,7 @@ const modules = [
   { id: 'Admin',        icon: ShieldAlert,  title: 'System Administration',  desc: 'Roles, permissions, audit logs, and global platform configuration settings.',           tag: 'Core',    ramp: 'blue',  stat: '3 admins',        statColor: '#64748b' },
   { id: 'Medical',      icon: Stethoscope,  title: 'Medical Claims',         desc: 'Employee medical reimbursements, hospital visits, pharmacy claims, and GL postings.',      tag: 'HR',      ramp: 'teal',  stat: '0 pending',       statColor: '#1D9E75' },
   { id: 'Performance',  icon: TrendingUp,   title: 'Performance Management', desc: 'Appraisal cycles, KPI tracking, review scores, and performance history.',                  tag: 'Growth',  ramp: 'teal',  stat: '0 reviews',       statColor: '#1D9E75' },
+  { id: 'OutOfStation', icon: MapPin,       title: 'Out of Station',         desc: 'Allowance for duty away from the home station: requests, approvals, daily rates by grade, and GL postings.', tag: 'HR', ramp: 'teal', stat: 'Daily allowance', statColor: '#1D9E75' },
   { id: 'Attendance',   icon: Clock,        title: 'Time & Attendance',      desc: 'Clock in/out, biometric device sync, kiosk punching, timesheets, and absence tracking.',   tag: 'HR',      ramp: 'teal',  stat: 'Live tracking',   statColor: '#1D9E75' },
 ];
 
