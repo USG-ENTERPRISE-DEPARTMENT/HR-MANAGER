@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ban, Check, CheckCircle2, Download, Eye, FileEdit, FileSpreadsheet, MapPin, Plus, RefreshCw, Save, Send, Trash2, XCircle } from 'lucide-react';
+import { Eye, FileEdit, Trash2, Check, X, XCircle, RefreshCw, SendHorizonal, Plus, Download, FileSpreadsheet, Save, CheckCircle2 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
+import { money } from '../../lib/currency';
 import { getCurrentUser } from '../../lib/auth';
 import { PageHeader } from './ui/PageHeader';
 import { TabBar } from './ui/TabBar';
+import { TableToolbar } from './ui/TableToolbar';
+import { TablePagination } from './ui/TablePagination';
+import { TableStateRow } from './ui/TableStateRow';
 import { FormModal } from './ui/FormModal';
+import { DetailSlideOver, DetailGrid, DetailField, DetailSection } from './ui/DetailSlideOver';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { SearchSelect } from './ui/SearchSelect';
@@ -15,13 +21,19 @@ import { RowActions } from './ui/RowActions';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { GlBlockedModal, type GlImbalance, type InvalidAccount } from './ui/GlBlockedModal';
 import { GlFailureCard } from './ui/GlFailureCard';
-import { exportReportExcel, fmtAmt, reportPdf } from './ui/reportTools';
-import { fmtDate, fmtDateTime } from '@/lib/dateFormat';
+import { exportReportExcel, reportPdf } from './ui/reportTools';
+import { fmtDate as formatDmy, fmtDateTime } from '@/lib/dateFormat';
 import { useRealtimeRefresh } from '@/lib/realtime';
 
 // Out of Station allowance: days (start to end, both included, weekends counted) × the daily rate for
 // the employee's pay grade. Raised by the employee or their supervisor, approved like leave
 // (supervisor, then HR), and paid to the employee's account through the GL on HR's approval.
+//
+// Two menu entries, like Leave:
+//   Personal Out of Station — the caller's own requests and their subordinates' (raise on their
+//                             behalf; give the supervisor approval).
+//   Manage Out of Station   — HR: daily rates, posting settings, the HR approval list, every request
+//                             with the printable schedule.
 
 type Request = {
   id: string; request_number: string; employee: string; employee_name: string; employee_code?: string;
@@ -36,23 +48,28 @@ type Rate = { paygrade_id: string; paygrade_name: string; daily_rate: number | n
 type Settings = { oos_expense_gl: string; oos_gl_branch: string; oos_supervisor_approval: string; oos_payments_enabled: string };
 type GlBlock = { accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null;
 
-const STATUSES = ['All', 'Draft', 'Pending Approval', 'Pending HR Approval', 'Approved', 'Paid', 'GL Failed', 'Rejected', 'Cancelled'];
-const OPEN = ['Draft', 'Pending Approval', 'Pending HR Approval'];
-
-function statusClass(status: string) {
-  if (status === 'Paid' || status === 'Approved') return 'pill-success';
-  if (status === 'Rejected' || status === 'Cancelled' || status === 'GL Failed') return 'pill-danger';
-  if (status === 'Draft') return 'pill-accent';
-  return 'pill-warning';
-}
-const day = (v?: string | null) => (v ? String(v).slice(0, 10) : '');
-const period = (r: Request) => `${fmtDate(r.date_start, '')} – ${fmtDate(r.date_end, '')}`;
-const daysBetween = (a: string, b: string) => {
-  const s = Date.parse(`${a}T00:00:00Z`), e = Date.parse(`${b}T00:00:00Z`);
-  return Number.isFinite(s) && Number.isFinite(e) && e >= s ? Math.round((e - s) / 86400000) + 1 : 0;
+// Same palette as Leave's status pills, plus the GL outcomes.
+const STATUS_PILL: Record<string, string> = {
+  Draft:                 'bg-slate-100 border border-slate-200 text-slate-500',
+  'Pending Approval':    'bg-amber-500/10 text-amber-700 border border-amber-200/50',
+  'Pending HR Approval': 'bg-purple-500/10 text-purple-700 border border-purple-200/50',
+  Approved:              'pill-success',
+  Paid:                  'pill-success',
+  'GL Failed':           'bg-red-500/10 text-red-700 border border-red-200/50',
+  Rejected:              'pill-danger',
+  Cancelled:             'bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--text-muted)]',
 };
+function StatusPill({ status }: { status: string }) {
+  return <span className={`pill ${STATUS_PILL[status] ?? ''}`}>{status}</span>;
+}
 
-/** Run an action and surface a GL block (bad accounts / imbalance) when the server reports one. */
+const OPEN = ['Draft', 'Pending Approval', 'Pending HR Approval'];
+const fmtDate = (v?: string | null) => formatDmy(v);
+const day = (v?: string | null) => (v ? String(v).slice(0, 10) : '');
+const amt = (n: any) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function paginate<T>(arr: T[], page: number, size: number): T[] { return arr.slice((page - 1) * size, page * size); }
+
+/** Run an action; show the server's message and open the GL block modal when it reports one. */
 async function runAction(call: () => Promise<any>, onGlBlock: (b: GlBlock) => void, fallbackOk: string) {
   try {
     const res = await call();
@@ -68,14 +85,13 @@ async function runAction(call: () => Promise<any>, onGlBlock: (b: GlBlock) => vo
   }
 }
 
-// ── Request form ──────────────────────────────────────────────────────────────
-function RequestForm({ initial, employees, onClose, onSaved }: {
-  initial: Request | null; employees: Employee[]; onClose: () => void; onSaved: () => void;
+// ── Request form (apply / edit) ───────────────────────────────────────────────
+function RequestForm({ initial, employees, title, subtitle, onClose, onSaved }: {
+  initial: Request | null; employees: Employee[]; title: string; subtitle: string; onClose: () => void; onSaved: () => void;
 }) {
-  const self = employees.find(e => e.is_self);
   const [form, setForm] = useState({
-    employee: initial?.employee ? String(initial.employee) : (self?.id ?? employees[0]?.id ?? ''),
-    purpose: initial?.purpose ?? '', location: initial?.location ?? '',
+    employee: initial?.employee ? String(initial.employee) : (employees.length === 1 ? String(employees[0].id) : ''),
+    location: initial?.location ?? '', purpose: initial?.purpose ?? '',
     date_start: day(initial?.date_start), date_end: day(initial?.date_end),
   });
   const [quote, setQuote] = useState<{ days: number; daily_rate: number; amount: number; paygrade_name?: string } | null>(null);
@@ -83,31 +99,30 @@ function RequestForm({ initial, employees, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
   const set = (key: keyof typeof form, value: string) => setForm(f => ({ ...f, [key]: value }));
 
-  // Ask the server for days × rate whenever the employee or dates change: the rate lives with the
-  // employee's pay grade, so the form never calculates its own.
+  // Days × rate comes from the server: the rate belongs to the employee's pay grade.
   useEffect(() => {
     setQuote(null); setQuoteError('');
-    if (!form.employee || !form.date_start || !form.date_end) return;
-    if (form.date_end < form.date_start) { setQuoteError('The end date is before the start date'); return; }
+    if (!form.employee || !form.date_start || !form.date_end || form.date_end < form.date_start) return;
     const t = setTimeout(() => {
       api.post('/out-of-station/quote', { employee: form.employee, date_start: form.date_start, date_end: form.date_end })
         .then(r => setQuote(r.data?.data ?? null))
-        .catch(e => setQuoteError(e.response?.data?.message || 'Could not work out the amount'));
+        .catch(e => setQuoteError(e.response?.data?.message || 'Could not work out the allowance'));
     }, 300);
     return () => clearTimeout(t);
   }, [form.employee, form.date_start, form.date_end]);
 
   const save = async (submit: boolean) => {
-    if (!form.employee) return toast.error('Choose the employee');
-    if (!form.purpose.trim()) return toast.error('Enter the purpose of the assignment');
-    if (!form.location.trim()) return toast.error('Enter the location');
-    if (!form.date_start || !form.date_end) return toast.error('Enter the start and end dates');
+    if (saving) return;
+    if (!form.employee) return toast.error('Select the employee');
+    if (!form.location.trim()) return toast.error('Location is required');
+    if (!form.date_start || !form.date_end) return toast.error('Start and end dates are required');
+    if (!form.purpose.trim()) return toast.error('Purpose is required');
     setSaving(true);
     try {
       if (initial) {
         await api.put(`/out-of-station/requests/${initial.id}`, form);
         if (submit) await api.post(`/out-of-station/requests/${initial.id}/submit`);
-        toast.success(submit ? 'Request submitted for approval' : 'Draft updated');
+        toast.success(submit ? 'Request submitted for approval' : 'Request updated');
       } else {
         const res = await api.post('/out-of-station/requests', { ...form, submit });
         toast.success(res.data?.message || 'Request saved');
@@ -117,434 +132,657 @@ function RequestForm({ initial, employees, onClose, onSaved }: {
     finally { setSaving(false); }
   };
 
-  const employeeOptions = employees.map(e => ({ id: String(e.id), label: `${e.employee_name}${e.employee_code ? ` (${e.employee_code})` : ''}${e.is_self ? ' — me' : ''}` }));
+  const options = employees.map(e => ({ id: String(e.id), label: `${e.employee_name}${e.employee_code ? ` (${e.employee_code})` : ''}` }));
 
   return (
     <FormModal
-      title={initial ? `Edit ${initial.request_number}` : 'New Out of Station Request'}
-      subtitle="Paid as days × the daily rate for the employee's grade. Weekends are counted."
-      onClose={onClose} onSave={() => save(true)} saveLabel={saving ? 'Saving…' : 'Submit for Approval'}
-      secondaryAction={{ label: 'Save Draft', onClick: () => { if (!saving) save(false); } }}
-      maxWidth="2xl" scrollable>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <FormField label="Employee" required>
-            {employeeOptions.length > 1
-              ? <SearchSelect value={form.employee} onChange={v => set('employee', v)} options={employeeOptions} placeholder="Select employee…" disabled={!!initial} />
-              : <input className={inputClass} value={employeeOptions[0]?.label ?? 'No employee record is linked to your account'} disabled />}
+      title={title} subtitle={subtitle}
+      onClose={onClose} onSave={() => save(true)} saveLabel={saving ? 'Saving…' : 'Submit'}
+      secondaryAction={{ label: 'Save as Draft', onClick: () => save(false) }}
+      maxWidth="lg">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        {employees.length > 1 && (
+          <FormField label="Employee" required className="col-span-full">
+            <SearchSelect value={form.employee} onChange={v => set('employee', v)} options={options} placeholder="Search employee…" disabled={!!initial} />
           </FormField>
-        </div>
-        <FormField label="Location" required><input id="oos-location" className={inputClass} value={form.location} maxLength={150} onChange={e => set('location', e.target.value)} placeholder="e.g. Makeni" /></FormField>
-        <div />
-        <FormField label="Start date" required><DateInput className={inputClass} value={form.date_start} onChange={e => set('date_start', e.target.value)} /></FormField>
-        <FormField label="End date" required><DateInput className={inputClass} value={form.date_end} onChange={e => set('date_end', e.target.value)} /></FormField>
-        <div className="sm:col-span-2">
-          <FormField label="Purpose" required>
-            <CountedTextarea className={`${inputClass} resize-none`} rows={2} maxChars={255} value={form.purpose} onChange={e => set('purpose', e.target.value)} placeholder="e.g. Relief duties at the Makeni branch" />
-          </FormField>
-        </div>
-      </div>
-      <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4">
-        {quoteError ? <p className="text-sm text-[var(--danger,#dc2626)]">{quoteError}</p>
-          : quote ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {[['Days', String(quote.days)], ['Grade', quote.paygrade_name || '—'], ['Daily rate', fmtAmt(quote.daily_rate)], ['Allowance', fmtAmt(quote.amount)]].map(([label, value]) => (
-                <div key={label}><p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{label}</p><p className={`mt-1 text-sm font-semibold tabular-nums ${label === 'Allowance' ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]'}`}>{value}</p></div>
-              ))}
+        )}
+        <FormField label="Location" required className="col-span-full">
+          <input id="oos-location" className={inputClass} value={form.location} maxLength={150} onChange={e => set('location', e.target.value)} placeholder="e.g. Makeni" />
+        </FormField>
+        <FormField label="Start Date" required>
+          <DateInput className={inputClass} value={form.date_start}
+            onChange={e => setForm(p => ({ ...p, date_start: e.target.value, date_end: p.date_end && e.target.value > p.date_end ? e.target.value : p.date_end }))} />
+        </FormField>
+        <FormField label="End Date" required>
+          <DateInput className={inputClass} value={form.date_end} min={form.date_start || undefined} onChange={e => set('date_end', e.target.value)} />
+        </FormField>
+
+        {form.date_start && form.date_end && (
+          form.date_end < form.date_start ? (
+            <div className="col-span-full rounded-[10px] border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-4 py-3 text-[12px] text-[var(--danger)]">
+              End date must be on or after start date.
             </div>
-          ) : <p className="text-sm text-[var(--text-muted)]">{form.date_start && form.date_end ? 'Working out the amount…' : 'Enter the dates to see the days and the allowance.'}</p>}
+          ) : quoteError ? (
+            <div className="col-span-full rounded-[10px] border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-4 py-3 text-[12px] text-[var(--danger)]">{quoteError}</div>
+          ) : (
+            <div className="col-span-full rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-4 py-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">
+                  {quote ? `${quote.days} day${quote.days !== 1 ? 's' : ''} × ${amt(quote.daily_rate)}` : 'Working out the allowance…'}
+                  <span className="ml-2 text-[11px] font-normal text-[var(--text-muted)]">weekends included</span>
+                </span>
+                {quote && <span className="text-[13px] font-bold tabular-nums text-[var(--success)]">{money(quote.amount)}</span>}
+              </div>
+              {quote?.paygrade_name && <p className="mt-1 text-[11px] text-[var(--text-muted)]">Daily rate for grade {quote.paygrade_name}</p>}
+            </div>
+          )
+        )}
+
+        <FormField label="Purpose" required className="col-span-full">
+          <CountedTextarea className={inputClass} rows={3} maxChars={255} value={form.purpose} onChange={e => set('purpose', e.target.value)} placeholder="e.g. Relief duties at the Makeni branch" />
+        </FormField>
       </div>
     </FormModal>
   );
 }
 
-// ── Reason prompt (reject / cancel) ───────────────────────────────────────────
-function ReasonModal({ title, label, required, onClose, onConfirm }: {
-  title: string; label: string; required: boolean; onClose: () => void; onConfirm: (reason: string) => void;
-}) {
-  const [reason, setReason] = useState('');
-  return (
-    <FormModal title={title} onClose={onClose} saveLabel="Confirm" maxWidth="md"
-      onSave={() => { if (required && !reason.trim()) { toast.error('Enter a reason'); return; } onConfirm(reason.trim()); }}>
-      <FormField label={label} required={required}>
-        <CountedTextarea id="oos-reason" className={`${inputClass} resize-none`} rows={3} maxChars={500} value={reason} onChange={e => setReason(e.target.value)} />
-      </FormField>
-    </FormModal>
-  );
-}
-
-// ── Detail ────────────────────────────────────────────────────────────────────
-function RequestDetail({ request, canRetry, onRetry, retrying, onClose }: {
-  request: Request; canRetry: boolean; onRetry: () => void; retrying: boolean; onClose: () => void;
+// ── Request detail (slide-over) ───────────────────────────────────────────────
+function RequestDetail({ request, footerActions, canRetry, retrying, onRetry, onClose }: {
+  request: Request | null; footerActions?: React.ReactNode; canRetry: boolean; retrying: boolean; onRetry: () => void; onClose: () => void;
 }) {
   const [history, setHistory] = useState<any[]>([]);
   useEffect(() => {
+    if (!request) return;
     api.get(`/out-of-station/requests/${request.id}/history`).then(r => setHistory(r.data?.data ?? [])).catch(() => setHistory([]));
-  }, [request.id, request.status]);
-  const facts: [string, string][] = [
-    ['Employee', `${request.employee_name}${request.employee_code ? ` (${request.employee_code})` : ''}`],
-    ['Location', request.location], ['Period', period(request)], ['Days', String(request.days)],
-    ['Grade', request.paygrade_name || '—'], ['Daily rate', fmtAmt(Number(request.daily_rate))],
-    ['Allowance', fmtAmt(Number(request.amount))], ['Status', request.status],
-    ['Account', request.account_no || '—'], ['Branch', request.branch || '—'],
-    ['Raised by', request.requested_by_name || '—'], ['GL reference', request.document_ref || '—'],
-  ];
+  }, [request?.id, request?.status]);
+  const r = request;
   return (
-    <FormModal title={request.request_number} subtitle={`${request.employee_name} · ${request.location}`} onClose={onClose} onSave={() => {}} readOnly maxWidth="3xl" scrollable>
-      <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-4 rounded-xl bg-[var(--bg)] p-4 sm:grid-cols-4">
-          {facts.map(([label, value]) => <div key={label} className="min-w-0"><p className="text-[10px] font-bold uppercase text-[var(--text-muted)]">{label}</p><p className="mt-1 break-words text-sm font-semibold text-[var(--text-primary)] tabular-nums">{value}</p></div>)}
-        </div>
-        <div><h4 className="mb-1 text-xs font-bold uppercase text-[var(--text-muted)]">Purpose</h4><p className="text-sm">{request.purpose}</p></div>
-        {request.rejection_reason && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <p className="text-xs font-bold uppercase text-red-600">{request.status === 'Cancelled' ? 'Cancellation reason' : 'Rejection reason'}</p>
-            <p className="mt-1 text-sm text-red-800">{request.rejection_reason}</p>
+    <DetailSlideOver open={!!r} title="Out of Station Details" subtitle={r ? `${r.request_number} · ${r.employee_name}` : undefined} onClose={onClose} footerActions={footerActions}>
+      {r && (
+        <div className="space-y-5">
+          {/* Banner — location + period + day count, like Leave Details */}
+          <div className="rounded-xl px-5 py-4 flex items-center justify-between gap-4"
+            style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)' }}>
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold text-[var(--text-primary)] truncate">{r.location}</p>
+              <p className="text-[12px] text-[var(--text-muted)]">{fmtDate(r.date_start)} → {fmtDate(r.date_end)}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[28px] font-bold tabular-nums leading-none text-[var(--accent)]">{r.days}</p>
+              <p className="text-[11px] font-semibold mt-0.5 text-[var(--accent)]">day{r.days !== 1 ? 's' : ''}</p>
+            </div>
           </div>
-        )}
-        {request.status === 'GL Failed' && (
-          <GlFailureCard paymentLog={request.payment_log} failedAt={request.updated_at} runName={request.request_number} canRetry={canRetry} retrying={retrying} onRetry={onRetry} />
-        )}
-        <div>
-          <h4 className="mb-2 text-sm font-bold">History</h4>
-          {!history.length ? <p className="text-sm text-[var(--text-muted)]">No history recorded.</p> : (
-            <ol className="space-y-2">
-              {history.map(h => (
-                <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2">
-                  <div className="min-w-0"><p className="text-sm font-semibold">{h.action}</p><p className="text-xs text-[var(--text-muted)]">{h.user_full_name || h.user_name || 'System'}</p></div>
-                  <span className="text-xs text-[var(--text-muted)]">{fmtDateTime(h.created_at, '')}</span>
-                </li>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-[12px] border border-[var(--border)] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2">Status</p>
+              <StatusPill status={r.status} />
+            </div>
+            <div className="rounded-[12px] border border-[var(--border)] px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">Employee</p>
+              <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{r.employee_name}</p>
+            </div>
+          </div>
+
+          <div className="rounded-[12px] border border-[var(--border)] overflow-hidden">
+            <div className="px-4 py-2 bg-[var(--bg)] border-b border-[var(--border)]">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Allowance</p>
+            </div>
+            <div className="px-4 divide-y divide-[var(--border)]">
+              {([
+                ['Grade',      r.paygrade_name || '—'],
+                ['Daily rate', amt(r.daily_rate)],
+                ['Days',       `${r.days} day${r.days !== 1 ? 's' : ''}`],
+                ['Net payout', <span key="n" className="font-bold text-[var(--success)] tabular-nums">{money(r.amount)}</span>],
+                ['Account',    r.account_no || '—'],
+                ['Branch',     r.branch || '—'],
+                ...(r.document_ref ? [['GL Reference', <span key="g" className="font-mono tracking-wide">{r.document_ref}</span>]] : []),
+              ] as [string, React.ReactNode][]).map(([label, val]) => (
+                <div key={label} className="flex items-start justify-between py-2.5 text-[13px] gap-4">
+                  <span className="text-[var(--text-muted)] shrink-0">{label}</span>
+                  <span className="font-medium text-[var(--text-primary)] text-right">{val}</span>
+                </div>
               ))}
-            </ol>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Purpose</p>
+            <div className="rounded-xl bg-[var(--bg)] border border-[var(--border)] px-4 py-3 text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{r.purpose}</div>
+          </div>
+
+          {(r.status === 'Rejected' || (r.status === 'Cancelled' && r.rejection_reason)) && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--danger)] mb-2">{r.status === 'Rejected' ? 'Rejection Reason' : 'Cancellation Reason'}</p>
+              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-[13px] text-red-700 leading-relaxed whitespace-pre-wrap">{r.rejection_reason || 'No reason was provided.'}</div>
+            </div>
+          )}
+
+          {r.status === 'GL Failed' && (
+            <GlFailureCard paymentLog={r.payment_log} failedAt={r.updated_at} runName={r.request_number} canRetry={canRetry} retrying={retrying} onRetry={onRetry} />
+          )}
+
+          <DetailSection title="Request">
+            <DetailGrid>
+              <DetailField label="Reference" value={r.request_number} />
+              <DetailField label="Raised by" value={r.requested_by_name || r.employee_name} />
+              <DetailField label="Submitted" value={r.submitted_at ? fmtDateTime(r.submitted_at, '') : '—'} />
+              <DetailField label="Paid" value={r.posted_at ? fmtDateTime(r.posted_at, '') : '—'} />
+            </DetailGrid>
+          </DetailSection>
+
+          {history.length > 0 && (
+            <DetailSection title="History">
+              <div className="rounded-[12px] border border-[var(--border)] divide-y divide-[var(--border)]">
+                {history.map(h => (
+                  <div key={h.id} className="flex items-start justify-between gap-4 px-4 py-2.5 text-[12px]">
+                    <div className="min-w-0">
+                      <p className="font-medium text-[var(--text-primary)]">{h.action}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{h.user_full_name || h.user_name || 'System'}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{fmtDateTime(h.created_at, '')}</span>
+                  </div>
+                ))}
+              </div>
+            </DetailSection>
           )}
         </div>
-      </div>
-    </FormModal>
+      )}
+    </DetailSlideOver>
   );
 }
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
-function SetupPanel() {
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [rates, setRates] = useState<Rate[]>([]);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+// ── Shared request table ──────────────────────────────────────────────────────
+function RequestTable({ rows, loading, empty, showEmployee, actions }: {
+  rows: Request[]; loading: boolean; empty: string; showEmployee: boolean; actions: (r: Request) => React.ComponentProps<typeof RowActions>['actions'];
+}) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  useEffect(() => setPage(1), [rows.length]);
+  const cols = showEmployee ? 9 : 8;
+  return (
+    <>
+      <div className="overflow-x-auto flex-1">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="th text-left">Reference</th>
+              {showEmployee && <th className="th text-left">Employee</th>}
+              <th className="th text-left">Location</th>
+              <th className="th text-left">Start</th>
+              <th className="th text-left">End</th>
+              <th className="th text-center" style={{ width: '6%' }}>Days</th>
+              <th className="th" style={{ width: '12%', textAlign: 'right' }}>Allowance</th>
+              <th className="th text-left">Status</th>
+              <th scope="col" className="th" style={{ textAlign: 'right' }}><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <TableStateRow cols={cols} loading={loading} empty={empty} />
+            ) : paginate(rows, page, pageSize).map((row, i) => (
+              <motion.tr key={row.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.03 * i }}>
+                <td className="td font-medium text-[var(--text-primary)]">{row.request_number}</td>
+                {showEmployee && <td className="td text-[var(--text-primary)] font-medium">{row.employee_name}</td>}
+                <td className="td">{row.location}</td>
+                <td className="td">{fmtDate(row.date_start)}</td>
+                <td className="td">{fmtDate(row.date_end)}</td>
+                <td className="td text-center">{row.days}</td>
+                <td className="td text-right"><span className="font-semibold tabular-nums text-[var(--success)] text-[13px]">{money(row.amount)}</span></td>
+                <td className="td"><StatusPill status={row.status} /></td>
+                <td className="td text-right"><div className="flex justify-end"><RowActions actions={actions(row)} /></div></td>
+              </motion.tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <TablePagination total={rows.length} filtered={rows.length} page={page} pageSize={pageSize}
+        onPageChange={setPage} onPageSizeChange={p => { setPageSize(p); setPage(1); }} />
+    </>
+  );
+}
+
+/** Reject / cancel / delete / approve / retry, shared by both pages. */
+function useRequestActions(reload: () => void) {
+  const [glBlock, setGlBlock] = useState<GlBlock>(null);
+  const [rejecting, setRejecting] = useState<Request | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [confirm, setConfirm] = useState<{ title: string; message: string; label: string; onConfirm: () => void } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  const post = (path: string, body: any, ok: string) => runAction(() => api.post(path, body), setGlBlock, ok).then(done => { if (done) reload(); return done; });
+  const approve = (r: Request) => post(`/out-of-station/requests/${r.id}/approve`, {}, 'Request approved');
+  const submit  = (r: Request) => post(`/out-of-station/requests/${r.id}/submit`, {}, 'Request submitted');
+  const postGl  = (r: Request) => post(`/out-of-station/requests/${r.id}/post`, {}, 'Posted');
+  const retry   = async (r: Request) => { setRetrying(true); await post(`/out-of-station/requests/${r.id}/retry-gl`, {}, 'Posted'); setRetrying(false); };
+  const cancel  = (r: Request) => setConfirm({
+    title: 'Cancel Request', message: `Cancel out-of-station request ${r.request_number} (${r.location}, ${r.days} day${r.days !== 1 ? 's' : ''})?`,
+    label: 'Cancel Request', onConfirm: () => post(`/out-of-station/requests/${r.id}/cancel`, {}, 'Request cancelled'),
+  });
+  const remove  = (r: Request) => setConfirm({
+    title: 'Delete Request', message: `Delete draft ${r.request_number}? This cannot be undone.`, label: 'Delete',
+    onConfirm: () => api.delete(`/out-of-station/requests/${r.id}`).then(() => { toast.success('Request deleted'); reload(); })
+      .catch((e: any) => toast.error(e.response?.data?.message || 'Failed to delete the request')),
+  });
+  const openReject = (r: Request) => { setRejecting(r); setRejectReason(''); };
+
+  const modals = (
+    <>
+      {rejecting && (
+        <FormModal title="Reject Request" subtitle="Provide a reason for rejection." onClose={() => setRejecting(null)} saveLabel="Reject" maxWidth="md" scrollable={false}
+          onSave={async () => {
+            if (!rejectReason.trim()) { toast.error('A reason is required'); return; }
+            const done = await post(`/out-of-station/requests/${rejecting.id}/reject`, { reason: rejectReason.trim() }, 'Request rejected');
+            if (done) setRejecting(null);
+          }}>
+          <FormField label="Rejection Reason" required>
+            <CountedTextarea className={inputClass} rows={3} maxChars={500} value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Reason for rejection…" />
+          </FormField>
+        </FormModal>
+      )}
+      {confirm && (
+        <ConfirmModal title={confirm.title} message={confirm.message} confirmLabel={confirm.label} variant="danger"
+          onCancel={() => setConfirm(null)} onConfirm={() => { confirm.onConfirm(); setConfirm(null); }} />
+      )}
+      <GlBlockedModal isOpen={!!glBlock} accounts={glBlock?.accounts} imbalance={glBlock?.imbalance} context="out-of-station allowance" onClose={() => setGlBlock(null)} />
+    </>
+  );
+  return { approve, submit, postGl, retry, retrying, cancel, remove, openReject, modals };
+}
+
+function useUser() {
+  const user = getCurrentUser();
+  const can = (p: string) => user?.resolvedPermissions?.has(p) || false;
+  const isAdmin = user?.allRoles?.some(r => ['admin', 'super-admin'].includes(r.name)) ?? false;
+  return {
+    userId: user?.id != null ? String(user.id) : '',
+    employeeId: user?.employeeId != null ? String(user.employeeId) : '',
+    canManage: isAdmin || can('manage_out_of_station'),
+    isHr: isAdmin || can('approve_out_of_station'),
+    canViewAll: isAdmin || can('manage_out_of_station') || can('approve_out_of_station') || can('view_out_of_station'),
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PERSONAL OUT OF STATION
+// ══════════════════════════════════════════════════════════════════════════════
+const PERSONAL_TABS = ['All my Requests', 'Approved Requests', 'Pending Requests', 'Subordinate Requests'] as const;
+
+export function PersonalOutOfStation() {
+  const me = useUser();
+  const [activeTab, setActiveTab] = useState<string>('All my Requests');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [rows, setRows] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [form, setForm] = useState<{ initial: Request | null; forTeam: boolean } | null>(null);
+  const [viewRow, setViewRow] = useState<Request | null>(null);
+
+  useEffect(() => {
+    api.get('/out-of-station/employees', { params: { scope: 'personal' } }).then(r => setEmployees(r.data?.data ?? [])).catch(() => setEmployees([]));
+  }, []);
+  const self = employees.filter(e => e.is_self);
+  const reports = employees.filter(e => e.is_report);
+  const TABS = PERSONAL_TABS.filter(t => t !== 'Subordinate Requests' || reports.length > 0);
 
   const load = useCallback(() => {
-    api.get('/out-of-station/settings').then(r => setSettings(r.data?.data ?? null)).catch(() => toast.error('Failed to load settings'));
-    api.get('/out-of-station/rates').then(r => {
-      const list: Rate[] = r.data?.data ?? [];
-      setRates(list);
-      setDraft(Object.fromEntries(list.map(x => [String(x.paygrade_id), x.daily_rate == null ? '' : String(x.daily_rate)])));
-    }).catch(() => toast.error('Failed to load daily rates'));
-  }, []);
-  useEffect(load, [load]);
+    setLoading(true);
+    const scope = activeTab === 'Subordinate Requests' ? 'team' : 'mine';
+    api.get('/out-of-station/requests', { params: { scope } })
+      .then(r => {
+        let list: Request[] = r.data?.data ?? [];
+        if (activeTab === 'All my Requests' || activeTab === 'Approved Requests' || activeTab === 'Pending Requests') {
+          list = list.filter(x => String(x.employee) === me.employeeId || !me.employeeId);
+        }
+        if (activeTab === 'Approved Requests') list = list.filter(x => ['Approved', 'Paid'].includes(x.status));
+        if (activeTab === 'Pending Requests')  list = list.filter(x => OPEN.includes(x.status));
+        setRows(list);
+      })
+      .catch(() => toast.error('Failed to load requests'))
+      .finally(() => setLoading(false));
+  }, [activeTab, me.employeeId]);
+  useEffect(() => { load(); }, [load]);
+  useRealtimeRefresh('outofstation', load);
 
-  const saveSettings = async () => {
-    if (!settings) return;
-    setBusy(true);
-    try { await api.put('/out-of-station/settings', settings); toast.success('Settings saved'); }
-    catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save settings'); }
-    finally { setBusy(false); }
-  };
-  const saveRates = async () => {
-    const changed = rates.filter(r => (r.daily_rate == null ? '' : String(r.daily_rate)) !== (draft[String(r.paygrade_id)] ?? ''));
-    if (!changed.length) return toast.info('No rate changes to save');
-    setBusy(true);
-    try {
-      await api.put('/out-of-station/rates', { rates: changed.map(r => ({ paygrade_id: r.paygrade_id, daily_rate: draft[String(r.paygrade_id)] })) });
-      toast.success(`${changed.length} daily rate${changed.length === 1 ? '' : 's'} saved`);
-      load();
-    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save rates'); }
-    finally { setBusy(false); }
-  };
+  const act = useRequestActions(() => { load(); setViewRow(null); });
+  const filtered = rows.filter(r => JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase()));
+  const isSubTab = activeTab === 'Subordinate Requests';
+  // Owner of a draft/open request: the employee, or whoever raised it (a supervisor for a report).
+  const owns = (r: Request) => String(r.employee) === me.employeeId || String(r.requested_by ?? '') === me.userId;
+  // Supervisor approval: a report's request waiting at the supervisor stage.
+  const decides = (r: Request) => isSubTab && r.status === 'Pending Approval' && String(r.employee) !== me.employeeId;
 
-  if (!settings) return <p className="p-6 text-sm text-[var(--text-muted)]">Loading setup…</p>;
-  const set = (k: keyof Settings, v: string) => setSettings(s => (s ? { ...s, [k]: v } : s));
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-        <h3 className="text-sm font-bold text-[var(--text-primary)]">Posting and approval</h3>
-        <p className="mb-4 mt-1 text-xs text-[var(--text-muted)]">On HR's approval the allowance is posted: debit the expense account, credit the employee's bank account.</p>
-        <div className="grid gap-4">
-          <FormField label="Out of Station expense GL account" required><input id="oos-expense-gl" className={inputClass} value={settings.oos_expense_gl} onChange={e => set('oos_expense_gl', e.target.value)} placeholder="e.g. 124500000000" /></FormField>
-          <FormField label="Posting branch"><input id="oos-branch" className={inputClass} value={settings.oos_gl_branch} onChange={e => set('oos_gl_branch', e.target.value)} placeholder="Blank uses the GL connection's default branch" /></FormField>
-          <FormField label="Supervisor approval before HR">
-            <Select className={inputClass} value={settings.oos_supervisor_approval} onChange={e => set('oos_supervisor_approval', e.target.value)}>
-              <option value="Yes">Yes — supervisor, then HR</option><option value="No">No — HR only</option>
-            </Select>
-          </FormField>
-          <FormField label="Post to the GL on approval">
-            <Select className={inputClass} value={settings.oos_payments_enabled} onChange={e => set('oos_payments_enabled', e.target.value)}>
-              <option value="Yes">Yes — pay the employee through the GL</option><option value="No">No — record only</option>
-            </Select>
-          </FormField>
-          <div className="flex justify-end"><button className="primary-btn" onClick={saveSettings} disabled={busy}><Save size={14} />Save Settings</button></div>
-        </div>
-      </section>
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-        <h3 className="text-sm font-bold text-[var(--text-primary)]">Daily rate by grade</h3>
-        <p className="mb-4 mt-1 text-xs text-[var(--text-muted)]">Employees on a grade with no rate can't raise a request. Clear a rate to remove it.</p>
-        <div className="max-h-[55vh] overflow-auto rounded-xl border border-[var(--border)]">
-          <table className="w-full border-collapse">
-            <thead><tr><th className="th">Grade</th><th className="th text-right">Daily rate</th></tr></thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {!rates.length ? <tr><td colSpan={2} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No pay grades found. Set them up in Salary first.</td></tr>
-                : rates.map(r => (
-                  <tr key={r.paygrade_id}>
-                    <td className="px-4 py-2 text-sm">{r.paygrade_name || `Grade ${r.paygrade_id}`}</td>
-                    <td className="px-4 py-2"><input id={`oos-rate-${r.paygrade_id}`} type="number" min="0" step="0.01" className={`${inputClass} ml-auto w-36 text-right tabular-nums`} value={draft[String(r.paygrade_id)] ?? ''} onChange={e => setDraft(d => ({ ...d, [String(r.paygrade_id)]: e.target.value }))} placeholder="Not set" /></td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 flex justify-end"><button className="primary-btn" onClick={saveRates} disabled={busy}><Save size={14} />Save Rates</button></div>
-      </section>
+    <div className="p-4 sm:p-6 md:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full">
+      <PageHeader title="Out of Station" subtitle="Request the out-of-station allowance and approve your subordinates' requests." />
+
+      <TabBar tabs={[...TABS]} activeTab={activeTab} onChange={setActiveTab} />
+
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden min-h-[500px] flex flex-col">
+        <TableToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search requests..."
+          searchWidth="sm:w-[280px]"
+          actions={isSubTab ? (
+            <button className="primary-btn shrink-0" onClick={() => setForm({ initial: null, forTeam: true })}>Request for Subordinate</button>
+          ) : activeTab !== 'Approved Requests' && self.length > 0 ? (
+            <button className="primary-btn shrink-0" onClick={() => setForm({ initial: null, forTeam: false })}>Apply Out of Station</button>
+          ) : undefined}
+        />
+        <RequestTable
+          rows={filtered} loading={loading} showEmployee={isSubTab}
+          empty={isSubTab ? 'No requests from your subordinates.' : 'No out-of-station requests found.'}
+          actions={r => [
+            { label: 'View', icon: Eye, onClick: () => setViewRow(r) },
+            { label: 'Approve', icon: Check, onClick: () => act.approve(r), hidden: !decides(r) },
+            { label: 'Reject', icon: XCircle, danger: true, onClick: () => act.openReject(r), hidden: !decides(r) },
+            { label: 'Submit for Approval', icon: SendHorizonal, onClick: () => act.submit(r), hidden: r.status !== 'Draft' || !owns(r) },
+            { label: 'Edit', icon: FileEdit, onClick: () => setForm({ initial: r, forTeam: isSubTab }), hidden: r.status !== 'Draft' || !owns(r) },
+            { label: 'Delete', icon: Trash2, danger: true, onClick: () => act.remove(r), hidden: r.status !== 'Draft' || !owns(r) },
+            { label: 'Cancel Request', icon: XCircle, danger: true, onClick: () => act.cancel(r), hidden: !OPEN.includes(r.status) || r.status === 'Draft' || !owns(r) },
+          ]}
+        />
+      </div>
+
+      {form && (
+        <RequestForm
+          initial={form.initial}
+          employees={form.initial ? employees : (form.forTeam ? reports : self)}
+          title={form.initial ? `Edit ${form.initial.request_number}` : form.forTeam ? 'Request for Subordinate' : 'Apply for Out of Station'}
+          subtitle="Paid as days × the daily rate for the employee's grade."
+          onClose={() => setForm(null)} onSaved={load} />
+      )}
+
+      <RequestDetail
+        request={viewRow} canRetry={false} retrying={false} onRetry={() => {}} onClose={() => setViewRow(null)}
+        footerActions={viewRow && decides(viewRow) ? (
+          <>
+            <button className="secondary-btn shadow-sm text-[var(--danger)] border-[var(--danger)]/40 hover:bg-[var(--danger)]/5" onClick={() => act.openReject(viewRow)}>
+              <X size={14} className="mr-1.5 inline" />Reject
+            </button>
+            <button className="primary-btn shadow-sm bg-[var(--success)] hover:opacity-90" onClick={() => act.approve(viewRow)}>
+              <Check size={14} className="mr-1.5 inline" />Approve
+            </button>
+          </>
+        ) : undefined}
+      />
+      {act.modals}
     </div>
   );
 }
 
-// ── Pages ─────────────────────────────────────────────────────────────────────
-// Two menu entries, like Leave:
-//   Personal Out of Station — the caller's own requests, and (for supervisors) their direct reports'
-//                             requests: raise on their behalf and give the supervisor approval.
-//   Manage Out of Station   — HR: final approvals, every request with the printable schedule, setup.
-type Mode = 'personal' | 'manage';
+// ══════════════════════════════════════════════════════════════════════════════
+// MANAGE OUT OF STATION
+// ══════════════════════════════════════════════════════════════════════════════
+const MANAGE_STATUSES = ['All', 'Pending Approval', 'Pending HR Approval', 'Approved', 'Paid', 'GL Failed', 'Rejected', 'Cancelled'];
 
-export function PersonalOutOfStation() { return <OutOfStationPage mode="personal" />; }
-export function ManageOutOfStation()   { return <OutOfStationPage mode="manage" />; }
+export function ManageOutOfStation() {
+  const me = useUser();
+  const MAIN_TABS = [
+    ...(me.canManage ? ['Daily Rates', 'Posting Settings'] : []),
+    ...(me.canViewAll ? ['All Requests'] : []),
+    ...(me.isHr ? ['Approval List'] : []),
+  ];
+  const [activeTab, setActiveTab] = useState<string>(MAIN_TABS[0] ?? '');
 
-function OutOfStationPage({ mode }: { mode: Mode }) {
-  const user = getCurrentUser();
-  const myUserId = user?.id != null ? String(user.id) : '';
-  const can = (p: string) => user?.resolvedPermissions?.has(p) || false;
-  const isAdmin = user?.allRoles?.some(r => ['admin', 'super-admin'].includes(r.name)) ?? false;
-  const canManage = isAdmin || can('manage_out_of_station');
-  const isHr = isAdmin || can('approve_out_of_station');
-  const canViewAll = canManage || isHr || can('view_out_of_station');
+  return (
+    <div className="p-4 sm:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full relative">
+      <PageHeader title="Out of Station Setup" subtitle="Configure daily rates and postings, approve requests and download the allowance schedule." />
+      {MAIN_TABS.length === 0 ? (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] p-10 text-center text-sm text-[var(--text-muted)]">You don't have access to manage out-of-station requests.</div>
+      ) : <>
+        <TabBar tabs={MAIN_TABS} activeTab={activeTab} onChange={setActiveTab} className="flex flex-wrap items-center gap-2 mt-2 mb-4 border-b border-slate-200 pb-2" />
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] flex flex-col min-h-[500px] overflow-hidden">
+          {activeTab === 'Daily Rates' && <RatesTab />}
+          {activeTab === 'Posting Settings' && <SettingsTab />}
+          {(activeTab === 'All Requests' || activeTab === 'Approval List') && <ManageRequestsTab key={activeTab} approvals={activeTab === 'Approval List'} me={me} />}
+        </div>
+      </>}
+    </div>
+  );
+}
 
-  // Personal: the caller plus their direct reports. Manage: everyone (for HR setup).
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const hasTeam = employees.some(e => e.is_report);
-  const tabs = useMemo(() => mode === 'personal'
-    ? ['My Requests', ...(hasTeam ? ['Team Requests'] : [])]
-    : [...(isHr ? ['Approvals'] : []), ...(canViewAll ? ['All Requests'] : []), ...(canManage ? ['Setup'] : [])],
-  [mode, hasTeam, isHr, canViewAll, canManage]);
-  const [tab, setTab] = useState(tabs[0] ?? 'My Requests');
-  useEffect(() => { if (!tabs.includes(tab)) setTab(tabs[0] ?? 'My Requests'); }, [tabs, tab]);
-
+function ManageRequestsTab({ approvals, me }: { approvals: boolean; me: ReturnType<typeof useUser> }) {
   const [rows, setRows] = useState<Request[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [status, setStatus] = useState('All');
-  const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [viewRow, setViewRow] = useState<Request | null>(null);
   const [form, setForm] = useState<Request | null | undefined>(undefined);
-  const [detail, setDetail] = useState<Request | null>(null);
-  const [reasonFor, setReasonFor] = useState<{ row: Request; kind: 'reject' | 'cancel' } | null>(null);
-  const [deleting, setDeleting] = useState<Request | null>(null);
-  const [glBlock, setGlBlock] = useState<GlBlock>(null);
-  const [retrying, setRetrying] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [pdfBusy, setPdfBusy] = useState(false);
 
-  useEffect(() => {
-    api.get('/out-of-station/employees', { params: mode === 'personal' ? { scope: 'personal' } : {} })
-      .then(r => setEmployees(r.data?.data ?? [])).catch(() => setEmployees([]));
-  }, [mode]);
-
-  const load = useCallback((silent = false) => {
-    if (tab === 'Setup') return;
-    if (!silent) setLoading(true);
-    const req = tab === 'Approvals'
-      // HR's queue is the HR tier only; supervisor-tier approvals live under Personal → Team Requests.
-      ? api.get('/out-of-station/approvals').then(r => ({ data: { data: (r.data?.data ?? []).filter((x: Request) => x.status === 'Pending HR Approval') } }))
-      : api.get('/out-of-station/requests', { params: {
-          scope: tab === 'Team Requests' ? 'team' : tab === 'All Requests' ? 'all' : 'mine',
-          ...(tab === 'All Requests' && from ? { from } : {}), ...(tab === 'All Requests' && to ? { to } : {}),
-        } });
-    req.then((r: any) => setRows(r.data?.data ?? []))
-      .catch((e: any) => { if (!silent) toast.error(e.response?.data?.message || 'Failed to load requests'); })
-      .finally(() => setLoading(false));
-  }, [tab, from, to]);
+  const load = useCallback(() => {
+    setLoading(true);
+    const req = approvals
+      // HR's list is the HR stage only; the supervisor stage is handled under Personal → Subordinate Requests.
+      ? api.get('/out-of-station/approvals').then(r => (r.data?.data ?? []).filter((x: Request) => x.status === 'Pending HR Approval'))
+      : api.get('/out-of-station/requests', { params: { scope: 'all', ...(from ? { from } : {}), ...(to ? { to } : {}) } }).then(r => r.data?.data ?? []);
+    req.then(setRows).catch((e: any) => toast.error(e.response?.data?.message || 'Failed to load requests')).finally(() => setLoading(false));
+  }, [approvals, from, to]);
   useEffect(() => { load(); }, [load]);
-  useRealtimeRefresh('outofstation', () => load(true));
-  useEffect(() => { setStatus('All'); setSearch(''); }, [tab]);
+  useRealtimeRefresh('outofstation', load);
+  useEffect(() => {
+    if (me.canManage && !approvals) api.get('/out-of-station/employees').then(r => setEmployees(r.data?.data ?? [])).catch(() => {});
+  }, [me.canManage, approvals]);
 
-  const filtered = useMemo(() => rows.filter(r =>
-    (status === 'All' || r.status === status)
-    && `${r.request_number} ${r.employee_name} ${r.employee_code ?? ''} ${r.location} ${r.purpose}`.toLowerCase().includes(search.toLowerCase())
-  ), [rows, status, search]);
-  const awaitingMe = tab === 'Team Requests' ? rows.filter(r => r.status === 'Pending Approval').length : 0;
-
-  const reload = () => load();
-  const act = async (path: string, body: any, ok: string) => {
-    const done = await runAction(() => api.post(path, body), setGlBlock, ok);
-    if (done) { reload(); setDetail(null); }
-    return done;
-  };
-  const retry = async (row: Request) => {
-    setRetrying(true);
-    await act(`/out-of-station/requests/${row.id}/retry-gl`, {}, 'Posted');
-    setRetrying(false);
-  };
-
-  // Who may edit, submit, delete or cancel a draft/open request: the employee (My Requests), whoever
-  // raised it, or HR setup in Manage. Matches the server's isOwner check.
-  const ownsRow = (r: Request) => tab === 'My Requests'
-    || String(r.requested_by ?? '') === myUserId
-    || (mode === 'manage' && canManage);
-  // Approve/reject: HR's queue, or a supervisor on their report's request at the supervisor tier.
-  const mayDecide = (r: Request) => tab === 'Approvals' || (tab === 'Team Requests' && r.status === 'Pending Approval');
+  const act = useRequestActions(() => { load(); setViewRow(null); });
+  const filtered = rows.filter(r => (status === 'All' || r.status === status) && JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase()));
+  const hrActions = me.isHr || me.canManage;
+  const decides = (r: Request) => approvals && r.status === 'Pending HR Approval' && String(r.employee) !== me.employeeId;
 
   // The schedule as the Bank prints it: name, days, rate, net, account and branch, with a total.
   const scheduleRows = filtered.filter(r => ['Approved', 'Paid', 'GL Failed'].includes(r.status));
   const scheduleHeaders = ['Name', 'Period', 'No. of Days', 'Rate', 'Net', 'A/C No.', 'Branch'];
   const scheduleData = () => {
-    const body = scheduleRows.map(r => [r.employee_name, period(r), r.days, fmtAmt(Number(r.daily_rate)), fmtAmt(Number(r.amount)), r.account_no || '', r.branch || '']);
-    const total = scheduleRows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    return [...body, ['Total', '', scheduleRows.reduce((n, r) => n + Number(r.days || 0), 0), '', fmtAmt(total), '', '']];
+    const body = scheduleRows.map(r => [r.employee_name, `${fmtDate(r.date_start)} – ${fmtDate(r.date_end)}`, r.days, amt(r.daily_rate), amt(r.amount), r.account_no || '', r.branch || '']);
+    return [...body, ['Total', '', scheduleRows.reduce((n, r) => n + Number(r.days || 0), 0), '', amt(scheduleRows.reduce((s, r) => s + Number(r.amount || 0), 0)), '', '']];
   };
   const scheduleTitle = 'Out of Station Allowance Schedule';
-  const scheduleSummary = `${from || to ? `${from ? fmtDate(from, '') : '…'} to ${to ? fmtDate(to, '') : '…'}` : 'All dates'} · Approved and paid requests`;
-
-  const showEmployeeCol = tab !== 'My Requests';
-  const cols = ['Request', ...(showEmployeeCol ? ['Employee'] : []), 'Location', 'Period', 'Days', 'Allowance', 'Status'];
-  // New Request: personal → for yourself (or a report, in Team Requests); manage → anyone, for HR setup.
-  const canRaise = mode === 'personal' ? employees.length > 0 : canManage && employees.length > 0;
-  const formEmployees = mode === 'manage' ? employees
-    : tab === 'Team Requests' ? employees.filter(e => e.is_report)
-    : employees.filter(e => e.is_self);
-
-  const emptyText = tab === 'My Requests' ? 'You have no out-of-station requests. Use New Request to raise one.'
-    : tab === 'Team Requests' ? 'None of your direct reports has an out-of-station request.'
-    : tab === 'Approvals' ? 'Nothing is waiting for HR approval.'
-    : 'No requests found.';
+  const scheduleSummary = `${from || to ? `${from ? fmtDate(from) : '…'} to ${to ? fmtDate(to) : '…'}` : 'All dates'} · Approved and paid requests`;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader
-          title={mode === 'personal' ? 'Personal Out of Station' : 'Manage Out of Station'}
-          subtitle={mode === 'personal'
-            ? 'Request the allowance for duty away from your station, and handle your team’s requests.'
-            : 'Approve out-of-station requests, download the allowance schedule, and set rates and GL accounts.'} />
-        {canRaise && tab !== 'Setup' && (formEmployees.length > 0) &&
-          <button className="primary-btn" onClick={() => setForm(null)}><Plus size={15} />{tab === 'Team Requests' ? 'Request for a Team Member' : 'New Request'}</button>}
-      </div>
-
-      {tabs.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-sm text-[var(--text-muted)]">You don't have access to manage out-of-station requests.</div>
-      ) : <>
-      <TabBar tabs={tabs} activeTab={tab} onChange={setTab} />
-
-      {tab === 'Setup' ? <SetupPanel /> : (
-        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-4">
-            {tab === 'Approvals'
-              ? <p className="text-sm text-[var(--text-muted)]">{filtered.length ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} waiting for HR approval` : 'Nothing waiting for HR approval'}</p>
-              : <div className="flex flex-wrap gap-2">{STATUSES.map(s => (
-                  <button key={s} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === s ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`} onClick={() => setStatus(s)}>
-                    {s}{s === 'Pending Approval' && awaitingMe > 0 ? ` (${awaitingMe})` : ''}
-                  </button>
-                ))}</div>}
-            <div className="flex flex-wrap items-center gap-2">
-              {tab === 'All Requests' && <>
-                <DateInput className={`${inputClass} w-40`} value={from} onChange={e => setFrom(e.target.value)} />
-                <span className="text-xs text-[var(--text-muted)]">to</span>
-                <DateInput className={`${inputClass} w-40`} value={to} onChange={e => setTo(e.target.value)} />
-              </>}
-              <input id="oos-search" className={`${inputClass} w-52`} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search requests…" />
-              <button className="secondary-btn" onClick={reload} title="Refresh"><RefreshCw size={15} /></button>
-            </div>
+    <>
+      <TableToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={approvals ? 'Search pending requests...' : 'Search requests...'}
+        actions={approvals ? undefined : (
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="secondary-btn shrink-0" disabled={!scheduleRows.length} onClick={() => exportReportExcel(scheduleTitle, scheduleSummary, scheduleHeaders, scheduleData())}>
+              <FileSpreadsheet className="w-[14px] h-[14px]" /><span className="hidden sm:inline">Export Excel</span>
+            </button>
+            <button className="secondary-btn shrink-0" disabled={!scheduleRows.length || pdfBusy} onClick={() => reportPdf(scheduleTitle, scheduleSummary, scheduleHeaders, scheduleData(), setPdfBusy)}>
+              <Download className="w-[14px] h-[14px]" /><span className="hidden sm:inline">{pdfBusy ? 'Generating…' : 'Download Schedule'}</span>
+            </button>
+            {me.canManage && (
+              <button className="primary-btn shrink-0" onClick={() => setForm(null)}>
+                <span className="hidden sm:inline">New Request</span><span className="sm:hidden">New</span><Plus className="w-[14px] h-[14px]" />
+              </button>
+            )}
           </div>
-
-          {tab === 'Team Requests' && awaitingMe > 0 && (
-            <div className="border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-xs text-[var(--text-muted)]">
-              <span className="font-bold text-[var(--text-primary)]">{awaitingMe}</span> request{awaitingMe === 1 ? '' : 's'} from your team waiting for your approval. Approve or reject from the row menu.
-            </div>
-          )}
-
-          {tab === 'All Requests' && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)]">Schedule: <span className="font-bold text-[var(--text-primary)]">{scheduleRows.length}</span> approved or paid request{scheduleRows.length === 1 ? '' : 's'} · <span className="font-bold text-[var(--text-primary)] tabular-nums">{fmtAmt(scheduleRows.reduce((s, r) => s + Number(r.amount || 0), 0))}</span></p>
-              <div className="flex gap-2">
-                <button className="secondary-btn !py-1.5 !px-3 !text-[12px]" disabled={!scheduleRows.length} onClick={() => exportReportExcel(scheduleTitle, scheduleSummary, scheduleHeaders, scheduleData())}><FileSpreadsheet size={13} />Export Excel</button>
-                <button className="secondary-btn !py-1.5 !px-3 !text-[12px]" disabled={!scheduleRows.length || pdfBusy} onClick={() => reportPdf(scheduleTitle, scheduleSummary, scheduleHeaders, scheduleData(), setPdfBusy)}><Download size={13} />{pdfBusy ? 'Generating…' : 'Download Schedule'}</button>
-              </div>
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead><tr>{cols.map(c => <th key={c} className={`th ${['Days', 'Allowance'].includes(c) ? 'text-right' : ''}`}>{c}</th>)}<th className="th text-right"><span className="sr-only">Actions</span></th></tr></thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {loading ? <tr><td colSpan={cols.length + 1} className="px-4 py-12 text-center text-sm text-[var(--text-muted)]">Loading requests…</td></tr>
-                  : !filtered.length ? <tr><td colSpan={cols.length + 1} className="px-4 py-12 text-center"><MapPin className="mx-auto mb-2 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">{emptyText}</p></td></tr>
-                    : filtered.map(r => {
-                      const owner = ownsRow(r);
-                      const decide = mayDecide(r);
-                      const hrActions = mode === 'manage' && (isHr || canManage);
-                      return (
-                        <tr key={r.id} className="hover:bg-[var(--surface-hover)]">
-                          <td className="px-4 py-3 text-sm font-bold text-[var(--accent)]"><button className="hover:underline" onClick={() => setDetail(r)}>{r.request_number}</button></td>
-                          {showEmployeeCol && <td className="px-4 py-3"><p className="text-sm font-semibold">{r.employee_name}</p><p className="text-xs text-[var(--text-muted)]">{r.employee_code || '—'}</p></td>}
-                          <td className="px-4 py-3 text-sm">{r.location}</td>
-                          <td className="px-4 py-3 text-sm whitespace-nowrap">{period(r)}</td>
-                          <td className="px-4 py-3 text-right text-sm tabular-nums">{r.days}</td>
-                          <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums">{fmtAmt(Number(r.amount))}</td>
-                          <td className="px-4 py-3"><span className={`pill text-[11px] ${statusClass(r.status)}`}>{r.status}</span></td>
-                          <td className="px-4 py-3">
-                            <div className="flex justify-end">
-                              <RowActions actions={[
-                                { label: 'View Details', icon: Eye, onClick: () => setDetail(r) },
-                                { label: 'Approve', icon: Check, onClick: () => act(`/out-of-station/requests/${r.id}/approve`, {}, 'Approved'), hidden: !decide },
-                                { label: 'Reject', icon: XCircle, danger: true, onClick: () => setReasonFor({ row: r, kind: 'reject' }), hidden: !decide },
-                                { label: 'Edit', icon: FileEdit, onClick: () => setForm(r), hidden: r.status !== 'Draft' || !owner },
-                                { label: 'Submit for Approval', icon: Send, onClick: () => act(`/out-of-station/requests/${r.id}/submit`, {}, 'Submitted'), hidden: r.status !== 'Draft' || !owner },
-                                { label: 'Retry GL Posting', icon: RefreshCw, onClick: () => retry(r), hidden: r.status !== 'GL Failed' || !hrActions },
-                                { label: 'Post to GL', icon: CheckCircle2, onClick: () => act(`/out-of-station/requests/${r.id}/post`, {}, 'Posted'), hidden: r.status !== 'Approved' || !hrActions },
-                                { label: 'Cancel Request', icon: Ban, danger: true, onClick: () => setReasonFor({ row: r, kind: 'cancel' }),
-                                  hidden: tab === 'Approvals' || !((OPEN.includes(r.status) && owner) || (['Approved', 'GL Failed'].includes(r.status) && hrActions)) },
-                                { label: 'Delete Draft', icon: Trash2, danger: true, onClick: () => setDeleting(r), hidden: r.status !== 'Draft' || !owner },
-                              ]} />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-              </tbody>
-            </table>
+        )}
+      />
+      {!approvals && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
+          <DateInput className={`${inputClass} max-w-[160px]`} value={from} onChange={e => setFrom(e.target.value)} />
+          <span className="text-[12px] text-[var(--text-muted)]">to</span>
+          <DateInput className={`${inputClass} max-w-[160px]`} value={to} onChange={e => setTo(e.target.value)} />
+          <div className="flex flex-wrap gap-1 ml-auto">
+            {MANAGE_STATUSES.map(s => (
+              <button key={s} onClick={() => setStatus(s)}
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${status === s
+                  ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                  : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'}`}>{s}</button>
+            ))}
           </div>
         </div>
       )}
-      </>}
+      <RequestTable
+        rows={filtered} loading={loading} showEmployee
+        empty={approvals ? 'No requests waiting for HR approval.' : 'No requests found.'}
+        actions={r => [
+          { label: 'View', icon: Eye, onClick: () => setViewRow(r) },
+          { label: 'Approve', icon: Check, onClick: () => act.approve(r), hidden: !decides(r) },
+          { label: 'Reject', icon: XCircle, danger: true, onClick: () => act.openReject(r), hidden: !decides(r) },
+          { label: 'Retry GL Posting', icon: RefreshCw, danger: true, onClick: () => act.retry(r), hidden: r.status !== 'GL Failed' || !hrActions },
+          { label: 'Post to GL', icon: CheckCircle2, onClick: () => act.postGl(r), hidden: r.status !== 'Approved' || !hrActions },
+          { label: 'Cancel Request', icon: XCircle, danger: true, onClick: () => act.cancel(r), hidden: approvals || !['Approved', 'GL Failed', ...OPEN].includes(r.status) || !hrActions },
+        ]}
+      />
 
-      {form !== undefined && <RequestForm initial={form} employees={form ? employees : formEmployees} onClose={() => setForm(undefined)} onSaved={reload} />}
-      {detail && <RequestDetail request={detail} canRetry={mode === 'manage' && (isHr || canManage)} retrying={retrying} onRetry={() => retry(detail)} onClose={() => setDetail(null)} />}
-      {reasonFor && (
-        <ReasonModal
-          title={reasonFor.kind === 'reject' ? `Reject ${reasonFor.row.request_number}` : `Cancel ${reasonFor.row.request_number}`}
-          label={reasonFor.kind === 'reject' ? 'Reason for rejecting' : 'Reason for cancelling (optional)'}
-          required={reasonFor.kind === 'reject'}
-          onClose={() => setReasonFor(null)}
-          onConfirm={async (reason) => {
-            const { row, kind } = reasonFor;
-            const done = await act(`/out-of-station/requests/${row.id}/${kind}`, { reason }, kind === 'reject' ? 'Rejected' : 'Cancelled');
-            if (done) setReasonFor(null);
-          }}
-        />
+      {form !== undefined && (
+        <RequestForm initial={form} employees={employees} title="New Out of Station Request" subtitle="Raise a request on behalf of any employee."
+          onClose={() => setForm(undefined)} onSaved={load} />
       )}
-      {deleting && (
-        <ConfirmModal title={`Delete ${deleting.request_number}?`} message="The draft is removed permanently." confirmLabel="Delete" variant="danger"
-          onCancel={() => setDeleting(null)}
-          onConfirm={async () => {
-            try { await api.delete(`/out-of-station/requests/${deleting.id}`); toast.success('Draft deleted'); reload(); }
-            catch (e: any) { toast.error(e.response?.data?.message || 'Failed to delete the draft'); }
-            finally { setDeleting(null); }
-          }} />
-      )}
-      <GlBlockedModal isOpen={!!glBlock} accounts={glBlock?.accounts} imbalance={glBlock?.imbalance} context="out-of-station allowance" onClose={() => setGlBlock(null)} />
+      <RequestDetail
+        request={viewRow} canRetry={hrActions} retrying={act.retrying} onRetry={() => viewRow && act.retry(viewRow)} onClose={() => setViewRow(null)}
+        footerActions={viewRow && decides(viewRow) ? (
+          <>
+            <button className="secondary-btn shadow-sm text-[var(--danger)] border-[var(--danger)]/40 hover:bg-[var(--danger)]/5" onClick={() => act.openReject(viewRow)}>
+              <X size={14} className="mr-1.5 inline" />Reject
+            </button>
+            <button className="primary-btn shadow-sm bg-[var(--success)] hover:opacity-90" onClick={() => act.approve(viewRow)}>
+              <Check size={14} className="mr-1.5 inline" />Approve
+            </button>
+          </>
+        ) : undefined}
+      />
+      {act.modals}
+    </>
+  );
+}
+
+function RatesTab() {
+  const [rates, setRates] = useState<Rate[]>([]);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get('/out-of-station/rates').then(r => {
+      const list: Rate[] = r.data?.data ?? [];
+      setRates(list);
+      setDraft(Object.fromEntries(list.map(x => [String(x.paygrade_id), x.daily_rate == null ? '' : String(x.daily_rate)])));
+    }).catch(() => toast.error('Failed to load daily rates')).finally(() => setLoading(false));
+  }, []);
+  useEffect(load, [load]);
+
+  const changed = rates.filter(r => (r.daily_rate == null ? '' : String(r.daily_rate)) !== (draft[String(r.paygrade_id)] ?? ''));
+  const save = async () => {
+    if (!changed.length) return;
+    setSaving(true);
+    try {
+      await api.put('/out-of-station/rates', { rates: changed.map(r => ({ paygrade_id: r.paygrade_id, daily_rate: draft[String(r.paygrade_id)] })) });
+      toast.success(`${changed.length} daily rate${changed.length === 1 ? '' : 's'} saved`);
+      load();
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save rates'); }
+    finally { setSaving(false); }
+  };
+
+  const filtered = rates.filter(r => String(r.paygrade_name ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
+  return (
+    <>
+      <TableToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search grades..."
+        actions={
+          <button onClick={save} disabled={!changed.length || saving} className="primary-btn shrink-0">
+            <span className="hidden sm:inline">{saving ? 'Saving…' : changed.length ? `Save ${changed.length} Change${changed.length === 1 ? '' : 's'}` : 'Save Rates'}</span>
+            <span className="sm:hidden">Save</span>
+            <Save className="w-[14px] h-[14px]" />
+          </button>
+        }
+      />
+      <div className="overflow-x-auto flex-1">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="th text-left">Grade</th>
+              <th className="th text-center" style={{ width: '14%' }}>Status</th>
+              <th className="th" style={{ width: '22%', textAlign: 'right' }}>Daily Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <TableStateRow cols={3} loading={loading} empty="No pay grades found. Set them up in Salary first." className="py-8" />
+            ) : paginate(filtered, page, pageSize).map((r, i) => {
+              const v = draft[String(r.paygrade_id)] ?? '';
+              return (
+                <motion.tr key={r.paygrade_id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.03 * i }}>
+                  <td className="td font-medium text-[var(--text-primary)]">{r.paygrade_name || `Grade ${r.paygrade_id}`}</td>
+                  <td className="td text-center">
+                    {v !== '' ? <span className="pill pill-success">Set</span>
+                      : <span className="pill" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Not set</span>}
+                  </td>
+                  <td className="td text-right">
+                    <input id={`oos-rate-${r.paygrade_id}`} type="number" min="0" step="0.01" className={`${inputClass} ml-auto max-w-[160px] text-right tabular-nums`}
+                      value={v} onChange={e => setDraft(d => ({ ...d, [String(r.paygrade_id)]: e.target.value }))} placeholder="0.00" />
+                  </td>
+                </motion.tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <TablePagination total={rates.length} filtered={filtered.length} page={page} pageSize={pageSize}
+        onPageChange={setPage} onPageSizeChange={p => { setPageSize(p); setPage(1); }} />
+    </>
+  );
+}
+
+function SettingsTab() {
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    api.get('/out-of-station/settings').then(r => setSettings(r.data?.data ?? null)).catch(() => toast.error('Failed to load settings'));
+  }, []);
+  const set = (k: keyof Settings, v: string) => setSettings(s => (s ? { ...s, [k]: v } : s));
+  const save = async () => {
+    if (!settings) return;
+    setSaving(true);
+    try { await api.put('/out-of-station/settings', settings); toast.success('Settings saved'); }
+    catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save settings'); }
+    finally { setSaving(false); }
+  };
+  if (!settings) return <div className="p-10 text-center text-[13px] text-[var(--text-muted)]">Loading…</div>;
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="mb-5">
+        <h3 className="font-bold text-[var(--text-primary)]">Posting Settings</h3>
+        <p className="text-[12px] text-[var(--text-muted)] mt-0.5">On HR's approval the allowance is posted: debit the expense account, credit the employee's bank account.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 max-w-3xl">
+        <FormField label="Out of Station Expense GL" required>
+          <input id="oos-expense-gl" className={inputClass} value={settings.oos_expense_gl} onChange={e => set('oos_expense_gl', e.target.value)} placeholder="e.g. 124500000000" />
+        </FormField>
+        <FormField label="Posting Branch" hint="Blank uses the GL connection's default branch">
+          <input id="oos-branch" className={inputClass} value={settings.oos_gl_branch} onChange={e => set('oos_gl_branch', e.target.value)} placeholder="000" />
+        </FormField>
+        <FormField label="Supervisor Approval">
+          <Select className={inputClass} value={settings.oos_supervisor_approval} onChange={e => set('oos_supervisor_approval', e.target.value)}>
+            <option value="Yes">Yes — supervisor, then HR</option>
+            <option value="No">No — HR only</option>
+          </Select>
+        </FormField>
+        <FormField label="Post to GL on Approval">
+          <Select className={inputClass} value={settings.oos_payments_enabled} onChange={e => set('oos_payments_enabled', e.target.value)}>
+            <option value="Yes">Yes — pay through the GL</option>
+            <option value="No">No — record only</option>
+          </Select>
+        </FormField>
+      </div>
+      <div className="mt-6 flex justify-end max-w-3xl">
+        <button className="primary-btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</button>
+      </div>
     </div>
   );
 }
