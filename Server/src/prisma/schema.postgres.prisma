@@ -4153,3 +4153,109 @@ model message_overrides {
   enabled       Boolean  @default(true)
   updated_at    DateTime @default(now()) @updatedAt @db.Timestamp(0)
 }
+
+// End of Service Benefit — tables from manual-migrations/20261027_end_of_service.*.sql (read with raw SQL).
+model eos_bands {
+  id            BigInt   @id
+  up_to_years   Int?
+  days_per_year Decimal  @db.Decimal(8, 2)
+  updated_by    BigInt?
+  updated_at    DateTime @default(now()) @db.Timestamp(0)
+}
+
+model eos_pf_list {
+  id         BigInt   @id
+  employee   BigInt   @unique(map: "eos_pf_list_employee_key")
+  amount     Decimal  @db.Decimal(14, 2)
+  note       String?  @db.VarChar(255)
+  updated_by BigInt?
+  updated_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model eos_settlements {
+  id                BigInt    @id
+  settlement_number String    @unique(map: "eos_settlements_number_key") @db.VarChar(20)
+  employee          BigInt
+  exit_reason       String    @db.VarChar(50)
+  notified_date     DateTime? @db.Date
+  effective_date    DateTime  @db.Date
+  hire_date         DateTime? @db.Date
+  service_years     Int       @default(0)
+  service_months    Int       @default(0)
+  counted_years     Int       @default(0)
+  days_per_year     Decimal   @default(0) @db.Decimal(8, 2)
+  divisor           Decimal   @default(261) @db.Decimal(8, 2)
+  annual_gross      Decimal   @default(0) @db.Decimal(14, 2)
+  gross_overridden  Boolean   @default(false)
+  eligible          Boolean   @default(true)
+  eosb_amount       Decimal   @default(0) @db.Decimal(14, 2)
+  total_additions   Decimal   @default(0) @db.Decimal(14, 2)
+  total_deductions  Decimal   @default(0) @db.Decimal(14, 2)
+  net_amount        Decimal   @default(0) @db.Decimal(14, 2)
+  notice_given      Boolean   @default(true)
+  salary_paid       Boolean   @default(false)
+  leave_paid        Boolean   @default(false)
+  rent_paid         Boolean   @default(true)
+  clothing_paid     Boolean   @default(false)
+  account_no        String?   @db.VarChar(50)
+  branch            String?   @db.VarChar(100)
+  next_of_kin       String?   @db.VarChar(150)
+  notes             String?   @db.Text
+  status            String    @default("Draft") @db.VarChar(30)
+  created_by        BigInt?
+  submitted_at      DateTime? @db.Timestamp(0)
+  approved_by       BigInt?
+  approved_at       DateTime? @db.Timestamp(0)
+  rejection_reason  String?   @db.VarChar(500)
+  document_ref      String?   @db.VarChar(100)
+  payment_log       String?   @db.Text
+  posted_at         DateTime? @db.Timestamp(0)
+  exit_applied_at   DateTime? @db.Timestamp(0)
+  created_at        DateTime  @default(now()) @db.Timestamp(0)
+  updated_at        DateTime  @default(now()) @db.Timestamp(0)
+
+  @@index([employee], map: "eos_settlements_employee_idx")
+  @@index([status], map: "eos_settlements_status_idx")
+}
+
+model eos_settlement_lines {
+  id            BigInt  @id
+  settlement_id BigInt
+  line_type     String  @db.VarChar(10)
+  item_code     String  @db.VarChar(30)
+  description   String  @db.VarChar(255)
+  basis         String? @db.VarChar(255)
+  amount        Decimal @db.Decimal(14, 2)
+  gl_account    String? @db.VarChar(50)
+  sort_order    Int     @default(0)
+
+  @@index([settlement_id], map: "eos_settlement_lines_settlement_idx")
+}
+
+model eos_settlement_stages {
+  id             BigInt    @id
+  settlement_id  BigInt
+  stage_order    Int
+  stage_name     String    @db.VarChar(100)
+  approver_type  String    @db.VarChar(10)
+  approver_id    String    @db.VarChar(50)
+  approver_label String?   @db.VarChar(150)
+  status         String    @default("Pending") @db.VarChar(20)
+  acted_by       BigInt?
+  acted_at       DateTime? @db.Timestamp(0)
+  comment        String?   @db.VarChar(500)
+
+  @@index([settlement_id], map: "eos_settlement_stages_settlement_idx")
+}
+
+model eos_log {
+  id            BigInt   @id
+  settlement_id BigInt
+  user_id       BigInt?
+  action        String   @db.VarChar(500)
+  status_from   String?  @db.VarChar(30)
+  status_to     String?  @db.VarChar(30)
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([settlement_id], map: "eos_log_settlement_idx")
+}

@@ -95,6 +95,7 @@ const med      = require('../controllers/medicalController');
 const leave    = require('../controllers/leaveController');
 const transfer = require('../controllers/employeeTransferController');
 const oos      = require('../controllers/outOfStationController');
+const eos      = require('../controllers/endOfServiceController');
 const appCfg   = require('../controllers/settingsController');
 const apiInteg = require('../controllers/apiIntegrationController');
 
@@ -652,6 +653,38 @@ router.post  ('/out-of-station/requests/:id/reject',    oos.reject);
 router.post  ('/out-of-station/requests/:id/cancel',    oos.cancel);
 router.post  ('/out-of-station/requests/:id/retry-gl',  oos.retryGL);
 router.post  ('/out-of-station/requests/:id/post',      oos.post);
+
+// ─────────────────────────────────────────────
+// End of Service Benefit
+// HR only. The controller checks view / manage / approve, and approval follows the stages set in
+// Settings → Approvals. Setup is gated here.
+// ─────────────────────────────────────────────
+const eosSetup = permissionGuard.any('manage_settings', 'manage_end_of_service');
+router.get   ('/end-of-service/settings',                  eos.getSettings);
+router.put   ('/end-of-service/settings',                  eosSetup, eos.saveSettings);
+router.get   ('/end-of-service/components',                eos.getComponents);
+router.get   ('/end-of-service/bands',                     eos.getBands);
+router.put   ('/end-of-service/bands',                     permissionGuard('manage_end_of_service'), eos.saveBands);
+router.get   ('/end-of-service/pf',                        permissionGuard.any('view_end_of_service', 'manage_end_of_service', 'approve_end_of_service'), eos.getPfList);
+router.post  ('/end-of-service/pf',                        permissionGuard('manage_end_of_service'), eos.savePf);
+router.delete('/end-of-service/pf/:id',                    permissionGuard('manage_end_of_service'), eos.deletePf);
+router.get   ('/end-of-service/approval-flow',             eos.getApprovalFlow);
+router.put   ('/end-of-service/approval-flow',             eosSetup, eos.saveApprovalFlow);
+router.get   ('/end-of-service/employees',                 eos.getEmployees);
+router.post  ('/end-of-service/quote',                     eos.quote);
+router.get   ('/end-of-service/approvals',                 eos.listApprovals);
+router.get   ('/end-of-service/settlements',               eos.listSettlements);
+router.post  ('/end-of-service/settlements',               eos.createSettlement);
+router.get   ('/end-of-service/settlements/:id',           eos.getSettlement);
+router.put   ('/end-of-service/settlements/:id',           eos.updateSettlement);
+router.delete('/end-of-service/settlements/:id',           eos.deleteSettlement);
+router.get   ('/end-of-service/settlements/:id/history',   eos.getHistory);
+router.post  ('/end-of-service/settlements/:id/submit',    eos.submit);
+router.post  ('/end-of-service/settlements/:id/approve',   eos.approve);
+router.post  ('/end-of-service/settlements/:id/reject',    eos.reject);
+router.post  ('/end-of-service/settlements/:id/cancel',    eos.cancel);
+router.post  ('/end-of-service/settlements/:id/retry-gl',  eos.retryGL);
+router.post  ('/end-of-service/settlements/:id/post',      eos.post);
 
 // ─────────────────────────────────────────────
 // Recruitment

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, CalendarCheck, Banknote, Building2,
   ShieldAlert, PieChart, FolderOpen, Briefcase, GraduationCap,
-  Stethoscope, TrendingUp, Clock, MapPin,
+  Stethoscope, TrendingUp, Clock, MapPin, DoorOpen,
   ArrowUpRight, Search, LayoutGrid, List
 } from 'lucide-react';
 import { usePermission } from '../../hooks/usePermission';
@@ -40,6 +40,7 @@ const modules = [
   { id: 'Medical',      icon: Stethoscope,  title: 'Medical Claims',         desc: 'Employee medical reimbursements, hospital visits, pharmacy claims, and GL postings.',      tag: 'HR',      ramp: 'teal',  stat: '0 pending',       statColor: '#1D9E75' },
   { id: 'Performance',  icon: TrendingUp,   title: 'Performance Management', desc: 'Appraisal cycles, KPI tracking, review scores, and performance history.',                  tag: 'Growth',  ramp: 'teal',  stat: '0 reviews',       statColor: '#1D9E75' },
   { id: 'OutOfStation', icon: MapPin,       title: 'Out of Station',         desc: 'Allowance for duty away from the home station: requests, approvals, daily rates by grade, and GL postings.', tag: 'HR', ramp: 'teal', stat: 'Daily allowance', statColor: '#1D9E75' },
+  { id: 'EndOfService', icon: DoorOpen,     title: 'End of Service',         desc: 'End of service benefit settlements: service bands, additions and deductions, approvals, letters and GL postings.', tag: 'HR', ramp: 'teal', stat: 'Exit settlements', statColor: '#1D9E75' },
   { id: 'Attendance',   icon: Clock,        title: 'Time & Attendance',      desc: 'Clock in/out, biometric device sync, kiosk punching, timesheets, and absence tracking.',   tag: 'HR',      ramp: 'teal',  stat: 'Live tracking',   statColor: '#1D9E75' },
 ];
 
@@ -472,6 +473,8 @@ export function Modules({ onNavigate, isSettings = false }: any) {
       case 'OutOfStation':
         if (canNav('ManageOutOfStation')) return 'ManageOutOfStation';
         return 'PersonalOutOfStation';   // personal — open to all
+      case 'EndOfService':
+        return canNav('ManageEndOfService') ? 'ManageEndOfService' : null;
       case 'Performance':
         if (canNav('ManagePerformance')) return 'ManagePerformance';
         return 'PersonalPerformance';    // personal — open to all

@@ -230,7 +230,7 @@ const ALL_MODULE_IDS = [
   'Employees', 'LeaveManagement', 'Payroll', 'Insights',
   'Company', 'Recruitment', 'Documents', 'Admin',
   'Medical', 'Performance', 'Training',
-  'Attendance', 'OutOfStation',
+  'Attendance', 'OutOfStation', 'EndOfService',
 ];
 
 const getModuleSettings = asyncHandler(async (req, res) => {

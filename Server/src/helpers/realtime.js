@@ -108,6 +108,7 @@ const TOPIC_RULES = [
   [/^\/(me\/)?leave\b/,                   'leave'],
   [/^\/employee-transfers\b/,             'transfers'],
   [/^\/out-of-station\b/,                 'outofstation'],
+  [/^\/end-of-service\b/,                 'endofservice'],
   [/^\/payroll\/runs\b/,                  'payroll'],
   [/^\/(me\/)?training\b/,                'training'],
   [/^\/me\/approvals\/(leave|medical|training)/, (m) => m[1]],

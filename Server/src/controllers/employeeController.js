@@ -1374,6 +1374,41 @@ const approveEmployee = asyncHandler(async (req, res) => {
   res.status(200).json({ status: '200', message: 'Employee approved and is now active', data: enriched, syncResult });
 });
 
+/**
+ * Mark an employee as exited outside the lifecycle approval queue, once an exit has been approved
+ * elsewhere (an End of Service settlement). Applies what an approved resignation or termination
+ * does — inactive, PC-code seat vacated, external system synced — and returns a short outcome.
+ * An employee already exited, or with an exit awaiting approval in Employees, is left as is.
+ */
+async function applyEmployeeExit(employeeId, { action, reason, effectiveDate }, req) {
+  const id = toBigInt(employeeId);
+  const emp = id ? await prisma.employee.findUnique({ where: { id } }) : null;
+  if (!emp) return { applied: false, message: 'Employee not found' };
+  if ([LIFECYCLE.TERMINATED, LIFECYCLE.RESIGNED].includes(emp.lifecycleStatus))
+    return { applied: false, message: `Employee is already ${emp.lifecycleStatus.toLowerCase()}` };
+  if (emp.pending_lifecycle_action)
+    return { applied: false, message: `An exit (${emp.pending_lifecycle_action.toLowerCase()}) is awaiting approval in Employees` };
+
+  const lifecycle = action === LIFECYCLE.RESIGNED ? LIFECYCLE.RESIGNED : LIFECYCLE.TERMINATED;
+  await prisma.employee.update({
+    where: { id },
+    data: {
+      lifecycleStatus:  lifecycle,
+      status:           '0',
+      actionReason:     reason?.trim() || null,
+      termination_date: effectiveDate ? new Date(effectiveDate) : emp.termination_date,
+      updatedAt:        new Date(),
+    },
+  });
+  const freed = await pcCodes.vacateEmployeeAssignments(id);
+  if (freed > 0) logActivity({ module: 'PcCode', action: 'auto-vacate', entityId: String(id), entityName: `${emp.firstName} ${emp.lastName}`, details: { reason: 'end of service' }, ...fromReq(req) });
+  logActivity({ module: 'Employees', action: lifecycle.toLowerCase(), entityId: String(id), entityName: `${emp.firstName} ${emp.lastName}`, details: { source: 'end_of_service', reason }, ...fromReq(req) });
+  const refreshed = await prisma.employee.findUnique({ where: { id } });
+  const [enriched] = await enrichEmployees([refreshed]);
+  await pushEmployeeToExternalSystem(enriched).catch(e => console.error('[employee exit] sync failed:', e.message));
+  return { applied: true, message: `Employee marked as ${lifecycle.toLowerCase()}` };
+}
+
 // PUT /employees/:id/status  — suspend | terminate | reinstate
 const changeEmployeeStatus = asyncHandler(async (req, res) => {
   const id = toBigInt(req.params.id);
@@ -1891,6 +1926,7 @@ module.exports = {
   rejectEmployee,
   changeEmployeeStatus,
   initiateResignation,
+  applyEmployeeExit,
   getAllPaygrades,
   getAllNotches,
   syncEmployee,

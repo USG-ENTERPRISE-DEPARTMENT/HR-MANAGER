@@ -84,6 +84,7 @@ const MyAttendance = lazy(() => import('./components/Attendance').then(m => ({ d
 const NotificationSettings = lazy(() => import('./components/NotificationSettings').then(m => ({ default: m.NotificationSettings })));
 const ManageOutOfStation = lazy(() => import('./components/OutOfStation').then(m => ({ default: m.ManageOutOfStation })));
 const PersonalOutOfStation = lazy(() => import('./components/OutOfStation').then(m => ({ default: m.PersonalOutOfStation })));
+const ManageEndOfService = lazy(() => import('./components/EndOfService').then(m => ({ default: m.ManageEndOfService })));
 const OnboardingPortal = lazy(() => import('./components/OnboardingPortal').then(m => ({ default: m.OnboardingPortal })));
 const Payroll = lazy(() => import('./components/Payroll').then(m => ({ default: m.Payroll })));
 const PcCodeOrganogram = lazy(() => import('./components/PcCodeOrganogram').then(m => ({ default: m.PcCodeOrganogram })));
@@ -258,6 +259,7 @@ export default function App() {
       // 'OutOfStation' is kept so links in notifications sent before the split still open.
       case 'OutOfStation':
       case 'PersonalOutOfStation': return <ProtectedRoute user={user} navKey="PersonalOutOfStation"><PersonalOutOfStation /></ProtectedRoute>;
+      case 'ManageEndOfService': return <ProtectedRoute user={user} navKey="ManageEndOfService"><ManageEndOfService /></ProtectedRoute>;
       case 'Salary': return <ProtectedRoute user={user} navKey="Salary"><Salary /></ProtectedRoute>;
       case 'Payroll': return <ProtectedRoute user={user} navKey="Payroll"><Payroll /></ProtectedRoute>;
       case 'Users': return <ProtectedRoute user={user} navKey="Users"><Users /></ProtectedRoute>;

@@ -14,7 +14,12 @@ type Opt = { id: string; label: string };
  * role (anyone with it) or a specific user. Saved to PUT /medical/approval-flow. A submitted medical
  * request (staff, dependent, or hospital claim) then walks these stages in order before it can be approved.
  */
-export function MedicalApprovalFlow({ onClose }: { onClose: () => void }) {
+export function MedicalApprovalFlow({
+  onClose,
+  endpoint = '/medical/approval-flow',
+  title = 'Medical Approval Flow',
+  subtitle = 'A submitted medical request must be approved at each stage below, in order, before it can be finalized.',
+}: { onClose: () => void; endpoint?: string; title?: string; subtitle?: string }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [roles, setRoles] = useState<Opt[]>([]);
   const [users, setUsers] = useState<Opt[]>([]);
@@ -23,7 +28,7 @@ export function MedicalApprovalFlow({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     Promise.all([
-      api.get('/medical/approval-flow'),
+      api.get(endpoint),
       api.get('/roles'),
       api.get('/users'),
     ]).then(([flowR, rolesR, usersR]) => {
@@ -55,7 +60,7 @@ export function MedicalApprovalFlow({ onClose }: { onClose: () => void }) {
     }
     setSaving(true);
     try {
-      await api.put('/medical/approval-flow', { stages });
+      await api.put(endpoint, { stages });
       toast.success(stages.length ? 'Approval flow saved' : 'Approval flow cleared');
       onClose();
     } catch (e: any) {
@@ -65,8 +70,8 @@ export function MedicalApprovalFlow({ onClose }: { onClose: () => void }) {
 
   return (
     <FormModal
-      title="Medical Approval Flow"
-      subtitle="A submitted medical request must be approved at each stage below, in order, before it can be finalized."
+      title={title}
+      subtitle={subtitle}
       onClose={onClose}
       onSave={save}
       saveLabel={saving ? 'Saving…' : 'Save Flow'}

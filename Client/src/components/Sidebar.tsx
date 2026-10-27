@@ -3,7 +3,7 @@ import {
   ShieldAlert, Users, FileText, Settings, PieChart,
   User, CalendarCheck, FolderOpen, Building2, FileSpreadsheet,
   ChevronRight, ChevronDown, LayoutDashboard, X,
-  PanelLeftClose, PanelLeftOpen, Banknote, CheckCircle, HelpCircle, Stethoscope, Briefcase, TrendingUp, GraduationCap, Clock, Network, MapPin
+  PanelLeftClose, PanelLeftOpen, Banknote, CheckCircle, HelpCircle, Stethoscope, Briefcase, TrendingUp, GraduationCap, Clock, Network, MapPin, DoorOpen
 } from 'lucide-react';
 import { usePermission } from '@/hooks/usePermission';
 import { AppUser } from '@/types/permissions';
@@ -132,6 +132,7 @@ const menuSections: MenuSection[] = [
           { label: 'Personal Out of Station', id: 'PersonalOutOfStation' },
         ],
       },
+      { icon: DoorOpen, label: 'End of Service', moduleIds: ['EndOfService'], id: 'ManageEndOfService' },
       { icon: Briefcase, label: 'Recruitment', moduleIds: ['Recruitment'], id: 'Recruitment' },
       {
         icon: TrendingUp,

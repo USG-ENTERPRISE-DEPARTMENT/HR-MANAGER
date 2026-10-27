@@ -2144,4 +2144,5 @@ module.exports = {
   submitPayroll, approvePayroll, rejectPayroll, getPayrollAudit, duplicatePayrollRun,
   debugPayrollRun, buildGLJournal,
   getApprovalFlow, saveApprovalFlow, getRunStages,
+  buildSalaryByEmp,
 };

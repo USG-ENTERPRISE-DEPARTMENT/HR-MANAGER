@@ -38,6 +38,8 @@ const PERMISSIONS = [
   'manage_work_week', 'manage_leave_groups', 'manage_leave_rules', 'manage_leave_approvals',
   // Out of Station allowance (requesting is open to all; these gate the HR side)
   'view_out_of_station', 'approve_out_of_station', 'manage_out_of_station',
+  // End of Service Benefit
+  'view_end_of_service', 'approve_end_of_service', 'manage_end_of_service',
   // Salary
   'view_salary_setup', 'manage_salary_component_types', 'manage_salary_components',
   'manage_employee_salary_components', 'manage_notch_setup', 'manage_payment_types', 'manage_notch_movements',
@@ -100,6 +102,8 @@ const ROLES = [
       'view_dashboard',
       // Out of Station allowance
       'view_out_of_station', 'approve_out_of_station', 'manage_out_of_station',
+      // End of Service Benefit
+      'view_end_of_service', 'approve_end_of_service', 'manage_end_of_service',
       // Recruitment, Performance, Medical, Attendance, Training (admin scope)
       'view_recruitment', 'manage_jobs', 'manage_candidates', 'manage_applications', 'manage_interviews',
       'view_performance', 'create_performance', 'delete_performance', 'review_performance',
@@ -131,6 +135,8 @@ const ROLES = [
       'manage_work_week', 'manage_leave_groups', 'manage_leave_rules', 'manage_leave_approvals',
       // Out of Station allowance
       'view_out_of_station', 'approve_out_of_station', 'manage_out_of_station',
+      // End of Service Benefit
+      'view_end_of_service', 'approve_end_of_service', 'manage_end_of_service',
       // Salary
       'view_salary_setup', 'manage_salary_component_types', 'manage_salary_components',
       'manage_employee_salary_components', 'manage_notch_setup', 'manage_payment_types', 'manage_notch_movements',

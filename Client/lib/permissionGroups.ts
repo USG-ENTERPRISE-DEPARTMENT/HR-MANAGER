@@ -65,6 +65,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     perms: ['view_out_of_station', 'approve_out_of_station', 'manage_out_of_station'],
   },
   {
+    label: 'End of Service',
+    color: { active: '#9f1239', light: '#fff1f2', text: '#881337', border: '#fecdd3' },
+    perms: ['view_end_of_service', 'approve_end_of_service', 'manage_end_of_service'],
+  },
+  {
     label: 'Salary',
     color: { active: '#b45309', light: '#fefce8', text: '#92400e', border: '#fde68a' },
     perms: ['view_salary_setup', 'manage_salary_component_types', 'manage_salary_components', 'manage_employee_salary_components', 'manage_notch_setup', 'manage_payment_types', 'manage_notch_movements'],
@@ -137,6 +142,9 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   view_out_of_station: 'See every out-of-station request and download the allowance schedule.',
   approve_out_of_station: 'Give the final (HR) approval on out-of-station requests, which pays them through the GL, and retry failed postings.',
   manage_out_of_station: 'Set the daily rate per grade, the expense GL account and approval options, and raise requests for any employee.',
+  view_end_of_service: 'See every end of service settlement and print settlement letters.',
+  approve_end_of_service: 'Approve end of service settlements when no approval stages are set, and retry failed GL postings.',
+  manage_end_of_service: 'Raise and edit end of service settlements, and set the service bands, Provident Fund list and calculation rules.',
   view_salary_setup: 'Open Salary Setup and view salary configuration.',
   view_payroll: 'Open Payroll and view payroll employees, runs, and results.',
   process_payroll: 'Create, calculate, and submit payroll runs for processing.',

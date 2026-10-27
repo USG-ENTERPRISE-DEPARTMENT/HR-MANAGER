@@ -75,6 +75,11 @@ export const PERMISSIONS = {
   APPROVE_OUT_OF_STATION:             'approve_out_of_station',
   MANAGE_OUT_OF_STATION:              'manage_out_of_station',
 
+  // ── End of Service Benefit ─────────────────────────────────
+  VIEW_END_OF_SERVICE:                'view_end_of_service',
+  APPROVE_END_OF_SERVICE:             'approve_end_of_service',
+  MANAGE_END_OF_SERVICE:              'manage_end_of_service',
+
   // ── Salary ─────────────────────────────────────────────────
   VIEW_SALARY_SETUP:                  'view_salary_setup',
   MANAGE_SALARY_COMPONENT_TYPES:      'manage_salary_component_types',
@@ -198,6 +203,9 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   ManageOutOfStation:   ['view_out_of_station', 'approve_out_of_station', 'manage_out_of_station'],
   PersonalOutOfStation: [],  // own and team requests - open to all
   OutOfStation:         [],  // old view key (notifications sent before the split) → Personal
+
+  // End of Service (HR only)
+  ManageEndOfService:   ['view_end_of_service', 'approve_end_of_service', 'manage_end_of_service'],
 
   // Payroll
   Payroll:            ['view_payroll', 'process_payroll', 'approve_payroll', 'manage_payroll_employees'],

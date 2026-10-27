@@ -4,7 +4,7 @@ export const ALL_MODULE_IDS = [
   'Employees', 'LeaveManagement', 'Payroll', 'Insights',
   'Company', 'Recruitment', 'Documents', 'Admin',
   'Medical', 'Performance',
-  'Training', 'Attendance', 'OutOfStation',
+  'Training', 'Attendance', 'OutOfStation', 'EndOfService',
 ];
 
 let _enabled: string[] = [...ALL_MODULE_IDS];

@@ -5,7 +5,7 @@ import {
   LayoutGrid, CalendarRange, Bell, SlidersHorizontal,
   Building2, Users, ShieldCheck, Stethoscope, Banknote, Network, CalendarClock, FileText, Briefcase,
   Mail, Server, AtSign, Eye, EyeOff, Send, Loader2, GraduationCap,
-  Clock, MapPin, Tablet, KeyRound, Copy, RefreshCw, Lock, Sparkles, CheckCircle2, XCircle, Plus, Trash2, Pencil,
+  Clock, MapPin, DoorOpen, Tablet, KeyRound, Copy, RefreshCw, Lock, Sparkles, CheckCircle2, XCircle, Plus, Trash2, Pencil,
   Smartphone, ExternalLink,
   MessageSquare, RotateCcw, Search, Check, ArrowRightLeft,
 } from 'lucide-react';
@@ -585,6 +585,7 @@ function PostingsSection({
         </SectionCard>
 
         <OutOfStationPostingCard />
+        <EndOfServicePostingCard />
       </div>
 
       {/* Applies to every GL posting (payroll + medical), so it sits apart from the per-module
@@ -807,6 +808,7 @@ function ApprovalsSection({
       </SectionCard>
 
       <OutOfStationApprovalCard />
+      <EndOfServiceApprovalCard />
     </div>
   );
 }
@@ -1117,6 +1119,7 @@ function MedicalGlSection({
       </SectionCard>
 
       <OutOfStationGlCard />
+      <EndOfServiceGlCard />
     </div>
   );
 }
@@ -1199,6 +1202,107 @@ function OutOfStationGlCard() {
             </div>
             <input
               className={`${inputClass} w-full ${mono ? 'font-mono text-[12px]' : ''}`}
+              value={cfg?.[key] ?? ''}
+              placeholder="Enter account code…"
+              disabled={!cfg}
+              onChange={e => set(key, e.target.value)}
+              onBlur={e => persist({ [key]: e.target.value.trim() })}
+            />
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── End of Service controls ──────────────────────────────────────────────────
+// Category end_of_service. The calculation rules live in End of Service → Setup; the posting switch,
+// GL accounts and approval flow sit here with the other modules'.
+function useEosSettings() {
+  const [cfg, setCfg] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    api.get('/end-of-service/settings').then(r => setCfg(r.data?.data ?? null)).catch(() => {});
+  }, []);
+  const set = (key: string, value: string) => setCfg(c => (c ? { ...c, [key]: value } : c));
+  const persist = async (patch: Record<string, string>) => {
+    try { await api.put('/end-of-service/settings', patch); toast.success('Setting saved'); }
+    catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save setting'); }
+  };
+  return { cfg, set, persist };
+}
+
+function EndOfServicePostingCard() {
+  const { cfg, set, persist } = useEosSettings();
+  return (
+    <SectionCard icon={<DoorOpen size={13} />} title="End of Service">
+      <ControlRow
+        label="Post End of Service Settlements"
+        description="When on, the final approval of a settlement posts the benefit, additions and deductions to the general ledger against the employee's account. When off, settlements are approved and recorded only — they can be posted later."
+        checked={(cfg?.eos_payments_enabled ?? 'Yes') === 'Yes'}
+        onChange={(v) => { set('eos_payments_enabled', v ? 'Yes' : 'No'); persist({ eos_payments_enabled: v ? 'Yes' : 'No' }); }}
+      />
+    </SectionCard>
+  );
+}
+
+function EndOfServiceApprovalCard() {
+  const [showEditor, setShowEditor] = useState(false);
+  return (
+    <>
+      <SectionCard icon={<DoorOpen size={13} />} title="End of Service Approval">
+        <div className="px-5 py-4">
+          <p className="text-[12px] text-[var(--text-muted)] mb-3 leading-relaxed">
+            Define the ordered role or user stages a submitted settlement passes through. The last stage marks the
+            employee as exited and posts the settlement. With no stages, one approval by a user with Approve End of
+            Service is enough. Whoever raised a settlement cannot approve it.
+          </p>
+          <button type="button" onClick={() => setShowEditor(true)} className="secondary-btn text-[13px]">
+            <ShieldCheck size={14} /> Configure Approval Flow
+          </button>
+        </div>
+      </SectionCard>
+      {showEditor && (
+        <MedicalApprovalFlow
+          onClose={() => setShowEditor(false)}
+          endpoint="/end-of-service/approval-flow"
+          title="End of Service Approval Flow"
+          subtitle="A submitted settlement must be approved at each stage below, in order, before it is final."
+        />
+      )}
+    </>
+  );
+}
+
+const EOS_GL_FIELDS = [
+  { key: 'eos_expense_gl',  label: 'EOSB Expense GL',            desc: 'Debit — the benefit' },
+  { key: 'eos_leave_gl',    label: 'Leave Allowance GL',         desc: 'Credit when recovered, debit when added' },
+  { key: 'eos_rent_gl',     label: 'Rent Allowance GL',          desc: 'Credit when recovered, debit when added' },
+  { key: 'eos_clothing_gl', label: 'Clothing Allowance GL',      desc: 'Debit — added when earned, not paid' },
+  { key: 'eos_salary_gl',   label: 'Final Salary GL',            desc: "Debit — final month's salary" },
+  { key: 'eos_notice_gl',   label: 'Notice Pay GL',              desc: 'Credit — salary in lieu of notice' },
+  { key: 'eos_pf_gl',       label: 'Provident Fund GL',          desc: 'Credit — PF deduction' },
+  { key: 'eos_gl_branch',   label: 'Posting Branch',             desc: 'Branch code (GL default if blank)' },
+];
+
+function EndOfServiceGlCard() {
+  const { cfg, set, persist } = useEosSettings();
+  return (
+    <SectionCard icon={<DoorOpen size={13} />} title="GL Posting — End of Service">
+      <div className="px-5 py-3 border-b border-[var(--border)]">
+        <p className="text-[12px] text-[var(--text-muted)]">
+          Posted when a settlement is finally approved. The other side of every entry is the employee's bank account; staff loans
+          are credited to the loan account entered on the settlement. A line with no account here or on the settlement blocks the posting.
+        </p>
+      </div>
+      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
+        {EOS_GL_FIELDS.map(({ key, label, desc }) => (
+          <div key={key} className="space-y-1.5">
+            <div>
+              <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-snug">{label}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{desc}</p>
+            </div>
+            <input
+              className={`${inputClass} w-full ${key === 'eos_gl_branch' ? '' : 'font-mono text-[12px]'}`}
               value={cfg?.[key] ?? ''}
               placeholder="Enter account code…"
               disabled={!cfg}
