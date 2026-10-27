@@ -193,7 +193,11 @@ export const NAV_PERMISSIONS: Record<string, string[]> = {
   LeaveSetup:         ['view_leave_setup', 'manage_leave_types', 'manage_leave_periods', 'manage_holidays'],
   LeaveCalendar:      [],  // Personal calendar - open to all
   LeaveManagement:    [],  // Personal leave management - open to all
-  OutOfStation:       [],  // Out of Station requests - open to all; HR tabs gated inside the page
+
+  // Out of Station
+  ManageOutOfStation:   ['view_out_of_station', 'approve_out_of_station', 'manage_out_of_station'],
+  PersonalOutOfStation: [],  // own and team requests - open to all
+  OutOfStation:         [],  // old view key (notifications sent before the split) → Personal
 
   // Payroll
   Payroll:            ['view_payroll', 'process_payroll', 'approve_payroll', 'manage_payroll_employees'],

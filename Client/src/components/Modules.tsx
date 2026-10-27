@@ -469,6 +469,9 @@ export function Modules({ onNavigate, isSettings = false }: any) {
       case 'Attendance':
         if (canNav('AdminAttendance')) return 'AdminAttendance';
         return 'MyAttendance';           // personal — open to all
+      case 'OutOfStation':
+        if (canNav('ManageOutOfStation')) return 'ManageOutOfStation';
+        return 'PersonalOutOfStation';   // personal — open to all
       case 'Performance':
         if (canNav('ManagePerformance')) return 'ManagePerformance';
         return 'PersonalPerformance';    // personal — open to all

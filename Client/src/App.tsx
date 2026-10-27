@@ -82,7 +82,8 @@ const ManagePerformance = lazy(() => import('./components/ManagePerformance').th
 const Modules = lazy(() => import('./components/Modules').then(m => ({ default: m.Modules })));
 const MyAttendance = lazy(() => import('./components/Attendance').then(m => ({ default: m.MyAttendance })));
 const NotificationSettings = lazy(() => import('./components/NotificationSettings').then(m => ({ default: m.NotificationSettings })));
-const OutOfStation = lazy(() => import('./components/OutOfStation').then(m => ({ default: m.OutOfStation })));
+const ManageOutOfStation = lazy(() => import('./components/OutOfStation').then(m => ({ default: m.ManageOutOfStation })));
+const PersonalOutOfStation = lazy(() => import('./components/OutOfStation').then(m => ({ default: m.PersonalOutOfStation })));
 const OnboardingPortal = lazy(() => import('./components/OnboardingPortal').then(m => ({ default: m.OnboardingPortal })));
 const Payroll = lazy(() => import('./components/Payroll').then(m => ({ default: m.Payroll })));
 const PcCodeOrganogram = lazy(() => import('./components/PcCodeOrganogram').then(m => ({ default: m.PcCodeOrganogram })));
@@ -253,7 +254,10 @@ export default function App() {
       case 'Leave': return <ProtectedRoute user={user} navKey="Leave"><LeaveManagement /></ProtectedRoute>;
       case 'LeaveSetup': return <ProtectedRoute user={user} navKey="LeaveSetup"><LeaveSetup /></ProtectedRoute>;
       case 'LeaveCalendar': return <ProtectedRoute user={user} navKey="LeaveCalendar"><LeaveCalendar /></ProtectedRoute>;
-      case 'OutOfStation': return <ProtectedRoute user={user} navKey="OutOfStation"><OutOfStation /></ProtectedRoute>;
+      case 'ManageOutOfStation': return <ProtectedRoute user={user} navKey="ManageOutOfStation"><ManageOutOfStation /></ProtectedRoute>;
+      // 'OutOfStation' is kept so links in notifications sent before the split still open.
+      case 'OutOfStation':
+      case 'PersonalOutOfStation': return <ProtectedRoute user={user} navKey="PersonalOutOfStation"><PersonalOutOfStation /></ProtectedRoute>;
       case 'Salary': return <ProtectedRoute user={user} navKey="Salary"><Salary /></ProtectedRoute>;
       case 'Payroll': return <ProtectedRoute user={user} navKey="Payroll"><Payroll /></ProtectedRoute>;
       case 'Users': return <ProtectedRoute user={user} navKey="Users"><Users /></ProtectedRoute>;

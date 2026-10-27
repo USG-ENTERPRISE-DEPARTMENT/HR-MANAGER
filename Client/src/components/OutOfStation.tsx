@@ -31,7 +31,7 @@ type Request = {
   requested_by?: string | null; requested_by_name?: string | null; submitted_at?: string | null;
   approved_at?: string | null; posted_at?: string | null; updated_at?: string | null; created_at?: string;
 };
-type Employee = { id: string; employee_name: string; employee_code?: string; paygrade_name?: string; is_self?: boolean };
+type Employee = { id: string; employee_name: string; employee_code?: string; paygrade_name?: string; is_self?: boolean; is_report?: boolean };
 type Rate = { paygrade_id: string; paygrade_name: string; daily_rate: number | null };
 type Settings = { oos_expense_gl: string; oos_gl_branch: string; oos_supervisor_approval: string; oos_payments_enabled: string };
 type GlBlock = { accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null;
@@ -305,26 +305,34 @@ function SetupPanel() {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-export function OutOfStation() {
+// ── Pages ─────────────────────────────────────────────────────────────────────
+// Two menu entries, like Leave:
+//   Personal Out of Station — the caller's own requests, and (for supervisors) their direct reports'
+//                             requests: raise on their behalf and give the supervisor approval.
+//   Manage Out of Station   — HR: final approvals, every request with the printable schedule, setup.
+type Mode = 'personal' | 'manage';
+
+export function PersonalOutOfStation() { return <OutOfStationPage mode="personal" />; }
+export function ManageOutOfStation()   { return <OutOfStationPage mode="manage" />; }
+
+function OutOfStationPage({ mode }: { mode: Mode }) {
   const user = getCurrentUser();
+  const myUserId = user?.id != null ? String(user.id) : '';
   const can = (p: string) => user?.resolvedPermissions?.has(p) || false;
   const isAdmin = user?.allRoles?.some(r => ['admin', 'super-admin'].includes(r.name)) ?? false;
   const canManage = isAdmin || can('manage_out_of_station');
   const isHr = isAdmin || can('approve_out_of_station');
   const canViewAll = canManage || isHr || can('view_out_of_station');
 
+  // Personal: the caller plus their direct reports. Manage: everyone (for HR setup).
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [approvalCount, setApprovalCount] = useState(0);
-  const hasTeam = employees.some(e => !e.is_self) && !canManage;
-  const tabs = useMemo(() => [
-    'My Requests',
-    ...(hasTeam ? ['My Team'] : []),
-    ...((hasTeam || isHr || approvalCount > 0) ? ['Approvals'] : []),
-    ...(canViewAll ? ['All Requests'] : []),
-    ...(canManage ? ['Setup'] : []),
-  ], [hasTeam, isHr, approvalCount, canViewAll, canManage]);
-  const [tab, setTab] = useState('My Requests');
+  const hasTeam = employees.some(e => e.is_report);
+  const tabs = useMemo(() => mode === 'personal'
+    ? ['My Requests', ...(hasTeam ? ['Team Requests'] : [])]
+    : [...(isHr ? ['Approvals'] : []), ...(canViewAll ? ['All Requests'] : []), ...(canManage ? ['Setup'] : [])],
+  [mode, hasTeam, isHr, canViewAll, canManage]);
+  const [tab, setTab] = useState(tabs[0] ?? 'My Requests');
+  useEffect(() => { if (!tabs.includes(tab)) setTab(tabs[0] ?? 'My Requests'); }, [tabs, tab]);
 
   const [rows, setRows] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -341,21 +349,23 @@ export function OutOfStation() {
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
-    api.get('/out-of-station/employees').then(r => setEmployees(r.data?.data ?? [])).catch(() => setEmployees([]));
-  }, []);
+    api.get('/out-of-station/employees', { params: mode === 'personal' ? { scope: 'personal' } : {} })
+      .then(r => setEmployees(r.data?.data ?? [])).catch(() => setEmployees([]));
+  }, [mode]);
 
   const load = useCallback((silent = false) => {
     if (tab === 'Setup') return;
     if (!silent) setLoading(true);
-    const req = tab === 'Approvals' ? api.get('/out-of-station/approvals')
+    const req = tab === 'Approvals'
+      // HR's queue is the HR tier only; supervisor-tier approvals live under Personal → Team Requests.
+      ? api.get('/out-of-station/approvals').then(r => ({ data: { data: (r.data?.data ?? []).filter((x: Request) => x.status === 'Pending HR Approval') } }))
       : api.get('/out-of-station/requests', { params: {
-          scope: tab === 'My Team' ? 'team' : tab === 'All Requests' ? 'all' : 'mine',
+          scope: tab === 'Team Requests' ? 'team' : tab === 'All Requests' ? 'all' : 'mine',
           ...(tab === 'All Requests' && from ? { from } : {}), ...(tab === 'All Requests' && to ? { to } : {}),
         } });
-    req.then(r => setRows(r.data?.data ?? []))
-      .catch(e => { if (!silent) toast.error(e.response?.data?.message || 'Failed to load requests'); })
+    req.then((r: any) => setRows(r.data?.data ?? []))
+      .catch((e: any) => { if (!silent) toast.error(e.response?.data?.message || 'Failed to load requests'); })
       .finally(() => setLoading(false));
-    api.get('/out-of-station/approvals').then(r => setApprovalCount((r.data?.data ?? []).length)).catch(() => {});
   }, [tab, from, to]);
   useEffect(() => { load(); }, [load]);
   useRealtimeRefresh('outofstation', () => load(true));
@@ -365,6 +375,7 @@ export function OutOfStation() {
     (status === 'All' || r.status === status)
     && `${r.request_number} ${r.employee_name} ${r.employee_code ?? ''} ${r.location} ${r.purpose}`.toLowerCase().includes(search.toLowerCase())
   ), [rows, status, search]);
+  const awaitingMe = tab === 'Team Requests' ? rows.filter(r => r.status === 'Pending Approval').length : 0;
 
   const reload = () => load();
   const act = async (path: string, body: any, ok: string) => {
@@ -378,6 +389,14 @@ export function OutOfStation() {
     setRetrying(false);
   };
 
+  // Who may edit, submit, delete or cancel a draft/open request: the employee (My Requests), whoever
+  // raised it, or HR setup in Manage. Matches the server's isOwner check.
+  const ownsRow = (r: Request) => tab === 'My Requests'
+    || String(r.requested_by ?? '') === myUserId
+    || (mode === 'manage' && canManage);
+  // Approve/reject: HR's queue, or a supervisor on their report's request at the supervisor tier.
+  const mayDecide = (r: Request) => tab === 'Approvals' || (tab === 'Team Requests' && r.status === 'Pending Approval');
+
   // The schedule as the Bank prints it: name, days, rate, net, account and branch, with a total.
   const scheduleRows = filtered.filter(r => ['Approved', 'Paid', 'GL Failed'].includes(r.status));
   const scheduleHeaders = ['Name', 'Period', 'No. of Days', 'Rate', 'Net', 'A/C No.', 'Branch'];
@@ -389,25 +408,45 @@ export function OutOfStation() {
   const scheduleTitle = 'Out of Station Allowance Schedule';
   const scheduleSummary = `${from || to ? `${from ? fmtDate(from, '') : '…'} to ${to ? fmtDate(to, '') : '…'}` : 'All dates'} · Approved and paid requests`;
 
-  const showEmployeeCol = tab !== 'My Requests' || employees.length > 1;
+  const showEmployeeCol = tab !== 'My Requests';
   const cols = ['Request', ...(showEmployeeCol ? ['Employee'] : []), 'Location', 'Period', 'Days', 'Allowance', 'Status'];
+  // New Request: personal → for yourself (or a report, in Team Requests); manage → anyone, for HR setup.
+  const canRaise = mode === 'personal' ? employees.length > 0 : canManage && employees.length > 0;
+  const formEmployees = mode === 'manage' ? employees
+    : tab === 'Team Requests' ? employees.filter(e => e.is_report)
+    : employees.filter(e => e.is_self);
+
+  const emptyText = tab === 'My Requests' ? 'You have no out-of-station requests. Use New Request to raise one.'
+    : tab === 'Team Requests' ? 'None of your direct reports has an out-of-station request.'
+    : tab === 'Approvals' ? 'Nothing is waiting for HR approval.'
+    : 'No requests found.';
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Out of Station" subtitle="Request, approve and pay the allowance for duty away from your station." />
-        {employees.length > 0 && <button className="primary-btn" onClick={() => setForm(null)}><Plus size={15} />New Request</button>}
+        <PageHeader
+          title={mode === 'personal' ? 'Personal Out of Station' : 'Manage Out of Station'}
+          subtitle={mode === 'personal'
+            ? 'Request the allowance for duty away from your station, and handle your team’s requests.'
+            : 'Approve out-of-station requests, download the allowance schedule, and set rates and GL accounts.'} />
+        {canRaise && tab !== 'Setup' && (formEmployees.length > 0) &&
+          <button className="primary-btn" onClick={() => setForm(null)}><Plus size={15} />{tab === 'Team Requests' ? 'Request for a Team Member' : 'New Request'}</button>}
       </div>
 
+      {tabs.length === 0 ? (
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-sm text-[var(--text-muted)]">You don't have access to manage out-of-station requests.</div>
+      ) : <>
       <TabBar tabs={tabs} activeTab={tab} onChange={setTab} />
 
       {tab === 'Setup' ? <SetupPanel /> : (
         <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-4">
             {tab === 'Approvals'
-              ? <p className="text-sm text-[var(--text-muted)]">{filtered.length ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} waiting for you` : 'Nothing waiting for your approval'}</p>
+              ? <p className="text-sm text-[var(--text-muted)]">{filtered.length ? `${filtered.length} request${filtered.length === 1 ? '' : 's'} waiting for HR approval` : 'Nothing waiting for HR approval'}</p>
               : <div className="flex flex-wrap gap-2">{STATUSES.map(s => (
-                  <button key={s} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === s ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`} onClick={() => setStatus(s)}>{s}</button>
+                  <button key={s} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === s ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`} onClick={() => setStatus(s)}>
+                    {s}{s === 'Pending Approval' && awaitingMe > 0 ? ` (${awaitingMe})` : ''}
+                  </button>
                 ))}</div>}
             <div className="flex flex-wrap items-center gap-2">
               {tab === 'All Requests' && <>
@@ -419,6 +458,12 @@ export function OutOfStation() {
               <button className="secondary-btn" onClick={reload} title="Refresh"><RefreshCw size={15} /></button>
             </div>
           </div>
+
+          {tab === 'Team Requests' && awaitingMe > 0 && (
+            <div className="border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-xs text-[var(--text-muted)]">
+              <span className="font-bold text-[var(--text-primary)]">{awaitingMe}</span> request{awaitingMe === 1 ? '' : 's'} from your team waiting for your approval. Approve or reject from the row menu.
+            </div>
+          )}
 
           {tab === 'All Requests' && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3">
@@ -435,9 +480,11 @@ export function OutOfStation() {
               <thead><tr>{cols.map(c => <th key={c} className={`th ${['Days', 'Allowance'].includes(c) ? 'text-right' : ''}`}>{c}</th>)}<th className="th text-right"><span className="sr-only">Actions</span></th></tr></thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {loading ? <tr><td colSpan={cols.length + 1} className="px-4 py-12 text-center text-sm text-[var(--text-muted)]">Loading requests…</td></tr>
-                  : !filtered.length ? <tr><td colSpan={cols.length + 1} className="px-4 py-12 text-center"><MapPin className="mx-auto mb-2 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">{tab === 'My Requests' ? 'You have no out-of-station requests. Use New Request to raise one.' : 'No requests found.'}</p></td></tr>
+                  : !filtered.length ? <tr><td colSpan={cols.length + 1} className="px-4 py-12 text-center"><MapPin className="mx-auto mb-2 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">{emptyText}</p></td></tr>
                     : filtered.map(r => {
-                      const isOwnerRow = tab !== 'Approvals' && (tab === 'My Requests' || tab === 'My Team' || canManage);
+                      const owner = ownsRow(r);
+                      const decide = mayDecide(r);
+                      const hrActions = mode === 'manage' && (isHr || canManage);
                       return (
                         <tr key={r.id} className="hover:bg-[var(--surface-hover)]">
                           <td className="px-4 py-3 text-sm font-bold text-[var(--accent)]"><button className="hover:underline" onClick={() => setDetail(r)}>{r.request_number}</button></td>
@@ -451,15 +498,15 @@ export function OutOfStation() {
                             <div className="flex justify-end">
                               <RowActions actions={[
                                 { label: 'View Details', icon: Eye, onClick: () => setDetail(r) },
-                                { label: 'Edit', icon: FileEdit, onClick: () => setForm(r), hidden: r.status !== 'Draft' || !isOwnerRow },
-                                { label: 'Submit for Approval', icon: Send, onClick: () => act(`/out-of-station/requests/${r.id}/submit`, {}, 'Submitted'), hidden: r.status !== 'Draft' || !isOwnerRow },
-                                { label: 'Approve', icon: Check, onClick: () => act(`/out-of-station/requests/${r.id}/approve`, {}, 'Approved'), hidden: tab !== 'Approvals' },
-                                { label: 'Reject', icon: XCircle, danger: true, onClick: () => setReasonFor({ row: r, kind: 'reject' }), hidden: tab !== 'Approvals' },
-                                { label: 'Retry GL Posting', icon: RefreshCw, onClick: () => retry(r), hidden: r.status !== 'GL Failed' || !(isHr || canManage) },
-                                { label: 'Post to GL', icon: CheckCircle2, onClick: () => act(`/out-of-station/requests/${r.id}/post`, {}, 'Posted'), hidden: r.status !== 'Approved' || !(isHr || canManage) },
+                                { label: 'Approve', icon: Check, onClick: () => act(`/out-of-station/requests/${r.id}/approve`, {}, 'Approved'), hidden: !decide },
+                                { label: 'Reject', icon: XCircle, danger: true, onClick: () => setReasonFor({ row: r, kind: 'reject' }), hidden: !decide },
+                                { label: 'Edit', icon: FileEdit, onClick: () => setForm(r), hidden: r.status !== 'Draft' || !owner },
+                                { label: 'Submit for Approval', icon: Send, onClick: () => act(`/out-of-station/requests/${r.id}/submit`, {}, 'Submitted'), hidden: r.status !== 'Draft' || !owner },
+                                { label: 'Retry GL Posting', icon: RefreshCw, onClick: () => retry(r), hidden: r.status !== 'GL Failed' || !hrActions },
+                                { label: 'Post to GL', icon: CheckCircle2, onClick: () => act(`/out-of-station/requests/${r.id}/post`, {}, 'Posted'), hidden: r.status !== 'Approved' || !hrActions },
                                 { label: 'Cancel Request', icon: Ban, danger: true, onClick: () => setReasonFor({ row: r, kind: 'cancel' }),
-                                  hidden: tab === 'Approvals' || !((OPEN.includes(r.status) && isOwnerRow) || (['Approved', 'GL Failed'].includes(r.status) && (isHr || canManage))) },
-                                { label: 'Delete Draft', icon: Trash2, danger: true, onClick: () => setDeleting(r), hidden: r.status !== 'Draft' || !isOwnerRow },
+                                  hidden: tab === 'Approvals' || !((OPEN.includes(r.status) && owner) || (['Approved', 'GL Failed'].includes(r.status) && hrActions)) },
+                                { label: 'Delete Draft', icon: Trash2, danger: true, onClick: () => setDeleting(r), hidden: r.status !== 'Draft' || !owner },
                               ]} />
                             </div>
                           </td>
@@ -471,9 +518,10 @@ export function OutOfStation() {
           </div>
         </div>
       )}
+      </>}
 
-      {form !== undefined && <RequestForm initial={form} employees={employees} onClose={() => setForm(undefined)} onSaved={reload} />}
-      {detail && <RequestDetail request={detail} canRetry={isHr || canManage} retrying={retrying} onRetry={() => retry(detail)} onClose={() => setDetail(null)} />}
+      {form !== undefined && <RequestForm initial={form} employees={form ? employees : formEmployees} onClose={() => setForm(undefined)} onSaved={reload} />}
+      {detail && <RequestDetail request={detail} canRetry={mode === 'manage' && (isHr || canManage)} retrying={retrying} onRetry={() => retry(detail)} onClose={() => setDetail(null)} />}
       {reasonFor && (
         <ReasonModal
           title={reasonFor.kind === 'reject' ? `Reject ${reasonFor.row.request_number}` : `Cancel ${reasonFor.row.request_number}`}

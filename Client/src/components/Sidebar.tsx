@@ -122,7 +122,16 @@ const menuSections: MenuSection[] = [
           { label: 'Personal Medical', id: 'PersonalMedical' },
         ],
       },
-      { icon: MapPin, label: 'Out of Station', moduleIds: ['OutOfStation'], id: 'OutOfStation' },
+      {
+        icon: MapPin,
+        label: 'Out of Station',
+        moduleIds: ['OutOfStation'],
+        hasSubmenu: true,
+        subItems: [
+          { label: 'Manage Out of Station',   id: 'ManageOutOfStation'   },
+          { label: 'Personal Out of Station', id: 'PersonalOutOfStation' },
+        ],
+      },
       { icon: Briefcase, label: 'Recruitment', moduleIds: ['Recruitment'], id: 'Recruitment' },
       {
         icon: TrendingUp,

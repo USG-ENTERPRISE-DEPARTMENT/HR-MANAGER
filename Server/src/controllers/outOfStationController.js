@@ -193,12 +193,12 @@ function notify(kind, row, req, reason) {
     if (kind === 'supervisor_pending' && row.supervisor_id) {
       notifyEmployee(row.supervisor_id, {
         message: `${who} has an ${what} awaiting your approval`,
-        action: 'OutOfStation', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee,
+        action: 'PersonalOutOfStation', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee,
       });
     } else if (kind === 'hr_pending') {
       notifyUsersWithPermission('approve_out_of_station', {
         message: `${who}: ${what} awaits HR approval`,
-        action: 'CentralApproval', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee,
+        action: 'ManageOutOfStation', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee,
       }, req.user?.id);
     } else if (row.employee) {
       const msg = kind === 'approved'  ? `Your ${what} was approved`
@@ -206,7 +206,7 @@ function notify(kind, row, req, reason) {
                 : kind === 'rejected'  ? `Your ${what} was rejected${reason ? ': ' + reason : ''}`
                 : kind === 'cancelled' ? `Your ${what} was cancelled`
                 : `Your ${what} was updated`;
-      notifyEmployee(row.employee, { message: msg, action: 'OutOfStation', type: 'out_of_station', fromUser: req.user?.id });
+      notifyEmployee(row.employee, { message: msg, action: 'PersonalOutOfStation', type: 'out_of_station', fromUser: req.user?.id });
     }
   } catch { /* never block the request */ }
 }
@@ -376,11 +376,14 @@ exports.saveRates = asyncHandler(async (req, res) => {
 // REQUESTS
 // ══════════════════════════════════════════════════════════════════════════════
 
-// GET /out-of-station/employees — who the caller may raise a request for: themself and their direct
-// reports, or every active employee for HR setup.
+// GET /out-of-station/employees[?scope=personal] — who the caller may raise a request for.
+//   personal (Personal Out of Station): themself and their direct reports, for everyone;
+//   otherwise (Manage Out of Station): every active employee for HR setup, else as personal.
+// Each row says whether it is the caller (is_self) or one of their direct reports (is_report).
 exports.getRequestableEmployees = asyncHandler(async (req, res) => {
   const me = myEmployeeId(req);
-  const where = canManage(req)
+  const personal = req.query.scope === 'personal' || !canManage(req);
+  const where = !personal
     ? Prisma.sql`e.status = '1'`
     : me ? Prisma.sql`e.status = '1' AND (e.id = ${toBigInt(me)} OR e.supervisorId = ${toBigInt(me)})`
          : null;
@@ -388,12 +391,16 @@ exports.getRequestableEmployees = asyncHandler(async (req, res) => {
   const rows = await prisma.$queryRaw`
     SELECT e.id, e.employee_id AS employee_code,
            TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name,
-           e.paygradeId AS paygrade_id, pg.name AS paygrade_name
+           e.paygradeId AS paygrade_id, pg.name AS paygrade_name, e.supervisorId AS supervisor_id
       FROM employee e
       LEFT JOIN paygrades pg ON pg.id = e.paygradeId
      WHERE ${where}
      ORDER BY e.firstName, e.lastName`.catch(() => []);
-  respond.ok(res, 'Employees', s(rows).map(r => ({ ...r, is_self: String(r.id) === me })));
+  respond.ok(res, 'Employees', s(rows).map(r => ({
+    ...r,
+    is_self:   String(r.id) === me,
+    is_report: !!me && String(r.supervisor_id ?? '') === me,
+  })));
 });
 
 // POST /out-of-station/quote — { employee, date_start, date_end } → days, rate and amount, for the form.
