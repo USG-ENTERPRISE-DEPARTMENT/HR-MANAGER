@@ -51,9 +51,14 @@ type Settlement = {
 type Quote = {
   eligible: boolean; service_years: number; service_months: number; counted_years: number; days_per_year: number; divisor: number;
   annual_gross: number; computed_gross: number; gross_overridden: boolean; gross_parts: { name: string; amount: number }[];
-  eosb_amount: number; monthly_salary: number; leave_paid: boolean; hire_date: string | null;
+  eosb_amount: number; monthly_salary: number; hire_date: string | null;
+  notice_given: boolean; salary_paid: boolean; leave_paid: boolean;
+  checks?: Record<CheckKey, Check>;
   lines: Line[]; warnings: string[]; account_no?: string | null; branch?: string | null;
 };
+const CHECK_KEYS = ['notice_given', 'salary_paid', 'leave_paid'] as const;
+type CheckKey = (typeof CHECK_KEYS)[number];
+type Check = { value: boolean; note: string } | null;
 type Employee = { id: string; employee_name: string; employee_code?: string; lifecycle_status?: string; open_settlement?: string | null };
 type GlBlock = { accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null;
 type Settings = Record<string, string> & { exit_reasons?: string[] };
@@ -187,9 +192,10 @@ function SettlementForm({ initial, employees, reasons, onClose, onSaved }: {
     exit_reason: initial?.exit_reason ?? '',
     effective_date: day(initial?.effective_date),
     notified_date: day(initial?.notified_date),
-    notice_given: initial?.notice_given ?? true,
-    salary_paid: initial?.salary_paid ?? false,
-    leave_paid: initial ? initial.leave_paid : (null as boolean | null),   // null → detected by the server
+    // null → the system's records answer (leave module, payroll, the dates); HR can still change it.
+    notice_given: (initial ? initial.notice_given : null) as boolean | null,
+    salary_paid: (initial ? initial.salary_paid : null) as boolean | null,
+    leave_paid: (initial ? initial.leave_paid : null) as boolean | null,
     rent_paid: initial?.rent_paid ?? true,
     clothing_paid: initial?.clothing_paid ?? false,
     annual_gross: initial?.gross_overridden ? String(initial.annual_gross) : '',
@@ -209,12 +215,12 @@ function SettlementForm({ initial, employees, reasons, onClose, onSaved }: {
     setQuoteError('');
     if (!form.employee || !form.exit_reason || !form.effective_date) { setQuote(null); return; }
     const t = setTimeout(() => {
-      const { leave_paid, annual_gross, ...rest } = form;
-      api.post('/end-of-service/quote', { ...rest, ...(leave_paid !== null ? { leave_paid } : {}), ...(annual_gross.trim() ? { annual_gross } : {}) })
+      const { annual_gross, ...rest } = form;
+      const answered = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== null));
+      api.post('/end-of-service/quote', { ...answered, ...(annual_gross.trim() ? { annual_gross } : {}) })
         .then(r => {
           const q: Quote = r.data?.data;
           setQuote(q);
-          if (form.leave_paid === null) setForm(f => ({ ...f, leave_paid: q.leave_paid }));
           if (initial && firstQuote) { setFirstQuote(false); return; }
           setFirstQuote(false);
           setLines(ls => [...q.lines, ...ls.filter(l => !AUTO_CODES.includes(l.item_code))]);
@@ -223,7 +229,10 @@ function SettlementForm({ initial, employees, reasons, onClose, onSaved }: {
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.employee, form.exit_reason, form.effective_date, form.notice_given, form.salary_paid, form.leave_paid, form.rent_paid, form.clothing_paid, form.annual_gross]);
+  }, [form.employee, form.exit_reason, form.effective_date, form.notified_date, form.notice_given, form.salary_paid, form.leave_paid, form.rent_paid, form.clothing_paid, form.annual_gross]);
+
+  // The answer in force: HR's when they set one, else what the server worked out from the records.
+  const effective = (k: CheckKey) => (form[k] !== null ? !!form[k] : !!quote?.[k]);
 
   const updateLine = (i: number, patch: Partial<Line>) => setLines(ls => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   const addLine = (item_code: 'loan' | 'other') => setLines(ls => [...ls, {
@@ -245,8 +254,12 @@ function SettlementForm({ initial, employees, reasons, onClose, onSaved }: {
       if (l.item_code === 'loan' && !String(l.gl_account ?? '').trim()) return toast.error(`Enter the loan account for "${l.description}"`);
     }
     setSaving(true);
-    const { leave_paid, annual_gross, ...rest } = form;
-    const body = { ...rest, leave_paid: !!leave_paid, annual_gross: annual_gross.trim() ? annual_gross : null, lines };
+    const { annual_gross, ...rest } = form;
+    const body = {
+      ...rest,
+      notice_given: effective('notice_given'), salary_paid: effective('salary_paid'), leave_paid: effective('leave_paid'),
+      annual_gross: annual_gross.trim() ? annual_gross : null, lines,
+    };
     try {
       if (initial) {
         await api.put(`/end-of-service/settlements/${initial.id}`, body);
@@ -294,19 +307,39 @@ function SettlementForm({ initial, employees, reasons, onClose, onSaved }: {
           </FormField>
         ) : <div className="hidden sm:block" />}
 
-        <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 rounded-[12px] border border-[var(--border)] px-4 py-3">
+        <div className="col-span-full rounded-[12px] border border-[var(--border)] divide-y divide-[var(--border)]">
           {([
             ['notice_given', 'Did the employee give the required notice?'],
             ['salary_paid', "Has the final month's salary already been paid?"],
             ['leave_paid', 'Has the leave allowance been paid this year?'],
             ['rent_paid', 'Has the rent allowance been paid for the year?'],
             ['clothing_paid', 'Has the clothing allowance been paid this year?'],
-          ] as const).map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between gap-3">
-              <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
-              <YesNo value={!!form[key]} onChange={v => set(key, v as any)} />
-            </div>
-          ))}
+          ] as const).map(([key, label]) => {
+            const check = CHECK_KEYS.includes(key as CheckKey) ? quote?.checks?.[key as CheckKey] : undefined;
+            const value = CHECK_KEYS.includes(key as CheckKey) ? effective(key as CheckKey) : !!form[key];
+            const differs = !!check && form[key] !== null && !!form[key] !== check.value;
+            return (
+              <div key={key} className="px-4 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {check && form[key] !== null && (
+                      <button type="button" className="text-[11px] text-[var(--accent)] hover:underline" onClick={() => set(key, null as any)}>Use system</button>
+                    )}
+                    <YesNo value={value} onChange={v => set(key, v as any)} />
+                  </div>
+                </div>
+                {check ? (
+                  <p className={`mt-1 flex items-start gap-1.5 text-[11px] ${differs ? 'text-amber-700' : 'text-[var(--text-muted)]'}`}>
+                    {differs ? <AlertTriangle size={12} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={12} className="mt-0.5 shrink-0 text-[var(--success)]" />}
+                    <span>{differs ? `Your answer differs from the records. ${check.note}` : `${form[key] === null ? 'Answered by the system. ' : ''}${check.note}`}</span>
+                  </p>
+                ) : key === 'notice_given' && !form.notified_date ? (
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">Enter the date notified and the system checks this against the notice period.</p>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
 
         {quoteError ? (
@@ -902,7 +935,7 @@ function RulesTab({ settings, onSaved }: { settings: Settings; onSaved: () => vo
     setForm({
       eos_divisor: settings.eos_divisor ?? '261', eos_min_service_months: settings.eos_min_service_months ?? '6',
       eos_round_up_months: settings.eos_round_up_months ?? '6', eos_notice_months: settings.eos_notice_months ?? '1',
-      eos_salary_basis: settings.eos_salary_basis ?? 'basic', eos_allowance_basis: settings.eos_allowance_basis ?? 'monthly',
+      eos_salary_basis: settings.eos_salary_basis ?? 'basic', eos_allowance_basis: settings.eos_allowance_basis ?? 'annual',
       eos_gross_components: listOf(settings.eos_gross_components), eos_rent_components: listOf(settings.eos_rent_components),
       eos_clothing_components: listOf(settings.eos_clothing_components), eos_ineligible_reasons: listOf(settings.eos_ineligible_reasons),
     });
@@ -942,8 +975,8 @@ function RulesTab({ settings, onSaved }: { settings: Settings; onSaved: () => vo
         </FormField>
         <FormField label="Rent and clothing component amounts are" hint="How the amounts are held on the salary components">
           <Select className={inputClass} value={form.eos_allowance_basis} onChange={e => set('eos_allowance_basis', e.target.value)}>
-            <option value="monthly">Monthly amounts</option>
             <option value="annual">Annual amounts</option>
+            <option value="monthly">Monthly amounts</option>
           </Select>
         </FormField>
         <FormField label="Rent allowance components">

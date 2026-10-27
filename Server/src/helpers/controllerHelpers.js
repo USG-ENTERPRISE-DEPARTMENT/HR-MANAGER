@@ -11,19 +11,21 @@ function serialize(obj) {
   if (obj instanceof Date)     return obj.toISOString();
   if (Array.isArray(obj))      return obj.map(serialize);
   if (obj !== null && typeof obj === 'object') {
-    if (obj.constructor?.name === 'Decimal') return parseFloat(obj.toString());
+    // A live Decimal (whatever its class is called in this Prisma build) prints its exact value.
+    // Checked before the plain-object shape below: those instances carry s/e/d too.
+    if (obj.constructor?.name === 'Decimal' || typeof obj.toFixed === 'function') return parseFloat(obj.toString());
     if (
       typeof obj.s === 'number' &&
       typeof obj.e === 'number' &&
       Array.isArray(obj.d) && obj.d.length > 0
     ) {
       // decimal.js shape: value = sign × 0.<digit groups> × 10^(e+1)
-      // (first group unpadded, subsequent groups zero-padded to 7 digits)
+      // (first group unpadded, subsequent groups zero-padded to 7 digits). Parsed from one string —
+      // multiplying by 10^(e+1) in floating point turned -33316.02 into -33316.020000000004.
       const digits = obj.d.map((g, i) => i === 0 ? String(g) : String(g).padStart(7, '0')).join('');
-      const num    = (obj.s < 0 ? -1 : 1) * parseFloat(`0.${digits}`) * Math.pow(10, obj.e + 1);
+      const num    = parseFloat(`${obj.s < 0 ? '-' : ''}0.${digits}e${obj.e + 1}`);
       return isNaN(num) ? null : num;
     }
-    if (typeof obj.toFixed === 'function') return parseFloat(obj.toString());
     const out = {};
     for (const [k, v] of Object.entries(obj)) out[fieldFor(k)] = serialize(v);
     return out;

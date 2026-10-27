@@ -70,7 +70,9 @@ const SETTING_DEFAULTS = {
   eos_gross_components:    '[]',      // salary component ids that make up Annual Gross (monthly × 12)
   eos_rent_components:     '[]',
   eos_clothing_components: '[]',
-  eos_allowance_basis:     'monthly', // how rent and clothing component amounts are held: monthly | annual
+  // How rent and clothing component amounts are held: annual | monthly. The Bank's are annual (Rent
+  // 2025 averages about four times the basic salary; Cloth Allowance about one month's basic).
+  eos_allowance_basis:     'annual',
   eos_ineligible_reasons:  JSON.stringify(['Dismissal', 'End of Contract']),
   eos_letter_signatory:    'Managing Director/CEO',
   eos_letter_body:         DEFAULT_LETTER,
@@ -199,14 +201,51 @@ async function annualLeaveAllowance(basic) {
   return round2(basic * 12 * factor);
 }
 
-/** Has the employee been paid their leave allowance in the exit year? */
-async function leavePaidInYear(employeeId, year) {
+const fmtDay = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/**
+ * What the system's own records say about the questions HR answers on a settlement. Each answer is
+ * { value, note } — or null when the records cannot tell, and HR's answer (or the default) stands.
+ *   leave_paid   — the leave module: a leave this year whose allowance was paid.
+ *   salary_paid  — payroll: a paid run (Completed or Bank Pending) covering the effective date that
+ *                  includes the employee.
+ *   notice_given — the dates: notified at least the notice period before the effective date.
+ */
+async function systemChecks(employeeId, effective, notified, noticeMonths) {
+  const emp = toBigInt(employeeId);
+  const year = effective.getUTCFullYear();
   const from = new Date(Date.UTC(year, 0, 1)), to = new Date(Date.UTC(year, 11, 31));
-  const [row] = await prisma.$queryRaw`
-    SELECT COUNT(*) AS n FROM employeeleaves
-     WHERE employee = ${toBigInt(employeeId)} AND allowance_status = 'Paid'
-       AND date_start >= ${from} AND date_start <= ${to}`.catch(() => [{ n: 0 }]);
-  return Number(row?.n ?? 0) > 0;
+
+  const [leave] = await prisma.$queryRaw`
+    SELECT el.date_start, el.leave_name, lt.name AS leave_type_name
+      FROM employeeleaves el LEFT JOIN leavetypes lt ON lt.id = el.leave_type
+     WHERE el.employee = ${emp} AND el.allowance_status = 'Paid'
+       AND el.date_start >= ${from} AND el.date_start <= ${to}
+     ORDER BY el.date_start LIMIT 1`.catch(() => []);
+  const leave_paid = leave
+    ? { value: true, note: `Leave module: allowance paid with ${leave.leave_type_name || leave.leave_name || 'leave'} starting ${fmtDay(leave.date_start)}` }
+    : { value: false, note: `Leave module: no leave allowance paid in ${year}` };
+
+  // status is an enum on Postgres; CONCAT turns it into text so the literal list compares on both databases.
+  const [run] = await prisma.$queryRaw`
+    SELECT pr.name, CONCAT(pr.status, '') AS status
+      FROM payrollruns pr
+     WHERE CONCAT(pr.status, '') IN ('Completed', 'Bank Pending')
+       AND pr.date_start <= ${effective} AND pr.date_end >= ${effective}
+       AND EXISTS (SELECT 1 FROM payrolldata pd WHERE pd.payroll = pr.id AND pd.employee = ${emp})
+     ORDER BY pr.date_end DESC LIMIT 1`.catch(() => []);
+  const salary_paid = run
+    ? { value: true, note: `Payroll: paid in "${run.name}" (${run.status})` }
+    : { value: false, note: 'Payroll: no paid run covering the effective date includes this employee' };
+
+  let notice_given = null;
+  if (notified) {
+    const due = new Date(notified); due.setUTCMonth(due.getUTCMonth() + noticeMonths);
+    notice_given = due <= effective
+      ? { value: true, note: `Dates: notified ${fmtDay(notified)}, at least ${noticeMonths} month${noticeMonths === 1 ? '' : 's'} before the effective date` }
+      : { value: false, note: `Dates: notified ${fmtDay(notified)}; ${noticeMonths} month${noticeMonths === 1 ? "'s" : "s'"} notice ends ${fmtDay(due)}, after the effective date` };
+  }
+  return { leave_paid, salary_paid, notice_given };
 }
 
 /**
@@ -269,7 +308,14 @@ async function computeSettlement(emp, input, settings) {
   };
   const monthlyOf = (annual) => trunc2(annual / 12);
 
-  const leavePaid = input.leave_paid !== undefined ? toBool(input.leave_paid) : await leavePaidInYear(emp.id, effective.getUTCFullYear());
+  // HR's answer wins when given; otherwise the system's records, otherwise the default.
+  const noticeMonths = Number(settings.eos_notice_months) || 1;
+  const notified = parseDay(input.notified_date);
+  const checks = await systemChecks(emp.id, effective, notified, noticeMonths);
+  const given = (k) => input[k] !== undefined && input[k] !== null && input[k] !== '';
+  const answer = (k, fallback) => (given(k) ? toBool(input[k]) : checks[k] ? checks[k].value : fallback);
+
+  const leavePaid = answer('leave_paid', false);
   const leaveAnnual = await annualLeaveAllowance(salary.basic);
   if (leaveAnnual > 0) {
     const m = monthlyOf(leaveAnnual);
@@ -298,10 +344,9 @@ async function computeSettlement(emp, input, settings) {
     add('addition', 'clothing_allowance', 'Clothing allowance earned, not paid', `${fmtMoney(clothingAnnual)} ÷ 12 × ${worked} month${worked === 1 ? '' : 's'} worked`, trunc2(monthlyOf(clothingAnnual) * worked));
   }
 
-  const noticeGiven = input.notice_given !== undefined ? toBool(input.notice_given) : true;
-  const salaryPaid  = input.salary_paid  !== undefined ? toBool(input.salary_paid)  : false;
+  const noticeGiven = answer('notice_given', true);
+  const salaryPaid  = answer('salary_paid', false);
   const monthlySalary = settings.eos_salary_basis === 'gross' ? monthlyOf(annualGross) : round2(salary.basic);
-  const noticeMonths = Number(settings.eos_notice_months) || 1;
   if (!salaryPaid) {
     if (noticeGiven) add('addition', 'final_salary', "Final month's salary", 'Notice given — salary for the final month', monthlySalary);
     else add('deduction', 'notice_pay', 'Salary in lieu of notice', `Notice not given — ${noticeMonths} month${noticeMonths === 1 ? "'s" : "s'"} salary`, round2(monthlySalary * noticeMonths));
@@ -317,7 +362,7 @@ async function computeSettlement(emp, input, settings) {
     annual_gross: annualGross, computed_gross: computedGross, gross_overridden: override, gross_parts: grossParts,
     eosb_amount: eosb, monthly_salary: monthlySalary,
     notice_given: noticeGiven, salary_paid: salaryPaid, leave_paid: leavePaid, rent_paid: rentPaid, clothing_paid: clothingPaid,
-    lines, warnings,
+    checks, lines, warnings,
   };
 }
 
@@ -878,6 +923,8 @@ exports.updateSettlement = asyncHandler(async (req, res) => {
     notice_given: row.notice_given, salary_paid: row.salary_paid, leave_paid: row.leave_paid, rent_paid: row.rent_paid,
     clothing_paid: row.clothing_paid, annual_gross: row.gross_overridden ? row.annual_gross : undefined,
     notes: row.notes, next_of_kin: row.next_of_kin,
+    // An edit that does not send lines keeps the ones on the settlement (loans included).
+    lines: (await loadLines(row.id)).map(({ line_type, item_code, description, basis, amount, gl_account }) => ({ line_type, item_code, description, basis, amount, gl_account })),
     ...req.body,
   };
   const p = await prepare(emp, body);
