@@ -583,6 +583,8 @@ function PostingsSection({
             onChange={(v) => { setEmailPayslips(v); saveSetting('payments', { emailPayslips: v }); }}
           />
         </SectionCard>
+
+        <OutOfStationPostingCard />
       </div>
 
       {/* Applies to every GL posting (payroll + medical), so it sits apart from the per-module
@@ -803,6 +805,8 @@ function ApprovalsSection({
           }}
         />
       </SectionCard>
+
+      <OutOfStationApprovalCard />
     </div>
   );
 }
@@ -1111,7 +1115,100 @@ function MedicalGlSection({
           ))}
         </div>
       </SectionCard>
+
+      <OutOfStationGlCard />
     </div>
+  );
+}
+
+// ─── Out of Station controls ──────────────────────────────────────────────────
+// Stored in their own settings category (out_of_station) and read by the server on every request
+// and posting. Each card loads and saves on its own, so the controls can sit in the sub-tab they
+// belong to — Postings, Approvals, and the GL accounts tab — as the other modules' do.
+type OosSettings = { oos_expense_gl: string; oos_gl_branch: string; oos_supervisor_approval: string; oos_payments_enabled: string };
+
+function useOosSettings() {
+  const [cfg, setCfg] = useState<OosSettings | null>(null);
+  useEffect(() => {
+    api.get('/out-of-station/settings').then(r => setCfg(r.data?.data ?? null)).catch(() => {});
+  }, []);
+  const set = (key: keyof OosSettings, value: string) => setCfg(c => (c ? { ...c, [key]: value } : c));
+  const persist = async (patch: Partial<OosSettings>) => {
+    try { await api.put('/out-of-station/settings', patch); toast.success('Setting saved'); }
+    catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save setting'); }
+  };
+  return { cfg, set, persist };
+}
+
+function OutOfStationPostingCard() {
+  const { cfg, set, persist } = useOosSettings();
+  return (
+    <SectionCard icon={<MapPin size={13} />} title="Out of Station">
+      <ControlRow
+        label="Post Out of Station Allowance Payments"
+        description="When on, HR's approval of an out-of-station request posts the allowance to the general ledger and pays the employee's account. When off, requests are approved and recorded only — nothing is posted or paid."
+        checked={(cfg?.oos_payments_enabled ?? 'Yes') === 'Yes'}
+        onChange={(v) => { set('oos_payments_enabled', v ? 'Yes' : 'No'); persist({ oos_payments_enabled: v ? 'Yes' : 'No' }); }}
+      />
+    </SectionCard>
+  );
+}
+
+function OutOfStationApprovalCard() {
+  const { cfg, set, persist } = useOosSettings();
+  return (
+    <SectionCard icon={<MapPin size={13} />} title="Out of Station Approval Flow">
+      <div className="px-5 py-3 border-b border-[var(--border)]">
+        <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
+          HR is always the final approver, and HR's approval pays the allowance. Requests a supervisor raises for their subordinate skip the supervisor step.
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-[var(--text-muted)]">
+          <span className="font-semibold text-[var(--text-primary)]">Config</span><span className="font-semibold text-[var(--text-primary)]">Behaviour</span>
+          <span>Supervisor Off</span><span>Employee → HR → GL</span>
+          <span>Supervisor On</span><span>Employee → Supervisor → HR → GL</span>
+        </div>
+      </div>
+      <ControlRow
+        label="Supervisor Approval"
+        description="When enabled, the employee's supervisor must approve an out-of-station request before it reaches HR."
+        checked={(cfg?.oos_supervisor_approval ?? 'Yes') === 'Yes'}
+        onChange={(v) => { set('oos_supervisor_approval', v ? 'Yes' : 'No'); persist({ oos_supervisor_approval: v ? 'Yes' : 'No' }); }}
+      />
+    </SectionCard>
+  );
+}
+
+function OutOfStationGlCard() {
+  const { cfg, set, persist } = useOosSettings();
+  return (
+    <SectionCard icon={<MapPin size={13} />} title="GL Posting — Out of Station">
+      <div className="px-5 py-3 border-b border-[var(--border)]">
+        <p className="text-[12px] text-[var(--text-muted)]">
+          Used when HR approves an out-of-station request: debit the expense account, credit the employee's bank account. A request cannot be paid until the expense account is set.
+        </p>
+      </div>
+      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {([
+          { key: 'oos_expense_gl', label: 'Out of Station Expense GL', desc: 'Debit — allowance expense', mono: true },
+          { key: 'oos_gl_branch',  label: 'Posting Branch',            desc: 'Branch code (GL default if blank)', mono: false },
+        ] as { key: 'oos_expense_gl' | 'oos_gl_branch'; label: string; desc: string; mono: boolean }[]).map(({ key, label, desc, mono }) => (
+          <div key={key} className="space-y-1.5">
+            <div>
+              <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-snug">{label}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{desc}</p>
+            </div>
+            <input
+              className={`${inputClass} w-full ${mono ? 'font-mono text-[12px]' : ''}`}
+              value={cfg?.[key] ?? ''}
+              placeholder="Enter account code…"
+              disabled={!cfg}
+              onChange={e => set(key, e.target.value)}
+              onBlur={e => persist({ [key]: e.target.value.trim() })}
+            />
+          </div>
+        ))}
+      </div>
+    </SectionCard>
   );
 }
 

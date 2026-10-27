@@ -118,7 +118,7 @@ async function quoteFor(emp, startStr, endStr) {
   if (!emp.paygrade_id) return { error: `${emp.employee_name || 'This employee'} has no pay grade on record, so no out-of-station rate applies. Set their pay grade first.` };
   const [rate] = await prisma.$queryRaw`
     SELECT daily_rate FROM outofstation_rates WHERE paygrade_id = ${toBigInt(emp.paygrade_id)}`.catch(() => []);
-  if (!rate) return { error: `No out-of-station daily rate is set for pay grade ${emp.paygrade_name || emp.paygrade_id}. Add it in Out of Station → Setup.` };
+  if (!rate) return { error: `No out-of-station daily rate is set for pay grade ${emp.paygrade_name || emp.paygrade_id}. Add it in Manage Out of Station → Daily Rates.` };
   const dailyRate = Number(s(rate.daily_rate));
   const days = daysBetween(start, end);
   return { start, end, days, daily_rate: dailyRate, amount: round2(days * dailyRate) };
@@ -249,7 +249,7 @@ async function postToLedger(id, req) {
     const amount    = round2(row.amount);
     const missing = [
       !(amount > 0) && 'an amount',
-      !expenseGl    && 'the Out of Station expense GL account (Out of Station → Setup)',
+      !expenseGl    && 'the Out of Station expense GL account (Settings → Controls → Medical & GL → GL Posting — Out of Station)',
       !account      && "the employee's bank account (on their employee profile)",
     ].filter(Boolean);
     if (missing.length) throw new Error(`GL posting not attempted — missing ${missing.join(' and ')}. Nothing was sent to the GL.`);

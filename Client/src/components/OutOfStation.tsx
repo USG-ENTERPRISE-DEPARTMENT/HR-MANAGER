@@ -16,7 +16,6 @@ import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { SearchSelect } from './ui/SearchSelect';
 import { DateInput } from './ui/DateInput';
-import { Select } from './ui/Select';
 import { RowActions } from './ui/RowActions';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { GlBlockedModal, type GlImbalance, type InvalidAccount } from './ui/GlBlockedModal';
@@ -45,7 +44,6 @@ type Request = {
 };
 type Employee = { id: string; employee_name: string; employee_code?: string; paygrade_name?: string; is_self?: boolean; is_report?: boolean };
 type Rate = { paygrade_id: string; paygrade_name: string; daily_rate: number | null };
-type Settings = { oos_expense_gl: string; oos_gl_branch: string; oos_supervisor_approval: string; oos_payments_enabled: string };
 type GlBlock = { accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null;
 
 // Same palette as Leave's status pills, plus the GL outcomes.
@@ -520,7 +518,7 @@ const MANAGE_STATUSES = ['All', 'Pending Approval', 'Pending HR Approval', 'Appr
 export function ManageOutOfStation() {
   const me = useUser();
   const MAIN_TABS = [
-    ...(me.canManage ? ['Daily Rates', 'Posting Settings'] : []),
+    ...(me.canManage ? ['Daily Rates'] : []),
     ...(me.canViewAll ? ['All Requests'] : []),
     ...(me.isHr ? ['Approval List'] : []),
   ];
@@ -528,14 +526,13 @@ export function ManageOutOfStation() {
 
   return (
     <div className="p-4 sm:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full relative">
-      <PageHeader title="Out of Station Setup" subtitle="Configure daily rates and postings, approve requests and download the allowance schedule." />
+      <PageHeader title="Out of Station Setup" subtitle="Set daily rates, approve requests and download the allowance schedule. Posting and approval controls are in Settings → Controls." />
       {MAIN_TABS.length === 0 ? (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] p-10 text-center text-sm text-[var(--text-muted)]">You don't have access to manage out-of-station requests.</div>
       ) : <>
         <TabBar tabs={MAIN_TABS} activeTab={activeTab} onChange={setActiveTab} className="flex flex-wrap items-center gap-2 mt-2 mb-4 border-b border-slate-200 pb-2" />
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] flex flex-col min-h-[500px] overflow-hidden">
           {activeTab === 'Daily Rates' && <RatesTab />}
-          {activeTab === 'Posting Settings' && <SettingsTab />}
           {(activeTab === 'All Requests' || activeTab === 'Approval List') && <ManageRequestsTab key={activeTab} approvals={activeTab === 'Approval List'} me={me} />}
         </div>
       </>}
@@ -736,53 +733,5 @@ function RatesTab() {
       <TablePagination total={rates.length} filtered={filtered.length} page={page} pageSize={pageSize}
         onPageChange={setPage} onPageSizeChange={p => { setPageSize(p); setPage(1); }} />
     </>
-  );
-}
-
-function SettingsTab() {
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    api.get('/out-of-station/settings').then(r => setSettings(r.data?.data ?? null)).catch(() => toast.error('Failed to load settings'));
-  }, []);
-  const set = (k: keyof Settings, v: string) => setSettings(s => (s ? { ...s, [k]: v } : s));
-  const save = async () => {
-    if (!settings) return;
-    setSaving(true);
-    try { await api.put('/out-of-station/settings', settings); toast.success('Settings saved'); }
-    catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save settings'); }
-    finally { setSaving(false); }
-  };
-  if (!settings) return <div className="p-10 text-center text-[13px] text-[var(--text-muted)]">Loading…</div>;
-  return (
-    <div className="p-4 sm:p-5">
-      <div className="mb-5">
-        <h3 className="font-bold text-[var(--text-primary)]">Posting Settings</h3>
-        <p className="text-[12px] text-[var(--text-muted)] mt-0.5">On HR's approval the allowance is posted: debit the expense account, credit the employee's bank account.</p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 max-w-3xl">
-        <FormField label="Out of Station Expense GL" required>
-          <input id="oos-expense-gl" className={inputClass} value={settings.oos_expense_gl} onChange={e => set('oos_expense_gl', e.target.value)} placeholder="e.g. 124500000000" />
-        </FormField>
-        <FormField label="Posting Branch" hint="Blank uses the GL connection's default branch">
-          <input id="oos-branch" className={inputClass} value={settings.oos_gl_branch} onChange={e => set('oos_gl_branch', e.target.value)} placeholder="000" />
-        </FormField>
-        <FormField label="Supervisor Approval">
-          <Select className={inputClass} value={settings.oos_supervisor_approval} onChange={e => set('oos_supervisor_approval', e.target.value)}>
-            <option value="Yes">Yes — supervisor, then HR</option>
-            <option value="No">No — HR only</option>
-          </Select>
-        </FormField>
-        <FormField label="Post to GL on Approval">
-          <Select className={inputClass} value={settings.oos_payments_enabled} onChange={e => set('oos_payments_enabled', e.target.value)}>
-            <option value="Yes">Yes — pay through the GL</option>
-            <option value="No">No — record only</option>
-          </Select>
-        </FormField>
-      </div>
-      <div className="mt-6 flex justify-end max-w-3xl">
-        <button className="primary-btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</button>
-      </div>
-    </div>
   );
 }

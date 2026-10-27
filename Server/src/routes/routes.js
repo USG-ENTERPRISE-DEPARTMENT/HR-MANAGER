@@ -633,7 +633,8 @@ router.post  ('/leave/leaves/:id/retry-gl',          leave.retryLeaveGL);
 // (self, supervisor, HR). Setup is gated here.
 // ─────────────────────────────────────────────
 router.get   ('/out-of-station/settings',               oos.getSettings);
-router.put   ('/out-of-station/settings',               permissionGuard('manage_out_of_station'), oos.saveSettings);
+// Edited in Settings → Controls (Postings, Approvals, Medical & GL).
+router.put   ('/out-of-station/settings',               permissionGuard.any('manage_settings', 'manage_out_of_station'), oos.saveSettings);
 router.get   ('/out-of-station/rates',                  oos.getRates);
 router.put   ('/out-of-station/rates',                  permissionGuard('manage_out_of_station'), oos.saveRates);
 router.get   ('/out-of-station/employees',              oos.getRequestableEmployees);
