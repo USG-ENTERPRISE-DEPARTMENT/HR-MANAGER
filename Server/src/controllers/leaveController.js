@@ -442,8 +442,29 @@ async function processLeaveAllowance(leaveId) {
   }
 }
 
+/**
+ * Is the employee's allowance held by End of Service? While a settlement is open or approved, the
+ * settlement has already added or recovered the leave allowance, so paying it here as well would pay
+ * it twice. Final approval then marks it 'Stopped (End of Service)'; a cancelled or rejected
+ * settlement releases the hold. False when the End of Service tables are not installed.
+ */
+async function heldByEndOfService(employeeId) {
+  const rows = await prisma.$queryRaw`
+    SELECT settlement_number FROM eos_settlements
+     WHERE employee = ${toBigInt(employeeId)} AND status NOT IN ('Rejected', 'Cancelled') LIMIT 1`.catch(() => []);
+  return rows[0]?.settlement_number ?? null;
+}
+
 // Post GL and clean up sibling once-per-period leaves — called by cron and financial approval
 async function postLeaveGLWithCleanup(leaveId) {
+  const owner = await prisma.employeeleaves
+    .findUnique({ where: { id: toBigInt(leaveId) }, select: { employee: true } }).catch(() => null);
+  const heldBy = owner ? await heldByEndOfService(owner.employee) : null;
+  if (heldBy) {
+    // Left GL Scheduled (not failed): it pays as normal if the settlement is cancelled or rejected.
+    console.log(`[postLeaveGL] Leave ${leaveId} not paid — held by end of service settlement ${heldBy}`);
+    return { heldBy };
+  }
   try {
     await postLeaveGL(leaveId);
   } catch (err) {
@@ -485,10 +506,14 @@ exports.retryLeaveGL = asyncHandler(async (req, res) => {
   if (!isAdmin) return respond.badReq(res, 'Only HR/admin can retry GL posting');
 
   const id   = toBigInt(req.params.id);
-  const current = await prisma.employeeleaves.findUnique({ where: { id }, select: { id: true, allowance_status: true } }).catch(() => null);
+  const current = await prisma.employeeleaves.findUnique({ where: { id }, select: { id: true, allowance_status: true, employee: true } }).catch(() => null);
   if (!current) return respond.notFound(res, 'Leave not found');
   if (current.allowance_status !== 'Failed GL Posting')
     return respond.badReq(res, 'Leave GL posting has not failed — no retry needed');
+  const heldBy = await heldByEndOfService(current.employee);
+  if (heldBy) {
+    return respond.badReq(res, `This allowance is held by end of service settlement ${heldBy} and cannot be paid while the settlement is open or approved`);
+  }
 
   await prisma.$executeRaw`UPDATE employeeleaves SET allowance_status='GL Scheduled' WHERE id=${id}`;
   await postLeaveGLWithCleanup(id);

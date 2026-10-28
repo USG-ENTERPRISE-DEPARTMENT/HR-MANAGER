@@ -694,6 +694,7 @@ const MODULES: HelpModule[] = [
               ['Approved',            'Fully approved — balance has been deducted'],
               ['GL Scheduled',        'HR approved the leave and its eligible allowance is waiting for the leave start date before GL posting'],
               ['Paid',                'The approved allowance was posted successfully'],
+              ['Stopped (End of Service)', "The employee's end of service settlement was approved before this allowance was paid. The settlement paid the earned part, so this allowance will not be posted"],
               ['Rejected',            'Declined at one of the approval tiers'],
               ['Cancelled',           'Approved leave that was later cancelled'],
             ],

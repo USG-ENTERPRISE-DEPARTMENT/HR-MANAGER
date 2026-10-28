@@ -216,15 +216,28 @@ async function systemChecks(employeeId, effective, notified, noticeMonths) {
   const year = effective.getUTCFullYear();
   const from = new Date(Date.UTC(year, 0, 1)), to = new Date(Date.UTC(year, 11, 31));
 
-  const [leave] = await prisma.$queryRaw`
-    SELECT el.date_start, el.leave_name, lt.name AS leave_type_name
+  // Only an allowance actually paid counts. One that is approved but not yet paid ('GL Scheduled',
+  // paid on the leave's start date) or whose posting failed counts as not paid: the settlement adds
+  // the months worked, and the leave module holds the payment while the settlement is open and stops
+  // it on final approval (see stopScheduledLeaveAllowances), so it is never paid on top.
+  const leaves = await prisma.$queryRaw`
+    SELECT el.date_start, el.leave_name, el.allowance_status, el.amount, lt.name AS leave_type_name
       FROM employeeleaves el LEFT JOIN leavetypes lt ON lt.id = el.leave_type
-     WHERE el.employee = ${emp} AND el.allowance_status = 'Paid'
+     WHERE el.employee = ${emp}
+       AND el.allowance_status IN ('Paid', 'GL Scheduled', 'Failed GL Posting')
        AND el.date_start >= ${from} AND el.date_start <= ${to}
-     ORDER BY el.date_start LIMIT 1`.catch(() => []);
-  const leave_paid = leave
-    ? { value: true, note: `Leave module: allowance paid with ${leave.leave_type_name || leave.leave_name || 'leave'} starting ${fmtDay(leave.date_start)}` }
-    : { value: false, note: `Leave module: no leave allowance paid in ${year}` };
+     ORDER BY el.date_start`;
+  const paid = leaves.find(l => l.allowance_status === 'Paid');
+  const pending = leaves.find(l => l.allowance_status !== 'Paid');
+  const nameOf = (l) => l.leave_type_name || l.leave_name || 'leave';
+  const leave_paid = paid
+    ? { value: true, amount: Number(paid.amount) || 0, note: `Leave module: allowance of ${fmtMoney(paid.amount)} paid with ${nameOf(paid)} starting ${fmtDay(paid.date_start)}` }
+    : {
+        value: false,
+        note: pending
+          ? `Leave module: an allowance of ${fmtMoney(pending.amount)} for ${nameOf(pending)} starting ${fmtDay(pending.date_start)} is ${pending.allowance_status === 'GL Scheduled' ? 'scheduled' : 'in a failed posting'}, not paid. It is held while this settlement is open and stopped when it is approved.`
+          : `Leave module: no leave allowance paid in ${year}`,
+      };
 
   // status is an enum on Postgres; CONCAT turns it into text so the literal list compares on both databases.
   const [run] = await prisma.$queryRaw`
@@ -316,7 +329,9 @@ async function computeSettlement(emp, input, settings) {
   const answer = (k, fallback) => (given(k) ? toBool(input[k]) : checks[k] ? checks[k].value : fallback);
 
   const leavePaid = answer('leave_paid', false);
-  const leaveAnnual = await annualLeaveAllowance(salary.basic);
+  // When the leave module has paid the allowance, recover from that amount; otherwise work out the
+  // year's allowance the way the leave module does.
+  const leaveAnnual = leavePaid && checks.leave_paid?.amount > 0 ? round2(checks.leave_paid.amount) : await annualLeaveAllowance(salary.basic);
   if (leaveAnnual > 0) {
     const m = monthlyOf(leaveAnnual);
     if (leavePaid) add('deduction', 'leave_allowance', 'Leave allowance not earned', `${fmtMoney(leaveAnnual)} ÷ 12 × ${notWorked} month${notWorked === 1 ? '' : 's'} not worked`, trunc2(m * notWorked));
@@ -469,6 +484,16 @@ async function replaceLines(tx, settlementId, lines) {
       VALUES (${newId()}, ${toBigInt(settlementId)}, ${l.line_type}, ${l.item_code}, ${l.description}, ${l.basis},
               ${l.amount}, ${l.gl_account}, ${i})`;
   }
+}
+
+/**
+ * On final approval: the settlement has settled the leave allowance, so any allowance the leave
+ * module still has scheduled (or failed) for this employee must never be paid. Returns how many.
+ */
+async function stopScheduledLeaveAllowances(employeeId) {
+  return prisma.$executeRaw`
+    UPDATE employeeleaves SET allowance_status = 'Stopped (End of Service)'
+     WHERE employee = ${toBigInt(employeeId)} AND allowance_status IN ('GL Scheduled', 'Failed GL Posting')`;
 }
 
 // ── Approval flow ─────────────────────────────────────────────────────────────
@@ -1041,6 +1066,8 @@ exports.approve = asyncHandler(async (req, res) => {
   }, req).catch(e => ({ applied: false, message: e.message }));
   if (exit.applied) await prisma.$executeRaw`UPDATE eos_settlements SET exit_applied_at = NOW() WHERE id = ${toBigInt(row.id)}`.catch(() => {});
   await writeLog(row.id, req.user?.id, exit.applied ? exit.message : `Employee status not changed: ${exit.message}`, 'Approved', 'Approved');
+  const stopped = await stopScheduledLeaveAllowances(row.employee).catch(e => { console.error('[end of service] could not stop leave allowances:', e.message); return 0; });
+  if (stopped) await writeLog(row.id, req.user?.id, `Stopped ${stopped} scheduled leave allowance${stopped === 1 ? '' : 's'} — settled here instead`, 'Approved', 'Approved');
   notifyCreator(row, req, `End of service settlement ${row.settlement_number} (${row.employee_name}) was approved`);
 
   const post = await postToLedger(row.id, req);
