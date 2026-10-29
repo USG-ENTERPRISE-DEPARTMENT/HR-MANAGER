@@ -754,8 +754,8 @@ function ApprovalsSection({
           </p>
           <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-[var(--text-muted)]">
             <span className="font-semibold text-[var(--text-primary)]">Config</span><span className="font-semibold text-[var(--text-primary)]">Behaviour</span>
-            <span>Supervisor Off</span><span>Employee → HR → GL</span>
-            <span>Supervisor On</span><span>Employee → Supervisor → HR → GL</span>
+            <span>Supervisor Off</span><span>Request → HR → GL</span>
+            <span>Supervisor On</span><span>Request → Supervisor → HR → GL</span>
           </div>
         </div>
         <ControlRow
@@ -1163,7 +1163,7 @@ function OutOfStationApprovalCard() {
     <SectionCard icon={<MapPin size={13} />} title="Out of Station Approval Flow">
       <div className="px-5 py-3 border-b border-[var(--border)]">
         <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
-          HR is always the final approver, and HR's approval pays the allowance. Requests a supervisor raises for their subordinate skip the supervisor step.
+          Only staff with people reporting to them can raise requests — for a subordinate or for themselves. HR is always the final approver, and HR's approval pays the allowance. Requests a supervisor raises for their subordinate skip the supervisor step.
         </p>
         <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-[var(--text-muted)]">
           <span className="font-semibold text-[var(--text-primary)]">Config</span><span className="font-semibold text-[var(--text-primary)]">Behaviour</span>
@@ -1173,7 +1173,7 @@ function OutOfStationApprovalCard() {
       </div>
       <ControlRow
         label="Supervisor Approval"
-        description="When enabled, the employee's supervisor must approve an out-of-station request before it reaches HR."
+        description="When enabled, the employee's supervisor must approve an out-of-station request before it reaches HR — for example a manager's own request goes to their supervisor first."
         checked={(cfg?.oos_supervisor_approval ?? 'Yes') === 'Yes'}
         onChange={(v) => { set('oos_supervisor_approval', v ? 'Yes' : 'No'); persist({ oos_supervisor_approval: v ? 'Yes' : 'No' }); }}
       />

@@ -2,8 +2,9 @@
 //
 // Staff sent on duty away from their station are paid days × the daily rate for their pay grade.
 // Days run from the start date to the end date, both included — weekends and holidays count — and
-// the allowance is not taxed. A request is raised by the employee or by their supervisor on their
-// behalf and approved like leave: a supervisor tier when switched on (skipped when the supervisor
+// the allowance is not taxed. Only staff with people reporting to them can raise a request — for
+// their direct reports or for themselves (HR setup can raise for anyone); staff with no reports
+// cannot. It is approved like leave: a supervisor tier when switched on (skipped when the supervisor
 // raised it), then HR. HR's approval posts it to the GL: Dr the out-of-station expense account,
 // Cr the employee's bank account.
 //
@@ -99,13 +100,26 @@ async function loadEmployee(employeeId) {
   };
 }
 
-/** May this caller raise or edit a request for `emp`? Self, their supervisor, or HR setup. */
-function canActFor(req, emp) {
-  const me = myEmployeeId(req);
-  if (canManage(req)) return true;
-  if (!me || !emp) return false;
-  return emp.id === me || emp.supervisor_id === me;
+/** Does this employee have anyone (active) reporting to them? */
+async function hasReports(employeeId) {
+  if (!employeeId) return false;
+  const rows = await prisma.$queryRaw`
+    SELECT id FROM employee WHERE supervisorId = ${toBigInt(employeeId)} AND status = '1' LIMIT 1`.catch(() => []);
+  return rows.length > 0;
 }
+
+/**
+ * May this caller raise a request for `emp`? Their supervisor, or HR setup; and themself only when
+ * they have people reporting to them. Staff with no reports cannot raise requests at all.
+ */
+async function canActFor(req, emp) {
+  const me = myEmployeeId(req);
+  if (!emp) return false;
+  if (me && emp.id === me) return hasReports(me);
+  if (canManage(req)) return true;
+  return !!me && emp.supervisor_id === me;
+}
+const RAISE_FOR_MSG = 'Only staff with people reporting to them can raise out-of-station requests — for their direct reports or themselves';
 
 /**
  * Days, rate and amount for an employee over a date range, or { error }.
@@ -177,12 +191,10 @@ async function getRow(id) {
   return row ? s(row) : null;
 }
 
-/** The employee, or whoever raised it, or HR setup — the people who own a request before approval. */
+/** Whoever raised it, or HR setup — the people who own a request before approval. An employee whose
+ *  supervisor raised it only views it. */
 function isOwner(req, row) {
-  const me = myEmployeeId(req);
-  return canManage(req)
-      || (me && String(row.employee) === me)
-      || String(row.requested_by ?? '') === String(req.user?.id ?? '');
+  return canManage(req) || String(row.requested_by ?? '') === String(req.user?.id ?? '');
 }
 
 /** In-app notifications. Never throws. */
@@ -377,15 +389,17 @@ exports.saveRates = asyncHandler(async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // GET /out-of-station/employees[?scope=personal] — who the caller may raise a request for.
-//   personal (Personal Out of Station): themself and their direct reports, for everyone;
+//   personal (Personal Out of Station): their direct reports, and themself when they have any;
 //   otherwise (Manage Out of Station): every active employee for HR setup, else as personal.
-// Each row says whether it is the caller (is_self) or one of their direct reports (is_report).
+// The caller is listed only when they have people reporting to them. Each row says whether it is the
+// caller (is_self) or one of their direct reports (is_report).
 exports.getRequestableEmployees = asyncHandler(async (req, res) => {
   const me = myEmployeeId(req);
   const personal = req.query.scope === 'personal' || !canManage(req);
+  const self = await hasReports(me) ? toBigInt(me) : 0n;
   const where = !personal
-    ? Prisma.sql`e.status = '1'`
-    : me ? Prisma.sql`e.status = '1' AND (e.id = ${toBigInt(me)} OR e.supervisorId = ${toBigInt(me)})`
+    ? Prisma.sql`e.status = '1' AND (e.id <> ${toBigInt(me) ?? 0n} OR e.id = ${self})`
+    : me ? Prisma.sql`e.status = '1' AND (e.supervisorId = ${toBigInt(me)} OR e.id = ${self})`
          : null;
   if (!where) return respond.ok(res, 'Employees', []);
   const rows = await prisma.$queryRaw`
@@ -405,9 +419,10 @@ exports.getRequestableEmployees = asyncHandler(async (req, res) => {
 
 // POST /out-of-station/quote — { employee, date_start, date_end } → days, rate and amount, for the form.
 exports.quote = asyncHandler(async (req, res) => {
-  const emp = await loadEmployee(req.body.employee || myEmployeeId(req));
+  if (!req.body.employee) return respond.badReq(res, 'Select the employee');
+  const emp = await loadEmployee(req.body.employee);
   if (!emp) return respond.badReq(res, 'Employee not found');
-  if (!canActFor(req, emp)) return respond.forbidden(res, 'You can only raise out-of-station requests for yourself or your direct reports');
+  if (!(await canActFor(req, emp))) return respond.forbidden(res, RAISE_FOR_MSG);
   const q = await quoteFor(emp, req.body.date_start, req.body.date_end);
   if (q.error) return respond.badReq(res, q.error);
   respond.ok(res, 'Quote', { days: q.days, daily_rate: q.daily_rate, amount: q.amount, paygrade_name: emp.paygrade_name });
@@ -459,7 +474,7 @@ exports.getRequest = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   const me = myEmployeeId(req);
-  const visible = isOwner(req, row) || canViewAll(req) || (me && String(row.supervisor_id ?? '') === me);
+  const visible = isOwner(req, row) || (me && String(row.employee) === me) || canViewAll(req) || (me && String(row.supervisor_id ?? '') === me);
   if (!visible) return respond.forbidden(res, 'You do not have access to this request');
   respond.ok(res, 'Request', row);
 });
@@ -488,12 +503,12 @@ exports.createRequest = asyncHandler(async (req, res) => {
   if (!location) return respond.badReq(res, 'Location is required');
   if (purpose.length > 255 || location.length > 150) return respond.badReq(res, 'Purpose (255) or location (150) is too long');
 
-  const employeeId = req.body.employee || myEmployeeId(req);
-  if (!employeeId) return respond.badReq(res, 'No employee record is linked to your account. Contact HR to link your profile.');
+  const employeeId = req.body.employee;
+  if (!employeeId) return respond.badReq(res, 'Select the employee the request is for');
   const emp = await loadEmployee(employeeId);
   if (!emp) return respond.badReq(res, 'Employee not found');
   if (emp.status !== '1') return respond.badReq(res, 'Out-of-station requests can only be raised for active employees');
-  if (!canActFor(req, emp)) return respond.forbidden(res, 'You can only raise out-of-station requests for yourself or your direct reports');
+  if (!(await canActFor(req, emp))) return respond.forbidden(res, RAISE_FOR_MSG);
 
   const q = await quoteFor(emp, req.body.date_start, req.body.date_end);
   if (q.error) return respond.badReq(res, q.error);
@@ -534,7 +549,7 @@ exports.updateRequest = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   if (row.status !== 'Draft') return respond.badReq(res, 'Only Draft requests can be edited');
-  if (!isOwner(req, row)) return respond.forbidden(res, 'You can only edit your own requests or those you raised');
+  if (!isOwner(req, row)) return respond.forbidden(res, 'Only whoever raised this request can edit it');
 
   const purpose  = req.body.purpose  !== undefined ? String(req.body.purpose).trim()  : row.purpose;
   const location = req.body.location !== undefined ? String(req.body.location).trim() : row.location;
@@ -561,7 +576,7 @@ exports.deleteRequest = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   if (row.status !== 'Draft') return respond.badReq(res, 'Only Draft requests can be deleted. Cancel it instead.');
-  if (!isOwner(req, row)) return respond.forbidden(res, 'You can only delete your own requests or those you raised');
+  if (!isOwner(req, row)) return respond.forbidden(res, 'Only whoever raised this request can delete it');
   await prisma.$executeRaw`DELETE FROM outofstation_log WHERE request_id = ${toBigInt(row.id)}`;
   await prisma.$executeRaw`DELETE FROM outofstation_requests WHERE id = ${toBigInt(row.id)}`;
   logActivity({ module: 'Out of Station', action: 'delete', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
@@ -599,7 +614,7 @@ exports.submit = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   if (row.status !== 'Draft') return respond.badReq(res, 'Only Draft requests can be submitted');
-  if (!isOwner(req, row)) return respond.forbidden(res, 'You can only submit your own requests or those you raised');
+  if (!isOwner(req, row)) return respond.forbidden(res, 'Only whoever raised this request can submit it');
   const msg = await submitRequest(row.id, req);
   respond.ok(res, msg, await getRow(row.id));
 });

@@ -25,12 +25,14 @@ import { fmtDate as formatDmy, fmtDateTime } from '@/lib/dateFormat';
 import { useRealtimeRefresh } from '@/lib/realtime';
 
 // Out of Station allowance: days (start to end, both included, weekends counted) × the daily rate for
-// the employee's pay grade. Raised by the employee or their supervisor, approved like leave
+// the employee's pay grade. Raised by staff who have people reporting to them — for a subordinate or
+// for themselves; staff with no reports cannot raise one. Approved like leave
 // (supervisor, then HR), and paid to the employee's account through the GL on HR's approval.
 //
 // Two menu entries, like Leave:
-//   Personal Out of Station — the caller's own requests and their subordinates' (raise on their
-//                             behalf; give the supervisor approval).
+//   Personal Out of Station — the caller's own requests (raised by them, if they have reports, or by
+//                             their supervisor) and their subordinates' (raise on their behalf; give
+//                             the supervisor approval).
 //   Manage Out of Station   — HR: daily rates, posting settings, the HR approval list, every request
 //                             with the printable schedule.
 
@@ -419,6 +421,7 @@ export function PersonalOutOfStation() {
   useEffect(() => {
     api.get('/out-of-station/employees', { params: { scope: 'personal' } }).then(r => setEmployees(r.data?.data ?? [])).catch(() => setEmployees([]));
   }, []);
+  // The server lists the caller only when they have people reporting to them.
   const self = employees.filter(e => e.is_self);
   const reports = employees.filter(e => e.is_report);
   const TABS = PERSONAL_TABS.filter(t => t !== 'Subordinate Requests' || reports.length > 0);
@@ -445,14 +448,14 @@ export function PersonalOutOfStation() {
   const act = useRequestActions(() => { load(); setViewRow(null); });
   const filtered = rows.filter(r => JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase()));
   const isSubTab = activeTab === 'Subordinate Requests';
-  // Owner of a draft/open request: the employee, or whoever raised it (a supervisor for a report).
-  const owns = (r: Request) => String(r.employee) === me.employeeId || String(r.requested_by ?? '') === me.userId;
+  // Owner of a draft/open request: whoever raised it. An employee whose supervisor raised it only views it.
+  const owns = (r: Request) => String(r.requested_by ?? '') === me.userId;
   // Supervisor approval: a report's request waiting at the supervisor stage.
   const decides = (r: Request) => isSubTab && r.status === 'Pending Approval' && String(r.employee) !== me.employeeId;
 
   return (
     <div className="p-4 sm:p-6 md:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full">
-      <PageHeader title="Out of Station" subtitle="Request the out-of-station allowance and approve your subordinates' requests." />
+      <PageHeader title="Out of Station" subtitle="Request the out-of-station allowance for your subordinates or yourself, and approve your subordinates' requests." />
 
       <TabBar tabs={[...TABS]} activeTab={activeTab} onChange={setActiveTab} />
 
@@ -470,7 +473,7 @@ export function PersonalOutOfStation() {
         />
         <RequestTable
           rows={filtered} loading={loading} showEmployee={isSubTab}
-          empty={isSubTab ? 'No requests from your subordinates.' : 'No out-of-station requests found.'}
+          empty={isSubTab ? 'No requests for your subordinates yet.' : self.length > 0 ? 'No out-of-station requests found.' : 'No out-of-station requests found. Your supervisor raises them on your behalf.'}
           actions={r => [
             { label: 'View', icon: Eye, onClick: () => setViewRow(r) },
             { label: 'Approve', icon: Check, onClick: () => act.approve(r), hidden: !decides(r) },
