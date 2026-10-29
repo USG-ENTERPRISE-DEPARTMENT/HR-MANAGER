@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Eye, FileEdit, Trash2, Check, X, XCircle, RefreshCw, SendHorizonal, Plus, Download, FileSpreadsheet, Save, CheckCircle2 } from 'lucide-react';
+import { Eye, FileEdit, Trash2, Check, X, XCircle, RefreshCw, SendHorizonal, Plus, Download, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
@@ -655,83 +655,116 @@ function ManageRequestsTab({ approvals, me }: { approvals: boolean; me: ReturnTy
 
 function RatesTab() {
   const [rates, setRates] = useState<Rate[]>([]);
-  const [draft, setDraft] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState<Rate | null>(null);
+  const [pending, setPending] = useState<Rate | null>(null);
+  const [f, setF] = useState({ paygrade_id: '', daily_rate: '' });
 
+  // The server lists every pay grade; the table shows only the grades that have a rate, like Medical Limits.
   const load = useCallback(() => {
     setLoading(true);
-    api.get('/out-of-station/rates').then(r => {
-      const list: Rate[] = r.data?.data ?? [];
-      setRates(list);
-      setDraft(Object.fromEntries(list.map(x => [String(x.paygrade_id), x.daily_rate == null ? '' : String(x.daily_rate)])));
-    }).catch(() => toast.error('Failed to load daily rates')).finally(() => setLoading(false));
+    api.get('/out-of-station/rates').then(r => setRates(r.data?.data ?? []))
+      .catch(() => toast.error('Failed to load daily rates')).finally(() => setLoading(false));
   }, []);
   useEffect(load, [load]);
 
-  const changed = rates.filter(r => (r.daily_rate == null ? '' : String(r.daily_rate)) !== (draft[String(r.paygrade_id)] ?? ''));
-  const save = async () => {
-    if (!changed.length) return;
+  const withRate = rates.filter(r => r.daily_rate != null);
+  // A grade that already has a rate shouldn't appear again when adding; when editing, keep the row's own grade.
+  const gradeOptions = useMemo(() => rates
+    .filter(r => r.daily_rate == null || String(r.paygrade_id) === String(sel?.paygrade_id))
+    .map(r => ({ id: String(r.paygrade_id), label: r.paygrade_name || `Grade ${r.paygrade_id}` })), [rates, sel]);
+
+  const openAdd = () => { setSel(null); setF({ paygrade_id: '', daily_rate: '' }); setOpen(true); };
+  const openEdit = (r: Rate) => { setSel(r); setF({ paygrade_id: String(r.paygrade_id), daily_rate: String(r.daily_rate ?? '') }); setOpen(true); };
+
+  // PUT takes a list of { paygrade_id, daily_rate }; a blank rate removes it. Changing an edited row's grade
+  // moves the rate, so the old grade is cleared in the same call.
+  const putRates = (list: { paygrade_id: string; daily_rate: string }[]) => api.put('/out-of-station/rates', { rates: list });
+
+  async function handleSave() {
+    if (!f.paygrade_id || f.daily_rate === '') return toast.error('All fields are required');
+    if (Number(f.daily_rate) < 0) return toast.error('Daily rate cannot be negative');
     setSaving(true);
     try {
-      await api.put('/out-of-station/rates', { rates: changed.map(r => ({ paygrade_id: r.paygrade_id, daily_rate: draft[String(r.paygrade_id)] })) });
-      toast.success(`${changed.length} daily rate${changed.length === 1 ? '' : 's'} saved`);
-      load();
-    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save rates'); }
+      const list = [{ paygrade_id: f.paygrade_id, daily_rate: f.daily_rate }];
+      if (sel && String(sel.paygrade_id) !== f.paygrade_id) list.push({ paygrade_id: String(sel.paygrade_id), daily_rate: '' });
+      await putRates(list);
+      toast.success(sel ? 'Daily rate updated' : 'Daily rate saved');
+      setOpen(false); load();
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save rate'); }
     finally { setSaving(false); }
-  };
+  }
 
-  const filtered = rates.filter(r => String(r.paygrade_name ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
+  async function handleDelete() {
+    if (!pending) return;
+    try { await putRates([{ paygrade_id: String(pending.paygrade_id), daily_rate: '' }]); toast.success('Deleted'); load(); }
+    catch { toast.error('Failed'); }
+    setPending(null);
+  }
+
+  const filtered = withRate.filter(r => String(r.paygrade_name ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
+  useEffect(() => { setPage(1); }, [filtered.length]);
   return (
     <>
       <TableToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        searchPlaceholder="Search grades..."
-        actions={
-          <button onClick={save} disabled={!changed.length || saving} className="primary-btn shrink-0">
-            <span className="hidden sm:inline">{saving ? 'Saving…' : changed.length ? `Save ${changed.length} Change${changed.length === 1 ? '' : 's'}` : 'Save Rates'}</span>
-            <span className="sm:hidden">Save</span>
-            <Save className="w-[14px] h-[14px]" />
-          </button>
-        }
+        actions={<button className="primary-btn" onClick={openAdd}><Plus size={14} />Add Rate</button>}
       />
       <div className="overflow-x-auto flex-1">
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="th text-left">Grade</th>
-              <th className="th text-center" style={{ width: '14%' }}>Status</th>
-              <th className="th" style={{ width: '22%', textAlign: 'right' }}>Daily Rate</th>
+              <th className="th">Pay Grade</th>
+              <th className="th">Daily Rate</th>
+              <th className="th !text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <TableStateRow cols={3} loading={loading} empty="No pay grades found. Set them up in Salary first." className="py-8" />
-            ) : paginate(filtered, page, pageSize).map((r, i) => {
-              const v = draft[String(r.paygrade_id)] ?? '';
-              return (
-                <motion.tr key={r.paygrade_id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.03 * i }}>
-                  <td className="td font-medium text-[var(--text-primary)]">{r.paygrade_name || `Grade ${r.paygrade_id}`}</td>
-                  <td className="td text-center">
-                    {v !== '' ? <span className="pill pill-success">Set</span>
-                      : <span className="pill" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Not set</span>}
-                  </td>
-                  <td className="td text-right">
-                    <input id={`oos-rate-${r.paygrade_id}`} type="number" min="0" step="0.01" className={`${inputClass} ml-auto max-w-[160px] text-right tabular-nums`}
-                      value={v} onChange={e => setDraft(d => ({ ...d, [String(r.paygrade_id)]: e.target.value }))} placeholder="0.00" />
-                  </td>
-                </motion.tr>
-              );
-            })}
+              <TableStateRow cols={3} loading={loading} empty={rates.length ? 'No daily rates set yet. Click Add Rate.' : 'No pay grades found. Set them up in Salary first.'} className="py-8" />
+            ) : paginate(filtered, page, pageSize).map(r => (
+              <tr key={r.paygrade_id} className="tr">
+                <td className="td">{r.paygrade_name || `Grade ${r.paygrade_id}`}</td>
+                <td className="td tabular-nums">{amt(r.daily_rate ?? 0)}</td>
+                <td className="td text-right">
+                  <div className="flex justify-end">
+                    <RowActions actions={[
+                      { label: 'Edit', icon: FileEdit, onClick: () => openEdit(r) },
+                      { label: 'Delete', icon: Trash2, danger: true, onClick: () => setPending(r) },
+                    ]} />
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-      <TablePagination total={rates.length} filtered={filtered.length} page={page} pageSize={pageSize}
+      <TablePagination total={withRate.length} filtered={filtered.length} page={page} pageSize={pageSize}
         onPageChange={setPage} onPageSizeChange={p => { setPageSize(p); setPage(1); }} />
+
+      {open && (
+        <FormModal title={sel ? 'Edit Daily Rate' : 'Add Daily Rate'} maxWidth="md"
+          onClose={() => setOpen(false)} onSave={handleSave} saveLabel={saving ? 'Saving…' : 'Save'}>
+          <FormField label="Pay Grade" required>
+            <SearchSelect value={f.paygrade_id} onChange={v => setF(p => ({ ...p, paygrade_id: v }))} options={gradeOptions} placeholder="Select pay grade…" />
+          </FormField>
+          <FormField label="Daily Rate" required>
+            <input type="number" min="0" step="0.01" className={inputClass} value={f.daily_rate}
+              onChange={e => setF(p => ({ ...p, daily_rate: e.target.value }))} placeholder="0.00"
+              onWheel={e => e.currentTarget.blur()} />
+          </FormField>
+        </FormModal>
+      )}
+      {pending && (
+        <ConfirmModal title="Delete daily rate?" message={`Remove the daily rate for ${pending.paygrade_name || 'this grade'}?`} confirmLabel="Delete" variant="danger"
+          onCancel={() => setPending(null)} onConfirm={handleDelete} />
+      )}
     </>
   );
 }
