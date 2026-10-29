@@ -1010,26 +1010,64 @@ function LetterTab({ settings, onSaved }: { settings: Settings; onSaved: () => v
   useEffect(() => {
     setForm({ eos_letter_signatory: settings.eos_letter_signatory ?? '', eos_letter_body: settings.eos_letter_body ?? '', eos_letter_body_death: settings.eos_letter_body_death ?? '' });
   }, [settings]);
+  const dirty = form.eos_letter_signatory !== (settings.eos_letter_signatory ?? '')
+    || form.eos_letter_body !== (settings.eos_letter_body ?? '')
+    || form.eos_letter_body_death !== (settings.eos_letter_body_death ?? '');
   const save = async () => {
     setSaving(true);
     try { await api.put('/end-of-service/settings', form); toast.success('Letter wording saved'); onSaved(); }
     catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save'); }
     finally { setSaving(false); }
   };
-  const placeholders = useMemo(() => ['{name}', '{effective_date}', '{reason}', '{balance_sentence}', '{account}', '{net_amount}'], []);
+  const placeholders = useMemo(() => [
+    ['{name}', "Employee's name"], ['{effective_date}', 'Last working date'], ['{reason}', 'Reason for leaving'],
+    ['{balance_sentence}', 'Amount paid or owed, as a sentence'], ['{account}', 'Employee account number'], ['{net_amount}', 'Net settlement amount'],
+  ], []);
+  const copy = (p: string) => { navigator.clipboard?.writeText(p).then(() => toast.success(`${p} copied`)).catch(() => {}); };
+  // The textareas only grow up to a cap and this body scrolls inside the card, so the toolbar (and its
+  // Save button) always stays in view however far a box is stretched.
+  const area = `${inputClass} resize-y min-h-[160px] max-h-[480px] leading-relaxed`;
   return (
-    <div className="p-5 sm:p-6 space-y-4">
-      <p className="text-[12px] text-[var(--text-muted)]">The letter is printed with the settlement breakdown below the wording. Placeholders: {placeholders.join(', ')}. Leave a blank line between paragraphs.</p>
-      <FormField label="Signed by">
-        <input className={inputClass} value={form.eos_letter_signatory} maxLength={100} onChange={e => setForm(f => ({ ...f, eos_letter_signatory: e.target.value }))} />
-      </FormField>
-      <FormField label="Letter to the employee">
-        <CountedTextarea className={inputClass} rows={9} maxChars={4000} value={form.eos_letter_body} onChange={e => setForm(f => ({ ...f, eos_letter_body: e.target.value }))} />
-      </FormField>
-      <FormField label="Letter to the next of kin (death)">
-        <CountedTextarea className={inputClass} rows={8} maxChars={4000} value={form.eos_letter_body_death} onChange={e => setForm(f => ({ ...f, eos_letter_body_death: e.target.value }))} />
-      </FormField>
-      <div className="flex justify-end"><button className="primary-btn" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save Wording'}<Save className="w-[14px] h-[14px]" /></button></div>
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border)]">
+        <div>
+          <p className="text-[13px] font-semibold text-[var(--text-primary)]">Settlement letter</p>
+          <p className="text-[11.5px] text-[var(--text-muted)]">Printed above the settlement breakdown. Leave a blank line between paragraphs.</p>
+        </div>
+        <button className="primary-btn shrink-0" disabled={saving || !dirty} onClick={save}>
+          {saving ? 'Saving…' : dirty ? 'Save Wording' : 'Saved'}<Save className="w-[14px] h-[14px]" />
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-6 items-start">
+          <div className="space-y-5 min-w-0">
+            <FormField label="Letter to the employee">
+              <CountedTextarea className={area} rows={9} maxChars={4000} value={form.eos_letter_body} onChange={e => setForm(f => ({ ...f, eos_letter_body: e.target.value }))} />
+            </FormField>
+            <FormField label="Letter to the next of kin (death)">
+              <CountedTextarea className={area} rows={8} maxChars={4000} value={form.eos_letter_body_death} onChange={e => setForm(f => ({ ...f, eos_letter_body_death: e.target.value }))} />
+            </FormField>
+          </div>
+          <div className="space-y-5 lg:sticky lg:top-0">
+            <FormField label="Signed by">
+              <input className={inputClass} value={form.eos_letter_signatory} maxLength={100} placeholder="e.g. Managing Director / CEO" onChange={e => setForm(f => ({ ...f, eos_letter_signatory: e.target.value }))} />
+            </FormField>
+            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-hover)] p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Placeholders</p>
+              <ul className="space-y-1.5">
+                {placeholders.map(([p, label]) => (
+                  <li key={p} className="flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => copy(p)} title="Copy"
+                      className="font-mono text-[11.5px] px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--border)] text-[var(--accent)] hover:border-[var(--accent)]">{p}</button>
+                    <span className="text-[11px] text-[var(--text-muted)] text-right">{label}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10.5px] text-[var(--text-muted)]">Click one to copy it, then paste it into the wording.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
