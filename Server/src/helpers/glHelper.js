@@ -2,6 +2,7 @@ const axios          = require('axios');
 const fs             = require('fs');
 const path           = require('path');
 const { getApiConfig } = require('../controllers/apiIntegrationController');
+const coreApi          = require('./coreApiClient');
 const { prisma }       = require('./dbQueryHelper');
 const { als }          = require('../middleware/requestContext');
 
@@ -114,6 +115,166 @@ function parseStatuses(data, list) {
 }
 
 /**
+ * Turn the core API's `{ validAccounts, invalidAccounts }` into the same Map invalidAccounts returns.
+ * Only an account named in validAccounts passes; one in neither list is blocked as NO_RESPONSE, for the
+ * same reason as below — silence is not evidence that an account is good.
+ */
+function listVerdicts({ validAccounts, invalidAccounts: invalid }, list, tag) {
+  const valid = new Set(validAccounts.map(a => String(a).trim()));
+  const bad   = new Set(invalid.map(a => String(a).trim()));
+  const out = new Map();
+  const unanswered = [];
+  for (const acct of list) {
+    if (bad.has(acct))        out.set(acct, { status: 'INVALID', description: 'The core banking system reports this account as invalid' });
+    else if (!valid.has(acct)) { unanswered.push(acct); out.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' }); }
+  }
+  glLog(`VALIDATE RESULT${tag}`, {
+    submitted:    list.length,
+    blockedCount: out.size,
+    blocked:      [...out.entries()].map(([a, s]) => ({ account: a, status: s.status })),
+    unanswered:   unanswered.length ? unanswered : undefined,
+  });
+  return out;
+}
+
+/**
+ * The core API's `{ valid…, invalid… }` lists, whatever the provider calls them: validateNormalAccounts
+ * uses validAccounts/invalidAccounts, and validateBranchCodes is expected to follow suit
+ * (validBranches/invalidBranches, validBranchCodes/…). Null when the reply carries no such pair.
+ */
+function pickVerdictLists(data) {
+  if (!data || typeof data !== 'object') return null;
+  const keys = Object.keys(data);
+  const validKey   = keys.find(k => /^valid/i.test(k)   && Array.isArray(data[k]));
+  const invalidKey = keys.find(k => /^invalid/i.test(k) && Array.isArray(data[k]));
+  return validKey && invalidKey ? { valid: data[validKey], invalid: data[invalidKey] } : null;
+}
+
+/**
+ * Ask the core API which branch codes in a journal it does not recognise (POST /validateBranchCodes).
+ *
+ * Same contract as invalidAccounts: a Map of code → { status, description } for every branch that
+ * must NOT be posted to, or null when the check could not be completed. A code the reply leaves out
+ * is blocked as NO_RESPONSE. Core API only — the old services had no branch check.
+ *
+ * The body key is `branches` — the endpoint itself answers with that format ({"branches":["code1"]});
+ * CORE_API_BRANCH_KEY overrides it should that change.
+ */
+async function invalidBranches(branches, referenceNo = '') {
+  const tag  = referenceNo ? ` ${referenceNo}` : '';
+  const list = [...new Set(branches.map(b => String(b ?? '').trim()).filter(Boolean))];
+  if (!list.length) return new Map();
+
+  const listKey = process.env.CORE_API_BRANCH_KEY || 'branches';
+  glLog(`BRANCH VALIDATE REQUEST${tag} → POST ${coreApi.urlOf('/validateBranchCodes')}`, { [listKey]: list });
+
+  let r;
+  try {
+    r = await coreApi.call('post', '/validateBranchCodes', { [listKey]: list });
+  } catch (e) {
+    glLog(`BRANCH VALIDATE TRANSPORT FAILURE${tag}`, { message: e.message });
+    return null;
+  }
+  glLog(`BRANCH VALIDATE RESPONSE${tag} (HTTP ${r.status})`, r.decrypted.ok ? r.decrypted.data : { error: r.decrypted.error, raw: r.raw });
+
+  // Read the lists whatever the HTTP status — the account endpoint answers 500 when any entry is
+  // invalid, and this one is assumed to behave the same.
+  const lists = r.decrypted.ok ? pickVerdictLists(r.decrypted.data?.data) : null;
+  if (!lists) {
+    glLog(`BRANCH VALIDATE UNUSABLE${tag}`, {
+      expected: 'data: { validBranches: [...], invalidBranches: [...] } (or similarly named lists)',
+      status: r.status, body: r.decrypted.ok ? r.decrypted.data : r.decrypted.error,
+    });
+    return null;
+  }
+
+  const valid = new Set(lists.valid.map(b => String(b).trim()));
+  const bad   = new Set(lists.invalid.map(b => String(b).trim()));
+  const out = new Map();
+  for (const code of list) {
+    if (bad.has(code))         out.set(code, { status: 'INVALID', description: 'The core banking system does not recognise this branch code' });
+    else if (!valid.has(code)) out.set(code, { status: 'NO_RESPONSE', description: 'The branch validator returned no status for this branch code' });
+  }
+  glLog(`BRANCH VALIDATE RESULT${tag}`, { submitted: list.length, blockedCount: out.size, blocked: [...out.keys()] });
+  return out;
+}
+
+/**
+ * The home branch of every employee on a journal, keyed by staff code (the lines' `employeeCode`).
+ *
+ * The core system also checks the EMPLOYEE's own branch during bulk payment — not just the branch on
+ * the line, which comes from the payroll column — so these codes are validated alongside the lines'.
+ * Employees with no branch set contribute nothing. Returns null if the lookup itself fails, which the
+ * caller treats like the validator being unavailable.
+ */
+async function employeeBranches(debitAccounts, creditAccounts) {
+  const codes = [...new Set([...(debitAccounts || []), ...(creditAccounts || [])]
+    .map(l => String(l?.employeeCode ?? '').trim()).filter(Boolean))];
+  const out = new Map();
+  if (!codes.length) return out;
+  try {
+    const emps = await prisma.employee.findMany({
+      where:  { employee_id: { in: codes } },
+      select: { employee_id: true, firstName: true, lastName: true, branchId: true },
+    });
+    const ids = [...new Set(emps.map(e => e.branchId).filter(v => v != null))];
+    const structures = ids.length
+      ? await prisma.companystructures.findMany({ where: { id: { in: ids } }, select: { id: true, comp_code: true, title: true } })
+      : [];
+    const byId = new Map(structures.map(s => [String(s.id), s]));
+    for (const e of emps) {
+      const s = e.branchId != null ? byId.get(String(e.branchId)) : null;
+      const branch = String(s?.comp_code ?? '').trim();
+      if (!branch) continue;
+      out.set(String(e.employee_id), {
+        branch, branchTitle: s.title ?? null,
+        name: [e.firstName, e.lastName].filter(Boolean).join(' '),
+      });
+    }
+    return out;
+  } catch (e) {
+    glLog('BRANCH LOOKUP FAILURE', { message: e.message, employees: codes.length });
+    return null;
+  }
+}
+
+/**
+ * Where each blocked branch code was used, in the same shape as describeAccounts so the existing
+ * "GL posting blocked" report can show it (kind 'branch'): the journal lines that carry it, and the
+ * employees whose own branch it is.
+ */
+function describeBranches(blocked, debitAccounts, creditAccounts, empBranches = new Map()) {
+  const lines = [
+    ...(debitAccounts  || []).map(d => ({ branch: d.debitBranch,  narration: d.debitNarration,  employeeCode: d.employeeCode, side: 'debit'  })),
+    ...(creditAccounts || []).map(c => ({ branch: c.creditBranch, narration: c.creditNarration, employeeCode: c.employeeCode, side: 'credit' })),
+  ];
+  return [...blocked.entries()].map(([code, s]) => {
+    const used   = lines.filter(l => String(l.branch ?? '').trim() === code);
+    const labels = [...new Set(used.map(l => l.narration).filter(Boolean).map(String))];
+    const homed  = [...empBranches.entries()].filter(([, b]) => b.branch === code);
+    const sourceNames = [...new Set(labels.map(x => x.split(' - ')[0].trim()).filter(Boolean))];
+    if (homed.length) {
+      const title = homed[0][1].branchTitle;
+      sourceNames.push(`Employee branch${title ? ` (${title})` : ''} — ${homed.length} employee${homed.length === 1 ? '' : 's'}`);
+    }
+    return {
+      account:       code,
+      kind:          'branch',
+      status:        s.status,
+      description:   s.description,
+      sourceNames,
+      employeeNames: [...new Set([
+        ...labels.map(x => x.split(' - ').slice(1).join(' - ').trim()),
+        ...homed.map(([, b]) => b.name),
+      ].filter(Boolean))],
+      employeeCodes: [...new Set([...used.map(l => l.employeeCode), ...homed.map(([c]) => c)].filter(Boolean).map(String))],
+      sides:         [...new Set(used.map(l => l.side))],
+      labels,
+    };
+  });
+}
+
+/**
  * Ask the core system which of `accounts` cannot be posted to.
  *
  * Returns a Map of account → { status, description } for every account that is NOT postable, or null
@@ -147,15 +308,44 @@ async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '')
   glLog(`VALIDATE REQUEST${tag} → POST ${url}`, { accounts: list });
 
   let res;
-  try {
-    res = await axios.post(url, { accounts: list }, {
-      headers, timeout: Number(cfg.gl_timeout) || 30000,
-    });
-  } catch (e) {
-    glLog(`VALIDATE TRANSPORT FAILURE${tag}`, {
-      url, message: e.message, status: e.response?.status ?? null, body: e.response?.data ?? null,
-    });
-    return null;
+  if (cfg.core_api_enabled) {
+    // New core API: encrypted, token-authenticated; its own log (logs/core-api.log) has the wire detail.
+    // `res` is shaped like an axios response so the checks below are shared with the old validator.
+    try {
+      // The core API itself answers that the list key is `accounts` ({"accounts":["acct1","acct2"]});
+      // `accountList` is refused with 400. CORE_API_VALIDATE_KEY overrides it should that change.
+      const listKey = process.env.CORE_API_VALIDATE_KEY || 'accounts';
+      const r = await coreApi.call('post', '/validateNormalAccounts', { [listKey]: list });
+      // The core API answers with two lists, and sends HTTP 500 + responseCode '001' whenever ANY account
+      // is invalid ("1 of 1 accounts invalid."). That is a real answer, not a failure, so the lists are
+      // read whatever the HTTP status.
+      const lists = r.decrypted.ok ? r.decrypted.data?.data : null;
+      if (lists && Array.isArray(lists.validAccounts) && Array.isArray(lists.invalidAccounts)) {
+        glLog(`VALIDATE RESPONSE${tag} (HTTP ${r.status})`, r.decrypted.data);
+        return listVerdicts(lists, list, tag);
+      }
+      if (!r.decrypted.ok || r.status >= 400) {
+        glLog(`VALIDATE TRANSPORT FAILURE${tag}`, {
+          url, status: r.status, body: r.decrypted.ok ? r.decrypted.data : r.decrypted.error,
+        });
+        return null;
+      }
+      res = { status: r.status, data: r.decrypted.data };
+    } catch (e) {
+      glLog(`VALIDATE TRANSPORT FAILURE${tag}`, { url, message: e.message });
+      return null;
+    }
+  } else {
+    try {
+      res = await axios.post(url, { accounts: list }, {
+        headers, timeout: Number(cfg.gl_timeout) || 30000,
+      });
+    } catch (e) {
+      glLog(`VALIDATE TRANSPORT FAILURE${tag}`, {
+        url, message: e.message, status: e.response?.status ?? null, body: e.response?.data ?? null,
+      });
+      return null;
+    }
   }
 
   // The raw response, always — this is the record that shows whether the validator actually screened
@@ -163,9 +353,9 @@ async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '')
   glLog(`VALIDATE RESPONSE${tag} (HTTP ${res.status})`, res.data);
 
   // This service reports success as `success: true` with responseCode 200 (a NUMBER, not the '000'
-  // string the posting API uses), so both are accepted.
+  // string the posting API uses), so both are accepted — as is the core API's '000'.
   const code = String(res.data?.responseCode ?? '');
-  const ok   = res.data?.success === true || ['200', '00', '000', '0'].includes(code);
+  const ok   = coreApi.isSuccess(res.data);
   if (!ok) {
     glLog(`VALIDATE REJECTED${tag}`, { url, responseCode: code, message: res.data?.message ?? null });
     return null;
@@ -390,6 +580,36 @@ async function postToGL({
   // unreachable validator must not stop payroll, and the posting's own error handling still applies.
   // That case is logged loudly so it is never mistaken for a clean pass.
   if (await validationEnabled()) {
+    // ── Branch gate (core API) ────────────────────────────────────────────────
+    // Checked before the accounts: every branch on a journal line (from the payroll column / GL
+    // settings) AND the home branch of every employee on the journal — the core system checks both
+    // during bulk payment. An unrecognised branch blocks the whole posting, exactly like an
+    // unrecognised account. A check that could not be completed is treated like the account validator
+    // being down: logged loudly, posting continues.
+    if (cfg.core_api_enabled) {
+      const empBranches = await employeeBranches(debitAccounts, creditAccounts);
+      const branchCodes = [
+        ...(debitAccounts  || []).map(d => d.debitBranch),
+        ...(creditAccounts || []).map(c => c.creditBranch),
+        ...[...(empBranches ?? new Map()).values()].map(b => b.branch),
+      ];
+      const badBranches = empBranches === null ? null : await invalidBranches(branchCodes, referenceNo);
+      if (badBranches === null) {
+        glLog(`BRANCH VALIDATE SKIPPED ${referenceNo}`, 'Branch validation unavailable — posting proceeded with branches unchecked.');
+        console.warn(`[gl validate] ${referenceNo}: branch validator unavailable, branches unchecked`);
+      } else if (badBranches.size) {
+        const details = describeBranches(badBranches, debitAccounts, creditAccounts, empBranches);
+        glLog(`BLOCKED ${referenceNo} — invalid branch codes`, { blocked: details.map(d => ({ branch: d.account, status: d.status, usedFor: d.sourceNames })) });
+        console.error(`[gl validate] ${referenceNo}: blocked — ${badBranches.size} invalid branch code(s)`);
+        const err = new Error(
+          `GL posting blocked — ${badBranches.size} branch code(s) are not recognised by the core banking system `
+          + `(${[...badBranches.keys()].join(', ')}). Nothing was sent to the GL.`,
+        );
+        err.glInvalidAccounts = details;
+        throw err;
+      }
+    }
+
     const accounts = [
       ...(debitAccounts  || []).map(d => d.debitAccount),
       ...(creditAccounts || []).map(c => c.creditAccount),
@@ -452,6 +672,10 @@ async function postToGL({
     postedBy,
   };
 
+  if (cfg.core_api_enabled) {
+    return postViaCoreApi({ payload, extra, referenceNo, url });
+  }
+
   // Log the request before sending: a timeout or a crash mid-flight must still leave a record of
   // exactly what was going to the bank. Auth headers are deliberately not logged.
   glLog(`REQUEST ${referenceNo} → PUT ${url}`, payload);
@@ -487,6 +711,61 @@ async function postToGL({
   }
   return {
     documentRef: data.documentRef || data.document_ref || data.referenceNo || referenceNo,
+    raw: data,
+  };
+}
+
+/**
+ * Send a checked, balanced journal through the new core API's /bulkPayment (PerformBulkPaymentHR).
+ *
+ * Its body has no terminal/description/branch and adds department/unit (gl_extra.department/.unit,
+ * blank by default). Each line keeps only the documented fields: the employeeCode carried for error
+ * messages is ours, not the bank's. Amounts are sent as strings, as the schema types them.
+ * Same contract as the old path: returns { documentRef, raw } or throws with glResponse attached.
+ */
+async function postViaCoreApi({ payload, extra, referenceNo, url }) {
+  const str = v => (v == null ? '' : String(v));
+  const body = {
+    postedBy:    str(payload.postedBy),
+    approvedBy:  str(payload.approvedBy),
+    channelCode: str(payload.channelCode),
+    transType:   str(payload.transType),
+    referenceNo: str(referenceNo),
+    department:  str(extra.department),
+    unit:        str(extra.unit),
+    creditAccounts: (payload.creditAccounts || []).map(c => ({
+      creditBranch: str(c.creditBranch), creditAccount: str(c.creditAccount), creditAmount: str(c.creditAmount),
+      creditCurrency: str(c.creditCurrency), creditNarration: str(c.creditNarration), creditProdRef: str(c.creditProdRef),
+    })),
+    debitAccounts: (payload.debitAccounts || []).map(d => ({
+      debitBranch: str(d.debitBranch), debitAccount: str(d.debitAccount), debitAmount: str(d.debitAmount),
+      debitCurrency: str(d.debitCurrency), debitNarration: str(d.debitNarration), debitProdRef: str(d.debitProdRef),
+    })),
+  };
+
+  glLog(`REQUEST ${referenceNo} → POST ${url} (core API)`, body);
+
+  let r;
+  try {
+    r = await coreApi.call('post', '/bulkPayment', body);
+  } catch (e) {
+    glLog(`TRANSPORT FAILURE ${referenceNo}`, { message: e.message });
+    throw e;
+  }
+  const data = r.decrypted.ok ? (r.decrypted.data || {}) : {};
+  glLog(`RESPONSE ${referenceNo} (HTTP ${r.status})`, r.decrypted.ok ? data : { error: r.decrypted.error, raw: r.raw });
+
+  if (!r.decrypted.ok || r.status >= 400 || !coreApi.isSuccess(data)) {
+    const code = String(data.responseCode ?? r.status);
+    const err = new Error(`GL error ${code}: ${data.message || r.decrypted.error || 'Unknown error'}`);
+    err.glResponse = r.decrypted.ok ? data : r.raw;
+    glLog(`REJECTED ${referenceNo}`, { responseCode: code, message: data.message ?? r.decrypted.error ?? null });
+    throw err;
+  }
+  const inner = data.data && typeof data.data === 'object' ? data.data : {};
+  return {
+    documentRef: inner.documentRef || inner.document_ref || inner.referenceNo
+              || data.documentRef || data.document_ref || data.referenceNo || referenceNo,
     raw: data,
   };
 }

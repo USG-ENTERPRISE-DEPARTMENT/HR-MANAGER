@@ -1326,6 +1326,7 @@ function IntegrationsSection({ glUrl, setGlUrl, glApiKey, setGlApiKey, glApiSecr
   empSyncBearerToken, setEmpSyncBearerToken,
   empSyncBasicUser, setEmpSyncBasicUser, empSyncBasicPass, setEmpSyncBasicPass,
   empSyncExtra, setEmpSyncExtra,
+  coreApi,
   onSave, saving }: any) {
   const [showKey,        setShowKey]        = useState(false);
   const [showSecret,     setShowSecret]     = useState(false);
@@ -1348,6 +1349,21 @@ function IntegrationsSection({ glUrl, setGlUrl, glApiKey, setGlApiKey, glApiSecr
 
   return (
     <div className="space-y-5">
+      {/* The core banking API is set up in the server's .env, not here. While it is active it carries GL
+          posting, account validation and the employee sync, so the URLs and credentials below are unused —
+          they are kept only as the fallback for CORE_API_ENABLED=off. */}
+      {coreApi?.enabled && (
+        <div className="rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-4 py-3 text-[12px] text-[var(--text-primary)]">
+          <p className="font-semibold mb-1">Core banking API is active</p>
+          <p className="text-[var(--text-muted)]">
+            GL posting, account validation and employee sync go through{' '}
+            <span className="font-mono text-[var(--text-primary)]">{coreApi.url}</span> (configured in the server's .env).
+            The endpoint URLs and credentials below are not used while it is on — they are the fallback if
+            CORE_API_ENABLED is set to <span className="font-mono">off</span>. The Extra Parameters (channel code,
+            transaction type, currency, branch) still apply.
+          </p>
+        </div>
+      )}
       <SectionCard icon={<Network size={14} />} title="GL / Payments API">
         <p className="px-5 py-2 text-[11px] text-[var(--text-muted)] bg-[var(--bg)] border-b border-[var(--border-light)]">
           Used by: Medical Claims · Payroll · Leave Allowance
@@ -1542,6 +1558,7 @@ function ControlsTab() {
   const [empSyncBasicPass,    setEmpSyncBasicPass]    = useState('');
   const [empSyncExtra,        setEmpSyncExtra]        = useState('{}');
   const [apiSaving,           setApiSaving]           = useState(false);
+  const [coreApi,             setCoreApi]             = useState<{ enabled: boolean; url: string }>({ enabled: false, url: '' });
 
   // ── Load from backend on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -1606,6 +1623,7 @@ function ControlsTab() {
       setEmpSyncBasicUser(d.employee_sync_basic_user    ?? '');
       setEmpSyncBasicPass(d.employee_sync_basic_pass    ?? '');
       setEmpSyncExtra(d.employee_sync_extra              ?? '{}');
+      setCoreApi({ enabled: !!d.core_api_enabled, url: d.core_api_url ?? '' });
     }).catch(() => {});
   }, []);
 
@@ -1783,6 +1801,7 @@ function ControlsTab() {
             empSyncBasicUser={empSyncBasicUser} setEmpSyncBasicUser={setEmpSyncBasicUser}
             empSyncBasicPass={empSyncBasicPass} setEmpSyncBasicPass={setEmpSyncBasicPass}
             empSyncExtra={empSyncExtra} setEmpSyncExtra={setEmpSyncExtra}
+            coreApi={coreApi}
             onSave={saveApiIntegrations} saving={apiSaving}
           />
         )}

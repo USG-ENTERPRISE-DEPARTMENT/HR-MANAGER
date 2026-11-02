@@ -1,13 +1,16 @@
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { X, AlertTriangle, Landmark, User, Copy, Scale } from 'lucide-react';
+import { X, AlertTriangle, Landmark, User, Copy, Scale, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 /** One unrecognised account, as reported by the GL account validator. */
 export interface InvalidAccount {
   account: string;
-  /** 'employee' → the person's own bank account; 'component' → a payroll/medical GL account. */
-  kind?: 'employee' | 'component';
+  /**
+   * 'employee' → the person's own bank account; 'component' → a payroll/medical GL account;
+   * 'branch' → a branch code on the journal lines (`account` then holds the code).
+   */
+  kind?: 'employee' | 'component' | 'branch';
   /** GL component names the account was used for, e.g. ["Salary Basic", "Lunch"]. */
   sourceNames?: string[];
   /** Employee names taken from the journal narration. */
@@ -41,6 +44,18 @@ interface Props {
 const money = (n: number) =>
   Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** "2 branch codes and 3 accounts" — what the core system refused, counted by kind. */
+export function blockedSummary(list: InvalidAccount[]): string {
+  const branches = list.filter(a => a.kind === 'branch').length;
+  const accounts = list.length - branches;
+  return [
+    branches ? plural(branches, 'branch code', 'branch codes') : null,
+    accounts ? plural(accounts, 'account', 'accounts') : null,
+  ].filter(Boolean).join(' and ');
+}
+
 /**
  * Explains why a GL posting was refused, for the two reasons that stop it before anything is sent:
  * accounts the core system does not recognise, and a journal whose debits and credits disagree.
@@ -55,12 +70,13 @@ export function GlBlockedModal({ isOpen, accounts, imbalance, context, onClose }
   const hasImbalance = !!imbalance;
   if (!isOpen || (!hasAccounts && !hasImbalance)) return null;
 
+  const branchCodes       = accountList.filter(a => a.kind === 'branch');
   const employeeAccounts  = accountList.filter(a => a.kind === 'employee');
-  const componentAccounts = accountList.filter(a => a.kind !== 'employee');
+  const componentAccounts = accountList.filter(a => a.kind !== 'employee' && a.kind !== 'branch');
 
   const subtitle = [
     hasImbalance ? 'Journal does not balance' : null,
-    hasAccounts ? `${accountList.length} account${accountList.length === 1 ? '' : 's'} not recognised` : null,
+    hasAccounts ? `${blockedSummary(accountList)} not recognised` : null,
   ].filter(Boolean).join(' · ');
 
   const copyAll = () => {
@@ -71,8 +87,8 @@ export function GlBlockedModal({ isOpen, accounts, imbalance, context, onClose }
       lines.push('');
     }
     if (hasAccounts) {
-      lines.push('Account\tUsed for');
-      for (const a of accountList) lines.push(`${a.account}\t${describe(a)}`);
+      lines.push('Account / branch\tUsed for');
+      for (const a of accountList) lines.push(`${a.kind === 'branch' ? `Branch ${a.account}` : a.account}\t${describe(a)}`);
     }
     navigator.clipboard?.writeText(lines.join('\n'))
       .then(() => toast.success('Copied to clipboard'))
@@ -117,6 +133,17 @@ export function GlBlockedModal({ isOpen, accounts, imbalance, context, onClose }
           </p>
 
           {hasImbalance && <ImbalanceSection imbalance={imbalance!} />}
+
+          {branchCodes.length > 0 && (
+            <Section
+              icon={<Building2 className="w-4 h-4" />}
+              title="Branch codes"
+              hint="Not recognised by the core banking system — check the branch code in Company Structure, and the branch set on the employee or GL settings"
+              rows={branchCodes}
+              keyLabel="Branch"
+              showStaffId
+            />
+          )}
 
           {componentAccounts.length > 0 && (
             <Section
@@ -250,8 +277,8 @@ function describe(a: InvalidAccount): string {
  * person, so listing staff there implies the fix is on an employee record when it is not. Employee
  * bank accounts are the opposite — the staff ID is how you find the record to correct.
  */
-function Section({ icon, title, hint, rows, showStaffId = false }: {
-  icon: React.ReactNode; title: string; hint: string; rows: InvalidAccount[]; showStaffId?: boolean;
+function Section({ icon, title, hint, rows, showStaffId = false, keyLabel = 'Account' }: {
+  icon: React.ReactNode; title: string; hint: string; rows: InvalidAccount[]; showStaffId?: boolean; keyLabel?: string;
 }) {
   return (
     <div className="mb-5 last:mb-0">
@@ -267,7 +294,7 @@ function Section({ icon, title, hint, rows, showStaffId = false }: {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-[var(--bg)]">
-                <th className="th text-left whitespace-nowrap">Account</th>
+                <th className="th text-left whitespace-nowrap">{keyLabel}</th>
                 <th className="th text-left">Used for</th>
                 {showStaffId && <th className="th text-left whitespace-nowrap">Staff ID</th>}
               </tr>

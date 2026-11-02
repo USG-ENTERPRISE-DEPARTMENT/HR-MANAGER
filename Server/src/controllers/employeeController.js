@@ -5,6 +5,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const respond = require('../helpers/respondHelper');
 const { logActivity, fromReq } = require('./auditController');
 const { getApiConfig } = require('./apiIntegrationController');
+const coreApi = require('../helpers/coreApiClient');
 const { sendEmployeeLifecycleEmail } = require('../helpers/emailHelper');
 const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
 const { upsertSetting } = require('../helpers/settingsHelper');
@@ -189,6 +190,28 @@ async function pushEmployeeToExternalSystem(e) {
     unit:              e.unit?.comp_code           || '',
     workEmail:         e.work_email               || '',
   };
+
+  // New core API: same payload (it matches UserDetailsHR field for field), sent encrypted with a token.
+  // A reply that is not a success code counts as a failed sync, as an HTTP error does on the old path.
+  if (apiCfg.core_api_enabled) {
+    try {
+      const r = await coreApi.call('post', '/updateDetails', payload);
+      const body = r.decrypted.ok ? r.decrypted.data : null;
+      if (r.status >= 400 || !coreApi.isSuccess(body)) {
+        const msg = body ? JSON.stringify(body) : (r.decrypted.error || `HTTP ${r.status}`);
+        console.error('[EmployeeSync] core API rejected', e.employee_id, '| http status:', r.status, '|', msg);
+        await prisma.$executeRaw`UPDATE employee SET sync_status='failed', sync_error=${msg.substring(0, 500)} WHERE id=${id}`;
+        return { success: false, httpStatus: r.status, data: body, message: body?.message || msg };
+      }
+      console.log('[EmployeeSync] pushed', e.employee_id, 'via core API → status:', r.status, '| response:', JSON.stringify(body));
+      await prisma.$executeRaw`UPDATE employee SET sync_status='synced', sync_error=NULL WHERE id=${id}`;
+      return { success: true, httpStatus: r.status, data: body };
+    } catch (err) {
+      console.error('[EmployeeSync] core API call failed for', e.employee_id, '|', err.message);
+      await prisma.$executeRaw`UPDATE employee SET sync_status='failed', sync_error=${String(err.message).substring(0, 500)} WHERE id=${id}`;
+      return { success: false, message: err.message };
+    }
+  }
 
   try {
     const apiKey    = apiCfg.employee_sync_api_key      || apiCfg.gl_api_key;

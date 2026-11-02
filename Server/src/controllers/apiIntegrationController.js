@@ -51,7 +51,26 @@ async function readApiSettings() {
 
 // ── Exported async helper — used by glHelper and employeeController ────────────
 
+// The new core banking API (helpers/coreApiClient.js, configured in Server/.env) replaces the three
+// old services. When it is configured, getApiConfig points GL posting, account validation and the
+// employee sync at its endpoints, so every existing "is the GL configured?" check keeps working and
+// glHelper / employeeController route the calls through the new client (core_api_enabled).
+const coreApi = require('../helpers/coreApiClient');
+const CORE_ENDPOINTS = {
+  gl_url:            '/bulkPayment',
+  gl_validate_url:   '/validateNormalAccounts',
+  employee_sync_url: '/updateDetails',
+};
+
 async function getApiConfig() {
+  const cfg = await getStoredApiConfig();
+  if (!coreApi.isConfigured()) return { ...cfg, core_api_enabled: false };
+  const routed = Object.fromEntries(Object.entries(CORE_ENDPOINTS).map(([k, ep]) => [k, coreApi.urlOf(ep)]));
+  return { ...cfg, ...routed, core_api_enabled: true };
+}
+
+/** The values saved in Settings → API (with .env fallbacks), before any routing to the core API. */
+async function getStoredApiConfig() {
   const db = await readApiSettings();
   return {
     gl_url:                db.gl_url                || process.env.POSTING_API_URL       || '',
@@ -133,9 +152,15 @@ async function getApiConfig() {
 
 // ── HTTP endpoints ─────────────────────────────────────────────────────────────
 
+// The stored values, not the routed ones — the settings form saves what it shows, and must not
+// overwrite the old service URLs with the core API's endpoints.
 const getApiIntegrations = asyncHandler(async (req, res) => {
-  const cfg = await getApiConfig();
-  return respond.ok(res, 'API integration settings', cfg);
+  const cfg = await getStoredApiConfig();
+  return respond.ok(res, 'API integration settings', {
+    ...cfg,
+    core_api_enabled: coreApi.isConfigured(),
+    core_api_url: coreApi.isConfigured() ? coreApi.urlOf('') : '',
+  });
 });
 
 const updateApiIntegrations = asyncHandler(async (req, res) => {
