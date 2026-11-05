@@ -673,7 +673,7 @@ async function postToGL({
   };
 
   if (cfg.core_api_enabled) {
-    return postViaCoreApi({ payload, extra, referenceNo, url });
+    return postViaCoreApi({ payload, referenceNo, url });
   }
 
   // Log the request before sending: a timeout or a crash mid-flight must still leave a record of
@@ -718,30 +718,12 @@ async function postToGL({
 /**
  * Send a checked, balanced journal through the new core API's /bulkPayment (PerformBulkPaymentHR).
  *
- * Its body has no terminal/description/branch and adds department/unit (gl_extra.department/.unit,
- * blank by default). Each line keeps only the documented fields: the employeeCode carried for error
- * messages is ours, not the bank's. Amounts are sent as strings, as the schema types them.
+ * The body is exactly the payload the old .90 posting API received — same fields, same order, same
+ * types. Only the transport differs: POST, encrypted, with the core API's token and key/secret.
  * Same contract as the old path: returns { documentRef, raw } or throws with glResponse attached.
  */
-async function postViaCoreApi({ payload, extra, referenceNo, url }) {
-  const str = v => (v == null ? '' : String(v));
-  const body = {
-    postedBy:    str(payload.postedBy),
-    approvedBy:  str(payload.approvedBy),
-    channelCode: str(payload.channelCode),
-    transType:   str(payload.transType),
-    referenceNo: str(referenceNo),
-    department:  str(extra.department),
-    unit:        str(extra.unit),
-    creditAccounts: (payload.creditAccounts || []).map(c => ({
-      creditBranch: str(c.creditBranch), creditAccount: str(c.creditAccount), creditAmount: str(c.creditAmount),
-      creditCurrency: str(c.creditCurrency), creditNarration: str(c.creditNarration), creditProdRef: str(c.creditProdRef),
-    })),
-    debitAccounts: (payload.debitAccounts || []).map(d => ({
-      debitBranch: str(d.debitBranch), debitAccount: str(d.debitAccount), debitAmount: str(d.debitAmount),
-      debitCurrency: str(d.debitCurrency), debitNarration: str(d.debitNarration), debitProdRef: str(d.debitProdRef),
-    })),
-  };
+async function postViaCoreApi({ payload, referenceNo, url }) {
+  const body = payload;
 
   glLog(`REQUEST ${referenceNo} → POST ${url} (core API)`, body);
 
