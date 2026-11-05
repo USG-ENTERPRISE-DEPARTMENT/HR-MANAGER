@@ -1755,7 +1755,9 @@ const DIRECTORY_SELECT = Prisma.sql`
            -- above: that substitutes the raw id when the join misses, which is a readable hint in a
            -- display name but would be a WRONG branch code to a caller that matches on it. A null
            -- says "unknown", which is the truth.
-           br.comp_code                                   AS branch_code
+           br.comp_code                                   AS branch_code,
+           -- Same reasoning as branch_code: no id fallback, null when unknown.
+           dept.comp_code                                 AS department_code
     FROM employee e
     LEFT JOIN codelistvalue      jt   ON jt.id   = e.jobTitleId
     LEFT JOIN companystructures  dept ON dept.id = e.departmentId
@@ -1782,6 +1784,9 @@ function toDirectoryEmployee(r) {
     // has no value at all (e.g. no department for branch staff) — report that as null, not "".
     jobTitle:        r.job_title || null,
     department:      r.department || null,
+    // The department's code (companystructures.comp_code). Null when the employee has no department,
+    // or their departmentId points at a structure that no longer exists.
+    departmentCode:  r.department_code ?? null,
     branch:          r.branch || null,
     // The code the core banking system knows a branch by (companystructures.comp_code, e.g. '003').
     // Null when the employee has no branch, or their branchId points at a structure that no longer
