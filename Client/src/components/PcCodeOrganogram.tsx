@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Network, Briefcase, UserCheck, ChevronDown, ChevronRight,
-  AlignLeft, Search, X, ZoomIn, ZoomOut, Maximize2, AlertTriangle,
+  AlignLeft, Search, X, ZoomIn, ZoomOut, Maximize2, AlertTriangle, FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
 import { PageHeader } from './ui/PageHeader';
+import { exportPcOrganogramExcel } from './pcOrganogramExcel';
 
 // A position node in the PC-code tree. `reports_to_id` is the parent position.
-interface PcNode {
+export interface PcNode {
   id: string;
   code: string;
   name: string;
@@ -360,6 +361,18 @@ export function PcCodeOrganogram() {
     return findRoots(nodes.filter(s => visibleIds.has(s.id)), byId, childrenMap, visibleIds);
   }, [visibleIds, roots, nodes, byId, childrenMap]);
 
+  // Exports what is on screen: the whole tree, or the search result with its reporting lines.
+  const [exporting, setExporting] = useState(false);
+  async function downloadExcel() {
+    setExporting(true);
+    try {
+      const n = await exportPcOrganogramExcel(effRoots, effChildrenMap, { filter: filtering ? search.trim() : undefined });
+      toast.success(`Exported ${n} position${n === 1 ? '' : 's'} to Excel`);
+    } catch {
+      toast.error('Failed to generate the Excel file');
+    } finally { setExporting(false); }
+  }
+
   const orphanCount = nodes.filter(n => n.is_ordinary_root).length;
   const stats = [
     { label: 'Positions', value: nodes.length,  Icon: Briefcase },
@@ -432,6 +445,15 @@ export function PcCodeOrganogram() {
                   <button onClick={() => setZoom(z => clampZoom(z + 0.1))} title="Zoom in" className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition-all"><ZoomIn size={13} /></button>
                 </div>
               )}
+
+              <button
+                onClick={downloadExcel}
+                disabled={loading || exporting || nodes.length === 0 || (matchIds !== null && matchIds.size === 0)}
+                title={filtering ? 'Download the matching positions and their reporting lines' : 'Download the full organogram'}
+                className="secondary-btn !py-1.5 !px-3 !text-[12px] shrink-0 disabled:opacity-50"
+              >
+                <FileSpreadsheet size={13} /> <span className="hidden sm:inline">{exporting ? 'Generating…' : 'Download Excel'}</span>
+              </button>
 
               <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
                 <button onClick={() => setView('tree')} className={`px-2 sm:px-3 py-1 sm:py-1.5 flex items-center gap-1 sm:gap-1.5 rounded-lg text-[11px] sm:text-[12px] font-bold transition-all whitespace-nowrap ${view === 'tree' ? 'bg-white text-[var(--accent)] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>

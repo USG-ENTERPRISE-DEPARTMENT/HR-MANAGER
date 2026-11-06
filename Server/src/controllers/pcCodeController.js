@@ -158,7 +158,10 @@ async function reseatUnderSupervisor(employeeId, newSupervisorId, client = prism
 // ── Enrichment for list/organogram ──────────────────────────────────────────
 
 // Map<pcCodeId(string) -> { name, employee_id, rmRoType }> of current holders.
-async function holderMap(pcCodeIds) {
+// `activeOnly` drops holders who are not active + approved employees, so their seat reads as vacant.
+// Only the organogram uses it: the assignment screens must still see such a seat as held, or a second
+// person could be assigned while the first assignment is still open.
+async function holderMap(pcCodeIds, { activeOnly = false } = {}) {
   if (pcCodeIds.length === 0) return {};
   const open = await prisma.pccodeassignments.findMany({
     where: { pcCodeId: { in: pcCodeIds }, endDate: null },
@@ -166,7 +169,7 @@ async function holderMap(pcCodeIds) {
   const empIds = [...new Set(open.map(a => a.employeeId))];
   const emps = empIds.length
     ? await prisma.employee.findMany({
-        where: { id: { in: empIds } },
+        where: { id: { in: empIds }, ...(activeOnly ? { lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED' } : {}) },
         select: { id: true, firstName: true, lastName: true, employee_id: true, rmRoType: true },
       })
     : [];
@@ -213,7 +216,8 @@ const getAllPcCodes = asyncHandler(async (req, res) => {
 // GET /pc-codes/organogram  (flat list; client builds the tree)
 const getPcCodeOrganogram = asyncHandler(async (req, res) => {
   const codes = await prisma.pccodes.findMany({ orderBy: { code: 'asc' } });
-  const holders = await holderMap(codes.map(c => c.id));
+  // Inactive staff are left off the chart: their seat shows as vacant.
+  const holders = await holderMap(codes.map(c => c.id), { activeOnly: true });
 
   // ── "Ordinary root" detection ──────────────────────────────────────────────
   // A seat placed directly under the synthetic root because its holder has NO usable supervisor —
@@ -278,6 +282,7 @@ async function computeOrdinaryRoots(codes, holders) {
   for (const c of underRoot) {
     const empId = empByCode[c.id.toString()];
     if (empId == null) continue;                       // vacant seat — not flagged
+    if (!holders[c.id.toString()]) continue;           // holder inactive: shown vacant, so not flagged either
     const supId = supByEmp[empId.toString()];
     // Ordinary root = no supervisor, or the supervisor isn't an active/approved employee. A holder
     // who reports to themselves is the intended root occupant (their seat is the ROOT code, which is
