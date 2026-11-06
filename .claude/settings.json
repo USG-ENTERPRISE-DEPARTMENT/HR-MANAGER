@@ -41,7 +41,8 @@
       "PowerShell($s=\"C:\\\\Users\\\\UNIONSG\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\86f828c74eab4806\\\\f21b838a-c3f0-4a54-a3d9-aa682d1bb82f\\\\scratchpad\"; & \"$s\\\\render.ps1\" \"$s\\\\v12.docx\" \"$s\\\\v12.pdf\" 2>$null; python \"$s\\\\pages.py\" \"$s\\\\v12.pdf\" \"$s\\\\pages12\"; New-Item -ItemType Directory -Force \"$s\\\\sheets12\" | Out-Null; python \"$s\\\\sheets.py\" \"$s\\\\pages12\" \"$s\\\\sheets12\" 8)",
       "Bash(awk '/^model companystructures \\\\{/,/^\\\\}/' src/prisma/schema.postgres.prisma)",
       "Bash(timeout 40 node -e ' *)",
-      "mcp__claude-artifacts__read_artifact"
+      "mcp__claude-artifacts__read_artifact",
+      "PowerShell(explorer.exe /select,\"C:\\\\Users\\\\UNIONSG\\\\Downloads\\\\RCB_HR_Requirements_Scoping_Document_v1.2.docx\")"
     ]
   }
 }
