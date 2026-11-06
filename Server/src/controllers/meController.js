@@ -17,6 +17,7 @@ const { Prisma } = require('@prisma/client');
 const { prisma } = require('../helpers/dbQueryHelper');
 const { toBigInt } = require('../helpers/controllerHelpers');
 const respond = require('../helpers/respondHelper');
+const { getSystemCurrency } = require('../helpers/settingsHelper');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const leave      = require('./leaveController');
@@ -189,7 +190,9 @@ exports.getMyDeductionGroup = asyncHandler(async (req, res) => {
     payFrequency: row?.pay_frequency != null
       ? { id: String(row.pay_frequency), name: row.freq_name ?? null }
       : null,
-    currency:   row?.currency ?? null,
+    // The system currency, not payrollemployees.currency: that per-employee free text held "Cedis"/"GHS"
+    // while the system ran on Leones. Null only when the employee has no payroll setup at all.
+    currency:   row ? await getSystemCurrency() : null,
     exemptions: row?.deduction_exemptions ?? null,
     // Distinguishes "no payroll setup at all" from "set up, but no group chosen".
     enrolled:   !!row,

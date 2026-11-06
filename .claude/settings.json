@@ -42,7 +42,8 @@
       "Bash(awk '/^model companystructures \\\\{/,/^\\\\}/' src/prisma/schema.postgres.prisma)",
       "Bash(timeout 40 node -e ' *)",
       "mcp__claude-artifacts__read_artifact",
-      "PowerShell(explorer.exe /select,\"C:\\\\Users\\\\UNIONSG\\\\Downloads\\\\RCB_HR_Requirements_Scoping_Document_v1.2.docx\")"
+      "PowerShell(explorer.exe /select,\"C:\\\\Users\\\\UNIONSG\\\\Downloads\\\\RCB_HR_Requirements_Scoping_Document_v1.2.docx\")",
+      "PowerShell($f='Server\\\\logs\\\\core-api.log'; \\(Get-Item $f\\).Length; Select-String -Path $f -Pattern 'REQUEST' | Select-Object -Last 15 | ForEach-Object { $_.Line })"
     ]
   }
 }

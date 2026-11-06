@@ -1018,6 +1018,7 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
     name:          'Net Pay',
     type:          'Credit',
     glAccount:     null,                        // each line credits the employee's own bank account
+    currency:      systemCurrency,
     employeeCount: employees.filter(e => e.netPay > 0).length,
     amount:        round2(employees.reduce((s, e) => s + (e.netPay > 0 ? e.netPay : 0), 0)),
   };
