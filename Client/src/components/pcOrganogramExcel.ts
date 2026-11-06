@@ -64,8 +64,6 @@ export async function exportPcOrganogramExcel(
   const stages = Math.max(1, ...rows.map(r => r.depth + 1));
   const generated = new Date().toLocaleString();
   const subtitle = `Generated ${generated}` + (opts.filter ? `  ·  Filtered by "${opts.filter}" (matching positions and their reporting line)` : '');
-  const label = (n: PcNode) => `${n.name} (${n.code})`;
-
   const wb = new ExcelJS.Workbook();
   wb.creator = 'HR System';
   wb.created = new Date();
@@ -99,7 +97,7 @@ export async function exportPcOrganogramExcel(
   };
 
   // ── Sheet 1: Organogram (staircase) ────────────────────────────────────────
-  const DETAIL = ['PC Code', 'Current Holder', 'Employee ID', 'Cost Center', 'Type', 'Reports To', 'Direct Reports', 'Total Under', 'Status'];
+  const DETAIL = ['PC Code', 'Current Holder', 'Employee ID', 'Cost Center', 'Type', 'Reports To (Code)', 'Reports To', 'Direct Reports', 'Total Under', 'Status'];
   const STATUS_COL = DETAIL.length - 1;
   const width = stages + DETAIL.length;
   const org = wb.addWorksheet('Organogram', {
@@ -132,7 +130,7 @@ export async function exportPcOrganogramExcel(
   for (let i = 1; i <= stages; i++) org.getColumn(i).width = i === stages ? 36 : 6;
   // Every stage column must be wide enough for its own names; narrow lead-in columns form the staircase.
   // Names overflow rightwards into the empty cells after them, so only the deepest column needs width.
-  [14, 28, 14, 13, 8, 36, 10, 10, 15].forEach((w, i) => { org.getColumn(stages + i + 1).width = w; });
+  [14, 28, 14, 13, 8, 16, 32, 10, 10, 15].forEach((w, i) => { org.getColumn(stages + i + 1).width = w; });
 
   rows.forEach((r, i) => {
     const k = kindOf(r.node);
@@ -156,15 +154,15 @@ export async function exportPcOrganogramExcel(
     const status = k === 'VACANT' ? 'Vacant' : k === 'ORPHAN' ? 'Filled — no supervisor' : 'Filled';
     const detail: (string | number)[] = [
       r.node.code, r.node.current_employee_name ?? '—', r.node.current_employee_id ?? '', costCell(r.node),
-      r.node.rm_ro_type ?? '', r.parent ? label(r.parent) : '— Top level —', r.direct, r.total, status,
+      r.node.rm_ro_type ?? '', r.parent?.code ?? '', r.parent?.name ?? '— Top level —', r.direct, r.total, status,
     ];
     detail.forEach((v, j) => {
       const c = row.getCell(stages + j + 1);
       c.value = v;
       c.border = box(GRID);
       c.font = { size: 10, color: { argb: j === STATUS_COL ? p.text : 'FF1F2937' }, bold: j === STATUS_COL };
-      c.alignment = { vertical: 'middle', horizontal: j >= 6 || j === 3 ? 'center' : 'left' };
-      if (j === 0 || j === 3) c.font = { size: 10, name: 'Consolas', color: { argb: 'FF475569' } };
+      c.alignment = { vertical: 'middle', horizontal: j >= 7 || j === 3 ? 'center' : 'left' };
+      if (j === 0 || j === 3 || j === 5) c.font = { size: 10, name: 'Consolas', color: { argb: 'FF475569' } };
       if (j === 3 && v === MISSING) styleMissing(c);
       if (j === STATUS_COL) c.fill = solid(p.bg);
     });
