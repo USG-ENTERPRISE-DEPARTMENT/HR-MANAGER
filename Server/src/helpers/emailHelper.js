@@ -559,4 +559,37 @@ async function sendPayslipEmail(mailer, { to, name, runName, period, pdf, filena
   });
 }
 
-module.exports = { sendWelcomeEmail, sendLeaveEmail, sendSchedulingInvite, sendInterviewConfirmation, buildIcs, sendCandidateStageEmail, sendEmployeeLifecycleEmail, sendDisciplinaryEmail, sendPerformanceEmail, sendDocumentExpiryEmail, notifyEnabled, openBulkMailer, sendPayslipEmail };
+/**
+ * Managers on Leave report for the MD: one row per manager with their leave and return date.
+ * Throws when email is switched off, so a "send now" from the report can tell the user why.
+ */
+async function sendManagersOnLeaveEmail({ to, periodLabel, rows }) {
+  const [t, branding] = await Promise.all([makeTransporter(), resolveBranding()]);
+  if (!t) throw new Error('Email is switched off in Settings → Email Setup');
+
+  const th = 'padding:9px 10px;text-align:left;font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5edf6';
+  const td = 'padding:10px;font-size:13px;line-height:1.45;color:#0f172a;border-bottom:1px solid #e5edf6;vertical-align:top';
+  const sub = t => `<br><span style="color:#64748b;font-size:12px">${escapeHtml(t || '—')}</span>`;
+  const table = rows.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5edf6;border-radius:10px;margin:18px 0">
+        <tr><th style="${th}">Manager</th><th style="${th}">Department / Branch</th><th style="${th}">Leave</th><th style="${th}">Back on</th></tr>
+        ${rows.map(r => `<tr>
+          <td style="${td}"><strong>${escapeHtml(r.employee_name)}</strong>${sub(r.job_title)}</td>
+          <td style="${td}">${escapeHtml(r.department || '—')}${sub(r.branch)}</td>
+          <td style="${td}">${escapeHtml(r.leave_type || 'Leave')}${sub(`${r.start_label} → ${r.end_label} (${r.days} day${r.days === 1 ? '' : 's'})`)}</td>
+          <td style="${td};white-space:nowrap;font-weight:700">${escapeHtml(r.back_on_label)}</td>
+        </tr>`).join('')}
+      </table>`
+    : `<p style="margin:18px 0;font-size:14px;color:#475569">No managers are on leave ${escapeHtml(periodLabel)}.</p>`;
+
+  const subject = `Managers on leave — ${periodLabel}`;
+  const body = `
+    <p style="margin:0 0 6px;font-size:16px;color:#334155">Managers on leave <strong style="color:#0f172a">${escapeHtml(periodLabel)}</strong></p>
+    <p style="margin:0;font-size:14px;color:#475569">${rows.length} manager${rows.length === 1 ? '' : 's'} away.</p>
+    ${table}
+    ${muted('Taken from approved leave in the HR system. Managers are staff with direct reports and the management grades set in the report settings.')}
+  `;
+  await t.transport.sendMail({ from: t.from, to, subject, html: emailShell({ branding, preheader: subject, body }) });
+}
+
+module.exports = { sendWelcomeEmail, sendLeaveEmail, sendSchedulingInvite, sendInterviewConfirmation, buildIcs, sendCandidateStageEmail, sendEmployeeLifecycleEmail, sendDisciplinaryEmail, sendPerformanceEmail, sendDocumentExpiryEmail, notifyEnabled, openBulkMailer, sendPayslipEmail, sendManagersOnLeaveEmail };

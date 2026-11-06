@@ -14,7 +14,7 @@ import api from '../../lib/api';
 import { useCan } from '@/hooks/useCan';
 import { PageHeader } from './ui/PageHeader';
 import { ActiveEmployeesReport, NewHiresReport, TerminatedEmployeesReport } from './reports/EmployeeReports';
-import { EmployeeLeavesReport, LeaveEntitlementReport } from './reports/LeaveReports';
+import { EmployeeLeavesReport, LeaveEntitlementReport, ManagersOnLeaveReport } from './reports/LeaveReports';
 import { GeneralPayrollReport, PayeReport, GlSummaryReport, PayrollMetaExport } from './reports/PayrollReports';
 import { JobPositionsReport, AttendanceReport } from './reports/OtherReports';
 
@@ -28,6 +28,7 @@ const LEGACY_REPORTS = {
   terminated:  TerminatedEmployeesReport,
   leaves:      EmployeeLeavesReport,
   entitlement: LeaveEntitlementReport,
+  managersOnLeave: ManagersOnLeaveReport,
   general:     GeneralPayrollReport,
   paye:        PayeReport,
   gl:          GlSummaryReport,
@@ -663,6 +664,7 @@ export function AdminReports() {
     { id: 10, name: 'New Hires Employee Report', description: 'Employees who joined between two dates.', icon: UserPlus, action: () => setLegacyOpen('newHires') },
     { id: 11, name: 'Terminated Employee Report', description: 'Employees who were terminated or resigned between two dates, with the reason.', icon: UserMinus, action: () => setLegacyOpen('terminated') },
     { id: 12, name: 'Employee Leaves Report', description: 'Every leave application by employee, date range and status.', icon: CalendarDays, action: () => setLegacyOpen('leaves') },
+    { id: 20, name: 'Managers on Leave', description: 'Managers away on leave for a date or date range, with their return date — emailed to the MD.', icon: CalendarDays, action: () => setLegacyOpen('managersOnLeave') },
     { id: 13, name: 'Employee Leave Entitlement', description: 'Leave entitlement, days taken and balance for the active period, by department or employee.', icon: CalendarDays, action: () => setLegacyOpen('entitlement') },
     { id: 14, name: 'General Payroll Report', description: 'Every report column per employee for a payroll run, with pay grade, account and NASSIT numbers.', icon: Table, action: () => setLegacyOpen('general') },
     { id: 15, name: 'PAYE Report', description: 'PAYE return per employee for a payroll run, in the statutory column layout.', icon: Calculator, action: () => setLegacyOpen('paye') },

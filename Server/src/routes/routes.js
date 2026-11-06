@@ -806,6 +806,13 @@ router.get ('/ai/insights/attrition',   permissionGuard('view_ai_insights'), ai.
 const report = require('../controllers/reportController');
 router.post('/reports/table.pdf', report.tablePdf);
 
+// Managers on Leave (HRM-R01) — report, its settings and the email to the MD.
+const mol = require('../controllers/managersOnLeaveController');
+router.get ('/reports/managers-on-leave',          mol.getReport);
+router.get ('/reports/managers-on-leave/settings', mol.getSettings);
+router.put ('/reports/managers-on-leave/settings', permissionGuard('manage_settings'), mol.saveSettings);
+router.post('/reports/managers-on-leave/email',    permissionGuard('export_reports'), mol.emailNow);
+
 // ─────────────────────────────────────────────
 // Legacy data migration (Settings → System → Migration)
 //

@@ -38,6 +38,14 @@ cron.schedule('0 8 * * *', () => {
   );
 });
 
+// Runs weekdays at 07:30 — emails today's Managers on Leave report to the MD (when switched on in the
+// report settings). The controller skips weekends, a disabled setting and, unless asked, empty days.
+cron.schedule('30 7 * * 1-5', () => {
+  require('../controllers/managersOnLeaveController').runDailyEmail().catch(err =>
+    console.error('[cron] Managers-on-leave email failed:', err.message)
+  );
+});
+
 // Runs hourly — makes approved employee transfers effective on their scheduled date.
 cron.schedule('10 * * * *', () => {
   transferCtrl.runDueTransfers()
@@ -73,5 +81,5 @@ cron.schedule('*/30 * * * *', () => {
   aiRag.ensureIndexed().catch(err => console.error('[ai] scheduled auto-index failed:', err.message));
 });
 
-console.log('[cron] Daily leave GL (06:00), attendance auto-absent, attendance digest (08:00), employee transfers (hourly), sync retry (15m) scheduled');
+console.log('[cron] Daily leave GL (06:00), managers-on-leave email (07:30 weekdays), attendance auto-absent, attendance digest (08:00), employee transfers (hourly), sync retry (15m) scheduled');
 console.log('[cron] AI knowledge auto-index scheduled (startup + every 30m)');

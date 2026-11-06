@@ -52,7 +52,7 @@ class PayloadCrypto {
         return decrypted.toString('utf8');
     }
 
-    static encryptForUrl(plainText) {
+    static encryptFormUrl(plainText) {
         const iv = crypto.randomBytes(16);
 
         const cipher = crypto.createCipheriv(
