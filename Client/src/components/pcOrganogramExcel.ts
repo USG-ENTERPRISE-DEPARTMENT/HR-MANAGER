@@ -41,6 +41,17 @@ function flatten(roots: PcNode[], childrenMap: Map<string, PcNode[]>): Row[] {
   return rows;
 }
 
+// Cost center comes from the server (bank + branch + department codes). A filled seat without one is
+// flagged, since a blank would read as "not applicable" rather than "branch/department code missing".
+const MISSING = 'Missing';
+const costCell = (n: PcNode) => (n.current_employee_name ? (n.cost_center ?? MISSING) : '');
+const styleMissing = (c: any) => {
+  c.value = MISSING;
+  c.font = { size: 9, bold: true, color: { argb: PALETTE.ORPHAN.text } };
+  c.fill = solid(PALETTE.ORPHAN.bg);
+  c.note = 'No cost center: the employee has no branch, the branch/department has no code, or a Head Office employee has no department.';
+};
+
 const thin = (argb: string) => ({ style: 'thin' as const, color: { argb } });
 const box = (argb: string) => ({ top: thin(argb), left: thin(argb), bottom: thin(argb), right: thin(argb) });
 const solid = (argb: string) => ({ type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb } });
@@ -88,7 +99,8 @@ export async function exportPcOrganogramExcel(
   };
 
   // ── Sheet 1: Organogram (staircase) ────────────────────────────────────────
-  const DETAIL = ['PC Code', 'Current Holder', 'Employee ID', 'Type', 'Reports To', 'Direct Reports', 'Total Under', 'Status'];
+  const DETAIL = ['PC Code', 'Current Holder', 'Employee ID', 'Cost Center', 'Type', 'Reports To', 'Direct Reports', 'Total Under', 'Status'];
+  const STATUS_COL = DETAIL.length - 1;
   const width = stages + DETAIL.length;
   const org = wb.addWorksheet('Organogram', {
     properties: { tabColor: { argb: TITLE_BG }, outlineLevelRow: 1 },
@@ -120,7 +132,7 @@ export async function exportPcOrganogramExcel(
   for (let i = 1; i <= stages; i++) org.getColumn(i).width = i === stages ? 36 : 6;
   // Every stage column must be wide enough for its own names; narrow lead-in columns form the staircase.
   // Names overflow rightwards into the empty cells after them, so only the deepest column needs width.
-  [14, 28, 14, 8, 36, 10, 10, 15].forEach((w, i) => { org.getColumn(stages + i + 1).width = w; });
+  [14, 28, 14, 13, 8, 36, 10, 10, 15].forEach((w, i) => { org.getColumn(stages + i + 1).width = w; });
 
   rows.forEach((r, i) => {
     const k = kindOf(r.node);
@@ -143,17 +155,18 @@ export async function exportPcOrganogramExcel(
     }
     const status = k === 'VACANT' ? 'Vacant' : k === 'ORPHAN' ? 'Filled — no supervisor' : 'Filled';
     const detail: (string | number)[] = [
-      r.node.code, r.node.current_employee_name ?? '—', r.node.current_employee_id ?? '', r.node.rm_ro_type ?? '',
-      r.parent ? label(r.parent) : '— Top level —', r.direct, r.total, status,
+      r.node.code, r.node.current_employee_name ?? '—', r.node.current_employee_id ?? '', costCell(r.node),
+      r.node.rm_ro_type ?? '', r.parent ? label(r.parent) : '— Top level —', r.direct, r.total, status,
     ];
     detail.forEach((v, j) => {
       const c = row.getCell(stages + j + 1);
       c.value = v;
       c.border = box(GRID);
-      c.font = { size: 10, color: { argb: j === 7 ? p.text : 'FF1F2937' }, bold: j === 7 };
-      c.alignment = { vertical: 'middle', horizontal: j >= 5 ? 'center' : 'left' };
-      if (j === 0) c.font = { size: 10, name: 'Consolas', color: { argb: 'FF475569' } };
-      if (j === 7) c.fill = solid(p.bg);
+      c.font = { size: 10, color: { argb: j === STATUS_COL ? p.text : 'FF1F2937' }, bold: j === STATUS_COL };
+      c.alignment = { vertical: 'middle', horizontal: j >= 6 || j === 3 ? 'center' : 'left' };
+      if (j === 0 || j === 3) c.font = { size: 10, name: 'Consolas', color: { argb: 'FF475569' } };
+      if (j === 3 && v === MISSING) styleMissing(c);
+      if (j === STATUS_COL) c.fill = solid(p.bg);
     });
     row.height = r.depth === 0 ? 20 : 17;
   });
@@ -203,24 +216,26 @@ export async function exportPcOrganogramExcel(
     properties: { tabColor: { argb: 'FF64748B' } },
     views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }],
   });
-  const FLAT_HEADERS = ['Stage', 'PC Code', 'Position', 'Current Holder', 'Employee ID', 'Type', 'Reports To (Code)', 'Reports To', 'Direct Reports', 'Total Under', 'Status', 'Chain of Command'];
+  const FLAT_HEADERS = ['Stage', 'PC Code', 'Position', 'Current Holder', 'Employee ID', 'Cost Center', 'Type', 'Reports To (Code)', 'Reports To', 'Direct Reports', 'Total Under', 'Status', 'Chain of Command'];
   titleBlock(flat, FLAT_HEADERS.length, 'PC Code Organogram — All Positions');
   headerRow(flat, 4, FLAT_HEADERS);
-  [8, 14, 32, 28, 14, 7, 16, 32, 10, 10, 20, 90].forEach((w, i) => { flat.getColumn(i + 1).width = w; });
+  [8, 14, 32, 28, 14, 13, 7, 16, 32, 10, 10, 20, 90].forEach((w, i) => { flat.getColumn(i + 1).width = w; });
   rows.forEach(r => {
     const k = kindOf(r.node);
     const row = flat.addRow([
       r.depth + 1, r.node.code, r.node.name, r.node.current_employee_name ?? '', r.node.current_employee_id ?? '',
-      r.node.rm_ro_type ?? '', r.parent?.code ?? '', r.parent?.name ?? '', r.direct, r.total,
+      costCell(r.node), r.node.rm_ro_type ?? '', r.parent?.code ?? '', r.parent?.name ?? '', r.direct, r.total,
       k === 'VACANT' ? 'Vacant' : k === 'ORPHAN' ? 'Filled — no supervisor' : 'Filled',
       r.path.map(n => n.name).join('  ›  '),
     ]);
     row.eachCell((cell, col) => {
       cell.border = box(GRID);
-      cell.alignment = { vertical: 'middle', horizontal: [1, 6, 9, 10].includes(col) ? 'center' : 'left' };
+      cell.alignment = { vertical: 'middle', horizontal: [1, 6, 7, 10, 11].includes(col) ? 'center' : 'left' };
     });
-    row.getCell(11).font = { bold: true, color: { argb: PALETTE[k].text } };
-    row.getCell(11).fill = solid(PALETTE[k].bg);
+    row.getCell(6).font = { name: 'Consolas', color: { argb: 'FF475569' } };
+    if (row.getCell(6).value === MISSING) styleMissing(row.getCell(6));
+    row.getCell(12).font = { bold: true, color: { argb: PALETTE[k].text } };
+    row.getCell(12).fill = solid(PALETTE[k].bg);
   });
   flat.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + rows.length, column: FLAT_HEADERS.length } };
 

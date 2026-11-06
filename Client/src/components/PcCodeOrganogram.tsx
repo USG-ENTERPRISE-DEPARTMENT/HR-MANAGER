@@ -18,6 +18,8 @@ export interface PcNode {
   current_employee_name: string | null;
   current_employee_id: string | null;
   rm_ro_type: string | null;
+  // Holder's cost center (bank + branch + department codes); null when vacant or a code is missing.
+  cost_center?: string | null;
   // Placed directly under the root because the holder has no active supervisor (none set, or their
   // manager has left). Flagged distinctly so it can be followed up on. Server-computed.
   is_ordinary_root?: boolean;

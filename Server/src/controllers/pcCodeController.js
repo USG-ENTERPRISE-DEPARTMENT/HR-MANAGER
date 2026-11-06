@@ -170,11 +170,18 @@ async function holderMap(pcCodeIds, { activeOnly = false } = {}) {
   const emps = empIds.length
     ? await prisma.employee.findMany({
         where: { id: { in: empIds }, ...(activeOnly ? { lifecycleStatus: 'ACTIVE', approvalStatus: 'APPROVED' } : {}) },
-        select: { id: true, firstName: true, lastName: true, employee_id: true, rmRoType: true },
+        select: { id: true, firstName: true, lastName: true, employee_id: true, rmRoType: true, branchId: true, departmentId: true },
       })
     : [];
   const empById = {};
   emps.forEach(e => { empById[e.id.toString()] = e; });
+
+  const structIds = [...new Set(emps.flatMap(e => [e.branchId, e.departmentId]).filter(Boolean))];
+  const structs = structIds.length
+    ? await prisma.companystructures.findMany({ where: { id: { in: structIds } }, select: { id: true, comp_code: true, type: true } })
+    : [];
+  const structById = {};
+  structs.forEach(s => { structById[s.id.toString()] = s; });
 
   const map = {};
   for (const a of open) {
@@ -183,9 +190,31 @@ async function holderMap(pcCodeIds, { activeOnly = false } = {}) {
       name: `${e.firstName ?? ''} ${e.lastName ?? ''}`.trim(),
       employee_id: e.employee_id,
       rmRoType: e.rmRoType ?? null,
+      costCenter: costCenter(
+        e.branchId ? structById[e.branchId.toString()] : null,
+        e.departmentId ? structById[e.departmentId.toString()] : null,
+      ),
     };
   }
   return map;
+}
+
+// Cost center = bank code + last 2 digits of the branch code + last 2 digits of the department code.
+// Departments exist only at Head Office, so staff at any other branch always end in 00:
+//   Head Office (000), department …12  → 020012
+//   Branch 004                         → 020400
+// Null when a code it needs is missing, so the gap shows instead of a wrong code.
+const COST_CENTER_BANK_CODE = '02';
+function costCenter(branch, department) {
+  const last2 = code => {
+    const s = String(code ?? '').trim();
+    return s ? s.slice(-2).padStart(2, '0') : null;
+  };
+  const br = last2(branch?.comp_code);
+  if (!br) return null;
+  if (branch.type !== 'Head_Office') return `${COST_CENTER_BANK_CODE}${br}00`;
+  const dept = last2(department?.comp_code);
+  return dept ? `${COST_CENTER_BANK_CODE}${br}${dept}` : null;
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
@@ -234,6 +263,7 @@ const getPcCodeOrganogram = asyncHandler(async (req, res) => {
     current_employee_name: holders[c.id.toString()]?.name ?? null,
     current_employee_id:   holders[c.id.toString()]?.employee_id ?? null,
     rm_ro_type:            holders[c.id.toString()]?.rmRoType ?? null,
+    cost_center:           holders[c.id.toString()]?.costCenter ?? null,
     is_ordinary_root:      ordinaryRoot.has(c.id.toString()),
   })));
 });
