@@ -13,6 +13,7 @@ import { TableStateRow } from './ui/TableStateRow';
 import { FormModal } from './ui/FormModal';
 import { DetailSlideOver, DetailGrid, DetailField, DetailSection } from './ui/DetailSlideOver';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { GlFailureCard } from './ui/GlFailureCard';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import api from '../../lib/api';
@@ -437,8 +438,9 @@ export function LeaveSetup() {
 
   const ellRetryGL = async (id: string) => {
     try {
-      await api.post(`/leave/leaves/${id}/retry-gl`);
-      toast.success('GL retry posted successfully');
+      const res = await api.post(`/leave/leaves/${id}/retry-gl`);
+      if (res.data?.data?.allowance_status === 'Paid') toast.success('GL retry posted successfully');
+      else toast.error(res.data?.message ?? 'GL retry failed');
       fetchEllLeaves(ellStatus);
     } catch (e: any) { toast.error(e.response?.data?.message ?? 'GL retry failed'); }
   };
@@ -1158,6 +1160,11 @@ export function LeaveSetup() {
       >
         {ellViewRow && (
           <div className="space-y-5">
+            {ellViewRow.allowance_status === 'Failed GL Posting' && (
+              <GlFailureCard paymentLog={ellViewRow.api_response} runName={ellViewRow.employee_name}
+                canRetry={false} retrying={false} onRetry={() => {}} />
+            )}
+
             {/* Summary header */}
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-4">
               <div className="flex items-start justify-between gap-3">

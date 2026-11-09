@@ -8,7 +8,9 @@ const { toBigInt, s, enumSql } = require('../helpers/controllerHelpers');
 const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
 const { pushLeave } = require('../helpers/mobilePush');
 const { Prisma } = require('@prisma/client'); // Prisma.sql / Prisma.join for portable dynamic SQL
-const { upsertSetting: upsertSettingShared } = require('../helpers/settingsHelper');
+const { upsertSetting: upsertSettingShared, getSystemCurrency } = require('../helpers/settingsHelper');
+const { postToGL } = require('../helpers/glHelper');
+const { getApiConfig } = require('./apiIntegrationController');
 
 // In-app bell notification for a leave action (independent of the email toggle).
 // 'submitted' → the employee's supervisor; approved/rejected/cancelled → the employee.
@@ -365,35 +367,94 @@ async function calcLeaveAllowance(employeeId, settings) {
   return { amount: Math.round(net * 100) / 100, leave_tax: Math.round(tax * 100) / 100 };
 }
 
-// Internal: posts GL (called from processLeaveAllowance).
-// No-op when leave payments are switched off — leave is recorded only, never paid/posted.
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Pay a scheduled allowance through the GL: Dr leave expense (gross), Cr the employee (net), Cr tax
+ * suspense (tax). postToGL validates the accounts and branches, and blocks the journal if any are bad.
+ *
+ * Returns true when posted, false when there was nothing to do (payments off, leave no longer approved,
+ * no amount, or another run already took it). Throws when the posting failed; the caller records why.
+ *
+ * The row is claimed as 'Posting' first, so the job and a retry can never pay the same allowance twice.
+ * If the server dies mid-call the row stays 'Posting' and is not resent: whether the bank received it
+ * is unknown, so someone must check the GL log before touching it.
+ */
 async function postLeaveGL(leaveId) {
-  if (!(await leavePaymentsEnabled())) return;
+  if (!(await leavePaymentsEnabled())) return false;
+  const id = toBigInt(leaveId);
   const s = await getAllowanceSettings();
   const rows = await prisma.$queryRaw`
-    SELECT el.*, e.bankAccount AS emp_bank_acc
+    SELECT el.*, e.bankAccount AS emp_bank_acc, e.employee_id AS employee_code,
+           TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name
      FROM employeeleaves el
      LEFT JOIN employee e ON e.id = el.employee
-     WHERE el.id=${toBigInt(leaveId)}`;
-  if (!rows.length) return;
-  const leave      = rows[0];
-  const amount     = parseFloat(leave.amount)    || 0;
-  const taxAmount  = parseFloat(leave.leave_tax) || 0;
-  if (!amount) return;
-  const custAccount = (leave.emp_acc_no || leave.emp_bank_acc || '').trim();
-  if (!custAccount) throw new Error('No bank account on record for this employee');
+     WHERE el.id=${id}`;
+  if (!rows.length) return false;
+  const leave = rows[0];
+  if (leave.status !== 'Approved') return false;   // rejected or cancelled after it was scheduled
+  const net = round2(parseFloat(leave.amount)    || 0);
+  const tax = round2(parseFloat(leave.leave_tax) || 0);
+  if (!net) return false;
 
-  const transRef    = Date.now();
-  const documentRef = Math.random().toString(36).substring(2, 4).toUpperCase() + String(transRef);
-  const logEntry    = JSON.stringify({
-    documentRef, amount, leave_tax: taxAmount,
-    debit_gl:    (leave.leave_gl || s.leave_allow_debit_gl || '').trim(),
-    tax_gl:      s.leave_allow_tax_gl || '',
-    credit_acct: custAccount,
-    employee:    String(leave.employee),
-    posted_at:   new Date().toISOString(),
+  const claimed = await prisma.$executeRaw`UPDATE employeeleaves SET allowance_status='Posting' WHERE id=${id} AND allowance_status='GL Scheduled'`;
+  if (!claimed) return false;
+
+  const custAccount = String(leave.emp_acc_no || leave.emp_bank_acc || '').trim();
+  const debitGl     = String(leave.leave_gl || s.leave_allow_debit_gl || '').trim();
+  const taxGl       = String(s.leave_allow_tax_gl || '').trim();
+  const missing = [
+    !debitGl          && 'the leave allowance debit GL account (on the leave type, or Settings → Controls → Leave)',
+    !custAccount      && "the employee's bank account (on their employee profile)",
+    tax > 0 && !taxGl && 'the leave allowance tax GL account (Settings → Controls → Leave)',
+  ].filter(Boolean);
+  if (missing.length) throw new Error(`GL posting not attempted — missing ${missing.join(' and ')}. Nothing was sent to the GL.`);
+
+  const cfg = await getApiConfig();
+  let extra = {};
+  try { extra = JSON.parse(cfg.gl_extra || '{}'); } catch { /* ignore */ }
+  const branch    = extra.branch || '000';
+  const currency  = await getSystemCurrency(extra.currency);
+  const owner     = leave.employee_code ? { employeeCode: String(leave.employee_code) } : {};
+  const leaveName = leave.leave_name || 'Leave';
+  const narration = ['Leave Allowance', leave.employee_name, leaveName].filter(Boolean).join(' - ');
+  // Kept to 17 characters: leave ids are 13 digits, and documentref holds only 20.
+  const referenceNo = `LV${String(leave.id).slice(-8)}${String(Date.now()).slice(-7)}`;
+  const approver = leave.approved_by
+    ? await prisma.users.findUnique({ where: { id: toBigInt(leave.approved_by) }, select: { username: true } }).catch(() => null)
+    : null;
+
+  const creditAccounts = [{
+    creditAmount: net, creditAccount: custAccount, creditCurrency: currency,
+    creditNarration: narration, creditProdRef: `NS_LV_${leave.id}_CR`, creditBranch: branch, ...owner,
+  }];
+  if (tax > 0) creditAccounts.push({
+    creditAmount: tax, creditAccount: taxGl, creditCurrency: currency,
+    creditNarration: `${narration} - Tax`, creditProdRef: `NS_LV_${leave.id}_TAX`, creditBranch: branch, ...owner,
   });
-  await prisma.$executeRaw`UPDATE employeeleaves SET documentref=${documentRef}, allowance_status='Paid', api_response=${logEntry.substring(0, 500)} WHERE id=${toBigInt(leaveId)}`;
+
+  const result = await postToGL({
+    approvedBy: approver?.username || 'System',
+    referenceNo,
+    description: ['Leave allowance', leave.employee_name].filter(Boolean).join(' - '),
+    branch,
+    debitAccounts: [{
+      debitAmount: round2(net + tax), debitAccount: debitGl, debitCurrency: currency,
+      debitNarration: narration, debitProdRef: `BS_LV_${leave.id}_EXP`, debitBranch: branch, ...owner,
+    }],
+    creditAccounts,
+  });
+
+  // The money has moved. A failure from here must never surface as a failed posting, or a retry would pay again.
+  const documentRef = String(result.documentRef ?? referenceNo).slice(0, 20);
+  const logEntry = JSON.stringify({
+    referenceNo, documentRef, amount: net, leave_tax: tax, debit_gl: debitGl, tax_gl: taxGl,
+    credit_acct: custAccount, employee: String(leave.employee), posted_at: new Date().toISOString(),
+    response: result.raw ?? null,
+  });
+  await prisma.$executeRaw`UPDATE employeeleaves SET documentref=${documentRef}, allowance_status='Paid', api_response=${logEntry} WHERE id=${id}`
+    .catch((err) => console.error(`[postLeaveGL] Leave ${leaveId} POSTED as ${referenceNo} but could not be marked Paid:`, err.message));
+  return true;
 }
 
 async function processLeaveAllowance(leaveId) {
@@ -465,13 +526,24 @@ async function postLeaveGLWithCleanup(leaveId) {
     console.log(`[postLeaveGL] Leave ${leaveId} not paid — held by end of service settlement ${heldBy}`);
     return { heldBy };
   }
+  let posted;
   try {
-    await postLeaveGL(leaveId);
+    posted = await postLeaveGL(leaveId);
   } catch (err) {
     console.error(`[postLeaveGL] Failed for leave ${leaveId}:`, err.message);
-    await prisma.$executeRaw`UPDATE employeeleaves SET allowance_status='Failed GL Posting', api_response=${err.message.substring(0, 500)} WHERE id=${toBigInt(leaveId)}`.catch(() => {});
-    return;
+    // Same shape as a payroll or medical failure, so GlFailureCard can show the blocked accounts.
+    const log = err.glInvalidAccounts ? { error: err.message, invalidAccounts: err.glInvalidAccounts }
+              : err.glImbalance       ? { error: err.message, imbalance: err.glImbalance }
+              : { error: err.glResponse || err.response?.data || err.message };
+    await prisma.$executeRaw`UPDATE employeeleaves SET allowance_status='Failed GL Posting', api_response=${JSON.stringify(log)} WHERE id=${toBigInt(leaveId)} AND allowance_status='Posting'`.catch(() => {});
+    // The daily job runs unattended, so tell HR rather than leave the employee silently unpaid.
+    notifyUsersWithPermission('manage_leave_approvals', {
+      message: `A leave allowance could not be posted to the GL: ${String(err.message).slice(0, 200)}`,
+      action: 'LeaveSetup', type: 'leave', employee: owner?.employee ?? null,
+    });
+    return { error: err.message };
   }
+  if (!posted) return {};
 
   const leaveRow = await prisma.employeeleaves
     .findUnique({ where: { id: toBigInt(leaveId) }, select: { employee: true, leave_type: true, leave_period: true } })
@@ -486,6 +558,7 @@ async function postLeaveGLWithCleanup(leaveId) {
          AND allowance_status IN ('GL Scheduled', '')
          AND id != ${toBigInt(leaveId)}`.catch(() => {});
   }
+  return { posted: true };
 }
 
 // Called by cron — posts GL for all leaves whose start date has arrived
@@ -515,16 +588,17 @@ exports.retryLeaveGL = asyncHandler(async (req, res) => {
     return respond.badReq(res, `This allowance is held by end of service settlement ${heldBy} and cannot be paid while the settlement is open or approved`);
   }
 
-  await prisma.$executeRaw`UPDATE employeeleaves SET allowance_status='GL Scheduled' WHERE id=${id}`;
-  await postLeaveGLWithCleanup(id);
+  // Conditional, so a double click cannot start two postings.
+  const reopened = await prisma.$executeRaw`UPDATE employeeleaves SET allowance_status='GL Scheduled' WHERE id=${id} AND allowance_status='Failed GL Posting'`;
+  if (!reopened) return respond.badReq(res, 'This GL posting is already being retried');
+  const outcome = await postLeaveGLWithCleanup(id);
 
   const updated = await prisma.employeeleaves.findUnique({ where: { id }, select: { allowance_status: true } }).catch(() => null);
+  const allowance_status = updated?.allowance_status;
 
-  if (updated?.allowance_status === 'Paid') {
-    return respond.ok(res, 'GL posting succeeded');
-  } else {
-    return respond.ok(res, 'GL posting failed again — check server logs', { allowance_status: updated?.allowance_status });
-  }
+  if (allowance_status === 'Paid') return respond.ok(res, 'GL posting succeeded', { allowance_status });
+  if (outcome?.error) return respond.ok(res, `GL posting failed again: ${outcome.error}`, { allowance_status });
+  return respond.ok(res, 'Not posted — leave payments are switched off or this leave is no longer approved', { allowance_status });
 });
 
 // GET /leave/allowance-settings — read the leave allowance configuration (enabled flag, GL accounts, tax/factor rates).
@@ -1989,6 +2063,25 @@ exports.submitLeave = asyncHandler(async (req, res) => {
   respond.ok(res, toSupervisor ? 'Leave submitted for supervisor approval' : 'Leave submitted — sent directly to HR approval');
 });
 
+const isLeaveAdmin = (req) => (req.user?.roles ?? []).some(r => ['admin', 'super-admin'].includes(String(r)));
+const isLeaveHr = (req) => isLeaveAdmin(req)
+  || (Array.isArray(req.user?.permissions) && req.user.permissions.includes('manage_leave_approvals'));
+
+/** The caller's relationship to a leave's employee. A failed lookup grants nothing. */
+async function callerRelation(req, leaveId) {
+  const me = req.user?.employeeId != null ? String(req.user.employeeId) : null;
+  if (!me) return { isOwn: false, isSupervisor: false };
+  const [row] = await prisma.$queryRaw`
+    SELECT el.employee, e.supervisorId AS supervisor_id
+      FROM employeeleaves el
+      LEFT JOIN employee e ON e.id = el.employee
+     WHERE el.id = ${toBigInt(leaveId)}`.catch(() => []);
+  return {
+    isOwn:        row?.employee != null && String(row.employee) === me,
+    isSupervisor: row?.supervisor_id != null && String(row.supervisor_id) === me,
+  };
+}
+
 // POST /leave/:id/approve — supervisor approval sends the leave to HR. HR is always the final leave
 // approver and schedules any allowance for GL posting.
 exports.approveLeave = asyncHandler(async (req, res) => {
@@ -2001,6 +2094,9 @@ exports.approveLeave = asyncHandler(async (req, res) => {
   const prevStatus = current.status;
 
   if (current.status === 'Pending Approval') {
+    const { isOwn, isSupervisor } = await callerRelation(req, id);
+    if (isOwn) return respond.forbidden(res, 'You cannot approve your own leave');
+    if (!isSupervisor && !isLeaveHr(req)) return respond.forbidden(res, "Only the employee's supervisor or HR can approve at this stage");
     const newLevel = level + 1;
     await prisma.$executeRaw`UPDATE employeeleaves SET approved_by=${toBigInt(req.user.id)}, approval_level=${newLevel} WHERE id=${id}`;
     await sendToHR(id, req.user.id);
@@ -2038,9 +2134,10 @@ exports.finalizeLeave = asyncHandler(async (req, res) => {
   const current = rows[0] ?? null;
   if (!current) return respond.notFound(res, 'Leave not found');
 
+  if (!isLeaveAdmin(req)) return respond.forbidden(res, 'Only Admin HR can finalize a leave');
   if (current.status !== 'Approved')
     return respond.badReq(res, 'Only Approved leaves can be finalized');
-  if (['Paid', 'GL Scheduled'].includes(current.allowance_status ?? ''))
+  if (['Paid', 'GL Scheduled', 'Posting'].includes(current.allowance_status ?? ''))
     return respond.badReq(res, 'GL posting already processed or in progress');
   if (current.allowance_status === 'Pre-enable Skip')
     return respond.badReq(res, 'This leave was approved before allowance was enabled and is not eligible for payout');
@@ -2059,11 +2156,17 @@ exports.rejectLeave = asyncHandler(async (req, res) => {
   const current = rows[0] ?? null;
   if (!current) return respond.notFound(res, 'Leave not found');
 
+  // Same rule as approval: the supervisor while it is with them, HR at any stage.
+  if (!isLeaveHr(req)) {
+    const { isSupervisor } = current.status === 'Pending Approval' ? await callerRelation(req, id) : { isSupervisor: false };
+    if (!isSupervisor) return respond.forbidden(res, "Only the employee's supervisor or HR can reject this leave");
+  }
+
   const { reason } = req.body;
   const prevStatus = current.status;
 
   // Fetch amount before updating so we can release the once-per-period slot
-  const leaveData = await prisma.$queryRaw`SELECT amount FROM employeeleaves WHERE id=${id}`.then(r => r[0]).catch(() => null);
+  const leaveData =await prisma.$queryRaw`SELECT amount FROM employeeleaves WHERE id=${id}`.then(r => r[0]).catch(() => null);
 
   await prisma.$executeRaw`UPDATE employeeleaves SET status='Rejected', approved_by=${toBigInt(req.user.id)}, rejection_reason=${reason ?? null} WHERE id=${id}`;
 

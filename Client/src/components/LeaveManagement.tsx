@@ -11,6 +11,7 @@ import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
 import { FormModal } from './ui/FormModal';
 import { DetailSlideOver } from './ui/DetailSlideOver';
+import { GlFailureCard } from './ui/GlFailureCard';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import api from '../../lib/api';
@@ -407,11 +408,8 @@ const fetchSubordinateEmployees = useCallback(() => {
     try {
       const res = await api.post(`/leave/leaves/${id}/retry-gl`);
       const status = res.data?.data?.allowance_status;
-      if (status === 'Failed GL Posting') {
-        toast.error('GL posting failed again — check server logs');
-      } else {
-        toast.success('GL posted successfully');
-      }
+      if (status === 'Paid') toast.success('GL posted successfully');
+      else toast.error(res.data?.message ?? 'GL posting failed');
       fetchLeaves();
     } catch (e: any) { toast.error(e.response?.data?.message ?? 'Failed to retry GL'); }
   };
@@ -1327,6 +1325,11 @@ const fetchSubordinateEmployees = useCallback(() => {
                 ))}
               </div>
             </div>
+
+            {viewRow.allowance_status === 'Failed GL Posting' && isAdmin && (
+              <GlFailureCard paymentLog={viewRow.api_response} runName={viewRow.employee_name}
+                canRetry={false} retrying={false} onRetry={() => {}} />
+            )}
 
             {/* Notes */}
             {viewRow.details && (
