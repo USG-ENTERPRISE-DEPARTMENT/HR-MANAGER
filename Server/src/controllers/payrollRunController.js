@@ -535,8 +535,10 @@ const generatePayroll = asyncHandler(async (req, res) => {
   const runTemplate = await resolveRunTemplate(id);
   const templateColIds = new Set(parseTemplateColumns(runTemplate?.visible_columns));
   const applicableCols = allCols.filter(col => {
+    // The template is checked first: nearly every run carries its own column list, and a column taken
+    // off the template stays on that list, so checking the list alone kept warning about it.
+    if (templateColIds.size) return templateColIds.has(String(col.id)) && (!runCols || runCols.has(String(col.id)));
     if (runCols) return runCols.has(String(col.id));
-    if (templateColIds.size) return templateColIds.has(String(col.id));
     return !col.groupIds.length || payrollEmps.some(pe => col.groupIds.includes(String(pe.deduction_group ?? '')));
   });
   const neededComponents = new Set();
