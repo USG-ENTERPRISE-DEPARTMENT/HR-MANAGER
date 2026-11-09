@@ -4,7 +4,7 @@ import {
   ChevronRight, ArrowLeft, BookOpen, Lightbulb, AlertTriangle,
   CheckCircle2, Clock, FileText, ListChecks, Sparkles, X, BarChart2, Briefcase, UserCheck,
   ShieldAlert, Activity, KeyRound, UserCog, TrendingUp, Star, FolderOpen, Mail,
-  Download, Loader2,
+  Download, Loader2, MapPin, DoorOpen,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -274,7 +274,7 @@ const MODULES: HelpModule[] = [
       {
         id: 'central-approval',
         title: 'Using Central Approval',
-        summary: 'Review the latest actionable employee, transfer, payroll, leave, and medical requests in one queue.',
+        summary: 'Review the latest actionable employee, transfer, payroll, leave, medical, and out-of-station requests in one queue.',
         icon: ListChecks,
         content: [
           { type: 'text', body: 'Central Approval combines pending work from multiple modules into one table. Records are arranged latest first. Stage approvers see requests only when the current configured stage is assigned to their user account or role; broader approvers see the requests their permissions allow them to action.' },
@@ -287,6 +287,7 @@ const MODULES: HelpModule[] = [
               ['Leave', 'Supervisor, financial, or Admin HR approval according to the leave status and allowance flow'],
               ['Payroll', 'Submitted payroll runs awaiting their configured approval stage'],
               ['Medical', 'Staff, dependent, and hospital requests awaiting their configured approval stage'],
+              ['Out of Station', 'Requests awaiting the employee\'s supervisor or HR\'s final approval'],
             ],
           },
           {
@@ -2732,6 +2733,295 @@ const MODULES: HelpModule[] = [
       },
     ],
   },
+
+  // ── OUT OF STATION ─────────────────────────────────────────────────────────
+  {
+    id: 'out-of-station',
+    title: 'Out of Station',
+    description: 'Request, approve and pay the daily allowance for staff sent on duty away from their home station.',
+    icon: MapPin,
+    color: '#0d9488',
+    accentBg: '#f0fdfa',
+    articles: [
+      {
+        id: 'oos-overview',
+        title: 'Out of Station Overview',
+        summary: 'What the allowance is, how it is calculated, and who can raise a request.',
+        icon: BookOpen,
+        content: [
+          { type: 'text', body: 'The Out of Station allowance pays staff who are sent on duty away from their home station. A request records where the employee is going, why, and for which dates. Once it is fully approved, the allowance is paid into the employee\'s bank account through the general ledger.' },
+          {
+            type: 'table',
+            headers: ['Page', 'What it is for'],
+            rows: [
+              ['Personal Out of Station', 'Raise requests for yourself or your direct reports, follow their progress, and approve your direct reports\' requests'],
+              ['Manage Out of Station', 'HR page: set daily rates, see every request, give final approval, and download the allowance schedule'],
+            ],
+          },
+          { type: 'text', body: 'Allowance = number of days × the daily rate for the employee\'s pay grade. Days are counted from the start date to the end date, with both included. Weekends and public holidays count. For example, 12 October to 25 October is 14 days. The allowance is not taxed.' },
+          {
+            type: 'table',
+            headers: ['Who', 'What they can raise'],
+            rows: [
+              ['Staff with people reporting to them', 'A request for any of their direct reports, or for themselves'],
+              ['Staff with no one reporting to them', 'Nothing. Their supervisor raises the request for them'],
+              ['HR with the Manage Out of Station permission', 'A request for any active employee, from Manage Out of Station → All Requests'],
+            ],
+          },
+          { type: 'warning', body: 'An employee needs a pay grade on their record, and that pay grade needs a daily rate, before a request can be raised for them. Without these the form shows an error instead of an amount.' },
+        ],
+      },
+      {
+        id: 'oos-raise-request',
+        title: 'Raising a Request',
+        summary: 'Apply for yourself or for a subordinate, and understand what each status means.',
+        icon: FileText,
+        content: [
+          {
+            type: 'steps', heading: 'How to raise a request',
+            steps: [
+              { label: 'Go to Out of Station → Personal Out of Station.' },
+              { label: 'To apply for yourself, click "Apply Out of Station". To apply for someone who reports to you, open the Subordinate Requests tab and click "Request for Subordinate".' },
+              { label: 'Enter the location, start date, end date and purpose. The form shows the days, daily rate and allowance.' },
+              { label: 'Click "Submit" to send it for approval, or "Save as Draft" to finish it later.' },
+            ],
+          },
+          { type: 'text', body: 'Only one request can cover a given day for an employee. If the dates overlap another request that is open, approved or paid, the form names that request. Change the dates or cancel the other request first.' },
+          {
+            type: 'table',
+            headers: ['Status', 'Meaning'],
+            rows: [
+              ['Draft', 'Saved but not submitted. It can still be edited or deleted'],
+              ['Pending Approval', 'Waiting for the employee\'s supervisor'],
+              ['Pending HR Approval', 'Waiting for HR\'s final approval'],
+              ['Approved', 'Fully approved but not paid, because GL postings are switched off'],
+              ['Paid', 'The allowance has been posted to the GL and paid to the employee\'s account'],
+              ['GL Failed', 'Approved, but the GL posting failed. HR can fix the cause and retry'],
+              ['Rejected', 'Declined by the supervisor or HR, with a reason'],
+              ['Cancelled', 'Withdrawn before payment'],
+            ],
+          },
+          { type: 'tip', body: 'Whoever raised a request can cancel it while it is still Draft or pending. After approval, only HR can cancel it. A Paid request cannot be cancelled.' },
+        ],
+      },
+      {
+        id: 'oos-approvals',
+        title: 'Approving and Paying Requests',
+        summary: 'The approval path, where approvers find requests, and what happens when HR approves.',
+        icon: CheckCircle2,
+        content: [
+          {
+            type: 'table',
+            headers: ['Situation', 'Approval path'],
+            rows: [
+              ['Supervisor approval switched on', 'Supervisor → HR → paid'],
+              ['Supervisor approval switched off', 'HR → paid'],
+              ['The employee\'s supervisor raised the request', 'HR → paid. Raising it counts as the supervisor\'s approval'],
+              ['The employee has no supervisor on record', 'HR → paid'],
+            ],
+          },
+          {
+            type: 'steps', heading: 'How to approve or reject',
+            steps: [
+              { label: 'Supervisors: open Personal Out of Station → Subordinate Requests, or Central Approval.' },
+              { label: 'HR: open Manage Out of Station → Approval List, or Central Approval.' },
+              { label: 'Open the request and check the location, dates and allowance.' },
+              { label: 'Click "Approve", or "Reject" and enter a reason.' },
+            ],
+          },
+          { type: 'text', body: 'HR\'s approval is final and pays the allowance straight away: the out-of-station expense account is debited and the employee\'s bank account is credited. The employee receives an in-app notification at each outcome.' },
+          { type: 'warning', body: 'You cannot approve your own request, even with HR access.' },
+          {
+            type: 'steps', heading: 'If a request shows GL Failed',
+            steps: [
+              { label: 'Open the request and read the failure details.' },
+              { label: 'Fix the cause, such as a missing expense GL account or a missing bank account on the employee\'s profile.' },
+              { label: 'Retry the posting from the same panel. A corrected bank account on the employee\'s profile is picked up automatically.' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'oos-setup',
+        title: 'Out of Station Setup',
+        summary: 'Set daily rates, GL accounts and approval controls, and download the allowance schedule.',
+        icon: ListChecks,
+        content: [
+          {
+            type: 'steps', heading: 'Before the first request',
+            steps: [
+              { label: 'Go to Manage Out of Station → Daily Rates and click "Add Rate" for each pay grade.' },
+              { label: 'Go to Settings → Controls → Medical & GL → GL Posting — Out of Station and enter the Out of Station Expense GL. The Posting Branch is optional; if blank, the GL default is used.' },
+              { label: 'Go to Settings → Controls → Approvals and choose whether Supervisor Approval is on.' },
+              { label: 'Go to Settings → Controls → Postings and confirm "Post Out of Station Allowance Payments" is on.' },
+            ],
+          },
+          { type: 'text', body: 'With postings switched off, requests stop at Approved and nothing is sent to the GL. Once postings are back on, HR can pay an Approved request from Manage Out of Station → All Requests, using "Post to GL" in the row\'s actions.' },
+          { type: 'text', body: 'A request\'s rate is taken when it is saved, and worked out again if the draft is edited. Changing a daily rate does not alter requests that have already been submitted.' },
+          {
+            type: 'table',
+            headers: ['Permission', 'What it allows'],
+            rows: [
+              ['View Out of Station', 'See All Requests and download the schedule'],
+              ['Approve Out of Station', 'Give HR\'s final approval, retry failed postings, and see All Requests'],
+              ['Manage Out of Station', 'Set daily rates, raise requests for any employee, and see All Requests'],
+            ],
+          },
+          { type: 'tip', body: 'Manage Out of Station → All Requests has "Export Excel" and "Download Schedule" buttons for the requests currently listed. Use these for the allowance schedule.' },
+        ],
+      },
+    ],
+  },
+
+  // ── END OF SERVICE ─────────────────────────────────────────────────────────
+  {
+    id: 'end-of-service',
+    title: 'End of Service',
+    description: 'Calculate, approve and pay the end of service benefit and final settlement when an employee leaves.',
+    icon: DoorOpen,
+    color: '#7c3aed',
+    accentBg: '#f5f3ff',
+    articles: [
+      {
+        id: 'eos-overview',
+        title: 'End of Service Overview',
+        summary: 'What a settlement includes and how the End of Service Benefit is calculated.',
+        icon: BookOpen,
+        content: [
+          { type: 'text', body: 'End of Service is used by HR when an employee leaves. A settlement works out the End of Service Benefit (EOSB), adds anything still owed to the employee, deducts anything the employee owes, and produces the final balance and a settlement letter. Final approval marks the employee as exited and posts the settlement to the general ledger.' },
+          { type: 'text', body: 'EOSB = Annual Gross × Years of Service × Days\' Pay per Year ÷ Divisor. The divisor is 261 by default, the number of working days in a year.' },
+          {
+            type: 'table',
+            headers: ['Part of the formula', 'How it is worked out'],
+            rows: [
+              ['Annual Gross', 'The monthly amounts of the salary components chosen in Calculation Rules × 12. HR can override it on a settlement'],
+              ['Years of Service', 'From the hire date to the effective date. By default a part year of 6 months or more counts as a full year, and service under 6 months earns no benefit'],
+              ['Days\' Pay per Year', 'Taken from the service band the employee falls into. That one rate applies to all of their years'],
+            ],
+          },
+          { type: 'tip', body: 'Example: 104,781.36 Annual Gross × 5 years × 33 days ÷ 261 = 66,241.08. The benefit and monthly amounts are cut off at 2 decimals, not rounded.' },
+          { type: 'text', body: 'The reasons for leaving are Resignation, Termination by the Bank, Death, Retirement, Redundancy, Medical Grounds, Dismissal and End of Contract. By default no benefit is paid for Dismissal or End of Contract, but additions and deductions still apply. HR can change which reasons earn no benefit in Calculation Rules.' },
+        ],
+      },
+      {
+        id: 'eos-create-settlement',
+        title: 'Creating a Settlement',
+        summary: 'Enter the exit details, answer the questions, and review the additions and deductions.',
+        icon: FileText,
+        content: [
+          {
+            type: 'steps', heading: 'How to create a settlement',
+            steps: [
+              { label: 'Go to End of Service → Settlements and click "New Settlement".' },
+              { label: 'Choose the employee, the reason for leaving and the effective date. Enter the date notified if the employee gave notice.', detail: 'For a death, enter the next of kin. The settlement letter is addressed to them.' },
+              { label: 'Check the answers to the five questions about notice, final salary, and leave, rent and clothing allowances.' },
+              { label: 'Review the service, Annual Gross and benefit shown, and any warnings about incomplete setup.' },
+              { label: 'Review the suggested additions and deductions. Change them if needed, or add a "Staff loan" or "Other item" line.' },
+              { label: 'Click "Submit" to send it for approval, or "Save as Draft" to finish it later.' },
+            ],
+          },
+          { type: 'text', body: 'The system answers three of the questions from its own records and shows where each answer came from: notice given (from the dates), final salary paid (from payroll), and leave allowance paid (from the leave module). You can change an answer; the form warns you if it differs from the records, and "Use system" restores it.' },
+          {
+            type: 'table',
+            headers: ['Item', 'How it is suggested'],
+            rows: [
+              ['Leave allowance', 'Already paid this year: the months after the exit are deducted. Not paid: the months worked are added'],
+              ['Rent allowance', 'Already paid for the year: the months after the exit are deducted. Not paid: the months worked are added'],
+              ['Clothing allowance', 'Not paid yet: the months worked are added. Already paid: no line'],
+              ['Final month\'s salary', 'Added when the employee gave notice and has not been paid for that month'],
+              ['Salary in lieu of notice', 'Deducted when no notice was given and that month\'s salary has not been paid'],
+              ['Provident Fund', 'The fixed amount deducted for employees on the Provident Fund list'],
+              ['Staff loan', 'Added by hand as a deduction. The loan account number is required'],
+              ['Other item', 'Added by hand as an addition or a deduction'],
+            ],
+          },
+          { type: 'text', body: 'Months are counted on the month of exit. Someone leaving in September has worked 9 months of the year, and October to December are the 3 months not worked.' },
+          { type: 'warning', body: 'An employee can have only one settlement at a time, unless the earlier one was rejected or cancelled. The employee needs a hire date on their record, or years of service cannot be counted.' },
+        ],
+      },
+      {
+        id: 'eos-approvals',
+        title: 'Approval, Posting and the Settlement Letter',
+        summary: 'What each status means, what final approval does, and how to print the letter.',
+        icon: CheckCircle2,
+        content: [
+          { type: 'text', body: 'A submitted settlement passes through the approval stages set in Settings → Controls → Approvals, in order. Each approver is notified and finds it under End of Service → Approval List. If no stages are set, one approval by a user with the Approve End of Service permission is enough.' },
+          { type: 'warning', body: 'Whoever raised a settlement cannot approve it. End of Service approvals are handled in the Approval List tab, not in Central Approval.' },
+          {
+            type: 'table',
+            headers: ['Status', 'Meaning'],
+            rows: [
+              ['Draft', 'Saved but not submitted. It can still be edited or deleted'],
+              ['Pending Approval', 'Moving through the approval stages'],
+              ['Approved', 'Fully approved. The settlement has not been posted, because postings are off or there was nothing to post'],
+              ['Paid', 'Posted to the GL'],
+              ['GL Failed', 'Approved, but the GL posting failed. It can be retried once the cause is fixed'],
+              ['Rejected', 'Declined at an approval stage, with a reason'],
+              ['Cancelled', 'Withdrawn by HR before posting'],
+            ],
+          },
+          {
+            type: 'table',
+            headers: ['What final approval does', 'Detail'],
+            rows: [
+              ['Marks the employee as exited', 'Resigned for a Resignation, and Terminated for every other reason, from the effective date'],
+              ['Stops scheduled leave allowances', 'Any unpaid scheduled allowance becomes "Stopped (End of Service)", because the settlement has already dealt with it'],
+              ['Posts the settlement', 'The benefit and additions are credited to the employee\'s account, and deductions are debited from it'],
+            ],
+          },
+          { type: 'text', body: 'While a settlement is open or approved, the employee\'s scheduled leave allowance is held so it cannot be paid twice. If the settlement is rejected or cancelled before final approval, the hold is released and the allowance pays as normal.' },
+          { type: 'tip', body: 'To print the letter, open a settlement that is Approved, Paid or GL Failed and click "Print Settlement Letter". It shows the wording from the Letter Wording tab above the settlement breakdown.' },
+          { type: 'text', body: 'If postings were off when a settlement was approved, HR can post it later using "Post to GL" in the row\'s actions on the Settlements tab.' },
+          { type: 'warning', body: 'A settlement that has been posted cannot be cancelled. Cancelling an approved settlement that has not been posted does not reinstate the employee; reinstate them in Employees if needed. If the balance is negative, the employee\'s account is left overdrawn and the amount must be followed up outside the system.' },
+        ],
+      },
+      {
+        id: 'eos-setup',
+        title: 'End of Service Setup',
+        summary: 'Set service bands, the Provident Fund list, calculation rules, letter wording and GL accounts.',
+        icon: ListChecks,
+        content: [
+          {
+            type: 'table',
+            headers: ['Where', 'What to set'],
+            rows: [
+              ['End of Service → Service Bands', 'The days\' pay per year for each length of service. Each band must cover more years than the one before, and the last band must be open-ended'],
+              ['End of Service → Provident Fund', 'The employees who have a Provident Fund deduction, with the fixed amount for each'],
+              ['End of Service → Calculation Rules', 'Divisor, minimum service, part-year rounding, notice period, Annual Gross components, rent and clothing components, and reasons that earn no benefit'],
+              ['End of Service → Letter Wording', 'The letter to the employee, the letter to the next of kin, and who signs them'],
+              ['Settings → Controls → Medical & GL', 'GL Posting — End of Service: the EOSB expense, allowance, salary, notice pay and Provident Fund accounts, and the posting branch'],
+              ['Settings → Controls → Approvals', '"Configure Approval Flow": the ordered role or user stages a settlement must pass'],
+              ['Settings → Controls → Postings', '"Post End of Service Settlements": when off, settlements are approved and recorded without posting'],
+            ],
+          },
+          { type: 'warning', body: 'Choose the Annual Gross components in Calculation Rules before raising settlements. Until they are chosen, only the basic salary is used and the form shows a warning.' },
+          { type: 'text', body: 'In Calculation Rules, also confirm whether rent and clothing component amounts are held as annual or monthly figures, and whether one month\'s salary means basic or gross. These affect the suggested rent, clothing, final salary and notice lines.' },
+          {
+            type: 'table',
+            headers: ['Letter placeholder', 'Replaced with'],
+            rows: [
+              ['{name}', 'The employee\'s name'],
+              ['{effective_date}', 'The last working date'],
+              ['{reason}', 'The reason for leaving'],
+              ['{balance_sentence}', 'The amount paid or owed, written as a sentence'],
+              ['{account}', 'The employee\'s account number'],
+              ['{net_amount}', 'The net settlement amount'],
+            ],
+          },
+          {
+            type: 'table',
+            headers: ['Permission', 'What it allows'],
+            rows: [
+              ['View End of Service', 'See settlements and the Provident Fund list'],
+              ['Approve End of Service', 'Approve settlements when no approval stages are set, and post settlements'],
+              ['Manage End of Service', 'Raise, edit and cancel settlements, and maintain the End of Service setup tabs'],
+            ],
+          },
+          { type: 'tip', body: 'When approval stages are set, an approver only needs to match the stage\'s role or user. They do not also need the Approve End of Service permission.' },
+        ],
+      },
+    ],
+  },
 ];
 
 // ─── Search logic ─────────────────────────────────────────────────────────────
@@ -3113,7 +3403,7 @@ export function Help() {
                   </div>
 
                   {/* Export just this module — the full manual is large, and someone training on one
-                      area rarely wants all 12 modules. */}
+                      area rarely wants every module. */}
                   <button
                     onClick={() => downloadManual(activeModule.id)}
                     disabled={!!downloading}
