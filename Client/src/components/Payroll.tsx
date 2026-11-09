@@ -913,7 +913,9 @@ function PayrollGrid({
   const isPendingApproval = activeRun.status === 'Pending Approval';
   const isApproved        = activeRun.status === 'Approved';
   const isRejected        = activeRun.status === 'Rejected';
-  const canEdit           = !isLocked && !isPendingApproval && !isApproved;
+  // A run rejected after posting keeps its spent reference and is closed for good: the fix is a new run.
+  const isPostedRejection = isRejected && !!activeRun.document_ref;
+  const canEdit           = !isLocked && !isPendingApproval && !isApproved && !isPostedRejection;
 
   // ── Multi-stage approval flow ──
   const hasFlow      = runStages.length > 0;
