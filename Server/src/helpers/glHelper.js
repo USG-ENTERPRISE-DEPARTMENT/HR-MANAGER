@@ -153,50 +153,34 @@ function parseStatuses(data, list) {
   return out;
 }
 
-/** One entry of the core API's account lists — a bare number, or an object with the account and its status. */
-function verdictEntry(entry) {
-  if (!entry || typeof entry !== 'object') return { account: String(entry ?? '').trim(), status: null, description: null };
-  const keys = Object.keys(entry);
-  const accountKey = keys.find(k => /^(account|acct)[_-]?(no|num|number|nbr)?$/i.test(k));
-  const statusKey  = keys.find(k => /^(account|acct)[_-]?status$/i.test(k)) ?? keys.find(k => /^status$/i.test(k));
-  const status = String(entry[statusKey] ?? '').trim();
-  return {
-    account:     String(entry[accountKey] ?? '').trim(),
-    status:      status || null,
-    description: entry.description ?? null,
-  };
-}
-
 /**
  * Turn the core API's `{ validAccounts, invalidAccounts }` into the same Map invalidAccounts returns.
  * Only an account named in validAccounts passes; one in neither list is blocked as NO_RESPONSE, for the
  * same reason as below — silence is not evidence that an account is good.
  *
- * Entries may be plain account numbers or objects that also carry the account status. A status, when
- * present, decides the outcome whichever list the account is in: a DR account being credited must not
- * stop a salary even if core lists it as invalid, and a status statusAllows refuses blocks even from
- * the valid list.
+ * The reply also carries `accountStatuses: [{ account, valid, status_indicator }]`. The indicator, when
+ * present, decides the outcome whichever list the account is in: core lists a DR account as invalid, yet
+ * a DR account being credited must not stop a salary, and a status statusAllows refuses blocks even if
+ * core calls the account valid.
  */
-function listVerdicts({ validAccounts, invalidAccounts: invalid }, list, tag, sides) {
-  const index = entries => new Map(entries.map(verdictEntry).map(e => [e.account, e]));
-  const valid = index(validAccounts);
-  const bad   = index(invalid);
+function listVerdicts({ validAccounts, invalidAccounts: invalid, accountStatuses }, list, tag, sides) {
+  const valid = new Set(validAccounts.map(a => String(a).trim()));
+  const bad   = new Set(invalid.map(a => String(a).trim()));
+  const indicators = new Map((Array.isArray(accountStatuses) ? accountStatuses : [])
+    .map(s => [String(s?.account ?? '').trim(), String(s?.status_indicator ?? '').trim()]));
   const out = new Map();
   const unanswered = [];
   for (const acct of list) {
-    const entry = bad.get(acct) ?? valid.get(acct);
-    if (!entry) {
-      unanswered.push(acct);
-      out.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' });
-    } else if (entry.status) {
-      if (!statusAllows(entry.status, sides.get(acct))) {
-        out.set(acct, {
-          status:      entry.status,
-          description: ACCOUNT_STATUS_TEXT[entry.status.toUpperCase()] ?? entry.description ?? `Account status ${entry.status}`,
-        });
+    const status = indicators.get(acct);
+    if (status) {
+      if (!statusAllows(status, sides.get(acct))) {
+        out.set(acct, { status, description: ACCOUNT_STATUS_TEXT[status.toUpperCase()] ?? `Account status ${status}` });
       }
     } else if (bad.has(acct)) {
       out.set(acct, { status: 'INVALID', description: 'The core banking system reports this account as invalid' });
+    } else if (!valid.has(acct)) {
+      unanswered.push(acct);
+      out.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' });
     }
   }
   glLog(`VALIDATE RESULT${tag}`, {
