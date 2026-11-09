@@ -89,7 +89,7 @@ export function GeneralPayrollReport({ onClose, canExport }: Props) {
       String(emp(a)?.employee_id ?? a).localeCompare(String(emp(b)?.employee_id ?? b), undefined, { numeric: true }));
     const base = (k: string) => {
       const e = emp(k);
-      return [e?.employee_id ?? '', e ? fullName(e) : `Employee ${k}`, e?.paygrade ?? '', e?.notch ?? '', e?.bankAccount ?? '', e?.nassit_num ?? '', e?.branch?.title ?? ''];
+      return [e?.employee_id ?? '', e ? fullName(e) : `Employee ${k}`, e?.paygrade ?? '', e?.notch ?? '', e?.bankAccount ?? '', e?.nassit_num || e?.ssn_num || '', e?.branch?.title ?? ''];
     };
     const raw = ordered.map(k => [...base(k), ...colList.map(([id]) => Math.round((byEmp.get(k)!.get(id) ?? 0) * 100) / 100)]) as Cell[][];
     const totals = colList.map(([id]) => ordered.reduce((s, k) => s + (byEmp.get(k)!.get(id) ?? 0), 0));

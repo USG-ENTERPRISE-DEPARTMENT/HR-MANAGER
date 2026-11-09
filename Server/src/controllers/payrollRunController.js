@@ -1872,6 +1872,10 @@ const NASSIT_COLUMNS = {
   employer: /^nassit\s*10%\s*\(payt\)/i,
 };
 
+// The employee's NASSIT number for reports. nassit_num is filled only by the migration; the employee
+// form's SSN field saves to ssn_num, which holds the same number, so it is the fallback.
+const EMPLOYEE_NASSIT_SQL = Prisma.sql`COALESCE(NULLIF(TRIM(e.nassit_num), ''), NULLIF(TRIM(e.ssn_num), ''))`;
+
 // GET /payroll/runs/:id/nassit-report — per-employee NASSIT contributions for a COMPLETED run:
 // staff ID, names, NASSIT number, basic salary, employee 5%, employer 10% and the total remitted.
 const getNassitReport = asyncHandler(async (req, res) => {
@@ -1887,7 +1891,7 @@ const getNassitReport = asyncHandler(async (req, res) => {
   const cells = await query`
     SELECT pd.employee, pd.amount, pc.name AS col,
            e.employee_id AS staff_code, e.firstName AS first_name, e.middleName AS middle_name,
-           e.lastName AS last_name, e.nassit_num
+           e.lastName AS last_name, ${EMPLOYEE_NASSIT_SQL} AS nassit_num
     FROM   payrolldata pd
     JOIN   payrollcolumns pc ON pc.id = pd.payroll_item
     JOIN   employee e        ON e.id  = pd.employee
@@ -1977,7 +1981,7 @@ const getPayeReport = asyncHandler(async (req, res) => {
   const cells = await query`
     SELECT pd.employee, pd.amount, pc.name AS col,
            e.employee_id AS staff_code, e.firstName AS first_name, e.middleName AS middle_name,
-           e.lastName AS last_name, e.nassit_num, e.hireDate AS hire_date, e.dateOfBirth AS birth_date,
+           e.lastName AS last_name, ${EMPLOYEE_NASSIT_SQL} AS nassit_num, e.hireDate AS hire_date, e.dateOfBirth AS birth_date,
            g.label AS gender, jt.label AS job_title
     FROM   payrolldata pd
     JOIN   payrollcolumns pc ON pc.id = pd.payroll_item
@@ -2098,7 +2102,7 @@ const getMyNassit = asyncHandler(async (req, res) => {
   const from = isDate(req.query.from) ? new Date(req.query.from) : new Date('1900-01-01');
   const to   = isDate(req.query.to)   ? new Date(req.query.to)   : new Date('2999-12-31');
 
-  const [emp] = await query`SELECT employee_id AS staff_code, nassit_num FROM employee WHERE id = ${BigInt(empId)} LIMIT 1`;
+  const [emp] = await query`SELECT e.employee_id AS staff_code, ${EMPLOYEE_NASSIT_SQL} AS nassit_num FROM employee e WHERE e.id = ${BigInt(empId)} LIMIT 1`;
   const cells = await query`
     SELECT pr.id AS run_id, pr.name AS run_name, pr.date_start, pr.date_end, pd.amount, pc.name AS col
     FROM   payrolldata pd
