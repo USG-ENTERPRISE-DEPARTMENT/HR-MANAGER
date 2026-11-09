@@ -81,6 +81,30 @@ runs and migrated employees, so rows entered in the target by other means are un
 
 Verify idempotency by running the migration **twice** and comparing counts; do not assume it.
 
+## Weekly top-ups
+
+Between the first load and go-live, **Top up now** (Settings → System → Migration, or
+`POST /migration/execute` with `mode: "topup"`) brings the target back in line with the old system.
+The target is treated as a **mirror**: the old system wins, so edits made to migrated records in the
+new system are overwritten. Do not use the target for real work until the last top-up.
+
+| | full load | top-up |
+|---|---|---|
+| Employees | refreshes a fixed subset of columns | writes only new/changed rows, every migrated column including bank account |
+| Payroll runs | adds new ones, never touches existing | also updates status, GL reference, finalised and approval details |
+| Payroll history | deletes and reloads every run | reloads only runs that differ per employee in row count or total |
+| Dependents | adds new ones | also updates relationship, gender, place of birth and ID number |
+| Logins, roles, permissions | copied from the reference database | skipped once the target has users, so an administrator's changes stand |
+
+Nothing is deleted because it vanished from the old system. Employees, runs and dependents found only
+in the new system are listed in the report for a person to decide.
+
+Each top-up's report is saved in `migration_topups` on the target, including failed runs. A failed
+top-up is safe to repeat: a half-loaded payroll run no longer matches, so the next one reloads it.
+
+Go-live: stop changes in the old system, run one last top-up, confirm the report shows the payroll
+totals matching, then switch over.
+
 ## Creating the rehearsal database
 
 ```bash

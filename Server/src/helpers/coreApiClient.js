@@ -11,7 +11,8 @@ const { encrypt, decrypt } = require('./encryption');
 //      the same way.
 //
 // Configuration (Server/.env):
-//   CORE_API_URL           e.g. http://10.32.11.88:8188
+//   CORE_API_URL           the gateway root, e.g. http://10.32.11.75:3050/alx/waf
+//   CORE_API_PREFIX        optional path added to the URL, e.g. /hr (unset = URL used as written)
 //   CORE_API_USERNAME / CORE_API_PASSWORD   the JWT credentials
 //   CORE_API_KEY / CORE_API_SECRET          sent as X-API-Key / X-API-Secret
 //   CORE_API_ENC_KEY       the AES key used by encryption.js
@@ -49,9 +50,21 @@ function mask(v) {
 }
 const maskToken = t => (t ? `${String(t).slice(0, 12)}…(${String(t).length} chars)` : '(none)');
 
+/**
+ * Base URL + an optional path prefix. CORE_API_URL is used exactly as written unless CORE_API_PREFIX is
+ * set (e.g. /hr), in which case the prefix is added — but not when the URL already ends with it.
+ */
+function baseUrl() {
+  const root   = String(process.env.CORE_API_URL || '').replace(/\/+$/, '');
+  const raw    = process.env.CORE_API_PREFIX ?? '';
+  const prefix = raw.trim() ? '/' + raw.trim().replace(/^\/+|\/+$/g, '') : '';
+  if (!root || !prefix || root.toLowerCase().endsWith(prefix.toLowerCase())) return root;
+  return root + prefix;
+}
+
 function config() {
   return {
-    url:      String(process.env.CORE_API_URL || '').replace(/\/+$/, ''),
+    url:      baseUrl(),
     username: process.env.CORE_API_USERNAME || '',
     password: process.env.CORE_API_PASSWORD || '',
     apiKey:   process.env.CORE_API_KEY      || '',

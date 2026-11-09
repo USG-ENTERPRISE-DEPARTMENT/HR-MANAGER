@@ -196,6 +196,8 @@ const postExecute = asyncHandler(async (req, res) => {
   if (job?.running) {
     return respond.conflict(res, `A migration into ${job.target} is already running (started ${job.startedAt}).`);
   }
+  // 'topup' makes the target match the old system and reports what changed; see MigrationRun.
+  const mode = req.body?.mode === 'topup' ? 'topup' : 'full';
 
   const targetUrl = which === 'rehearsal' ? rehearsalUrl() : process.env.PG_URL;
   if (!targetUrl) return respond.badReq(res, `No connection string configured for the ${which} target.`);
@@ -205,6 +207,7 @@ const postExecute = asyncHandler(async (req, res) => {
   job = {
     running: true,
     target: which,
+    mode,
     startedAt: new Date().toISOString(),
     startedMs: Date.now(),
     currentStep: null,
@@ -218,13 +221,15 @@ const postExecute = asyncHandler(async (req, res) => {
     if (s) Object.assign(s, patch);
   };
 
-  logActivity({ module: 'Migration', action: 'execute_start', ...fromReq(req), details: { target: which } });
+  logActivity({ module: 'Migration', action: 'execute_start', ...fromReq(req), details: { target: which, mode } });
 
   // Deliberately NOT awaited: a full load runs for about ten minutes, far longer than any sane
   // HTTP timeout. The response returns at once and the client polls GET /migration/job.
   execute({
     sourceCfg: sourceConfig(req),
     targetUrl,
+    mode,
+    startedBy: req.user?.username ?? null,
     onProgress: (p) => {
       if (p.phase === 'start') {
         job.currentStep = p.step;
@@ -247,6 +252,7 @@ const postExecute = asyncHandler(async (req, res) => {
       job.finishedAt = new Date().toISOString();
       logActivity({ module: 'Migration', action: 'execute_complete', ...fromReq(req), details: {
         target: which,
+        mode,
         elapsedMs: result.elapsedMs,
         steps: result.steps.map(s => ({ step: s.key, inserted: s.inserted, skipped: s.skipped })),
       }});
@@ -278,6 +284,25 @@ const getJob = asyncHandler(async (req, res) => {
   });
 });
 
+// GET /migration/topups — the saved report of each top-up into the chosen target, newest first.
+// Read straight from the target: the table lives there, and is absent until the first top-up.
+const getTopups = asyncHandler(async (req, res) => {
+  const url = req.query.target === 'rehearsal' ? rehearsalUrl() : process.env.PG_URL;
+  if (!url) return respond.badReq(res, 'No connection string configured for that target.');
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: url, connectionTimeoutMillis: 20000 });
+  await client.connect();
+  try {
+    const [{ t }] = (await client.query(`SELECT to_regclass('migration_topups') AS t`)).rows;
+    const rows = t ? (await client.query(
+      `SELECT id, started_at, finished_at, status, started_by, elapsed_ms, error, report
+         FROM migration_topups ORDER BY id DESC LIMIT 30`)).rows : [];
+    respond.ok(res, 'Top-up history', rows);
+  } finally {
+    await client.end().catch(() => {});
+  }
+});
+
 // GET /migration/status — kept for the simple "is anything running?" check.
 const getStatus = asyncHandler(async (req, res) => {
   respond.ok(res, 'Migration status', job?.running
@@ -285,4 +310,4 @@ const getStatus = asyncHandler(async (req, res) => {
     : { running: false });
 });
 
-module.exports = { getPlan, postPreflight, getTarget, postDryRun, postExecute, getStatus, getJob };
+module.exports = { getPlan, postPreflight, getTarget, postDryRun, postExecute, getStatus, getJob, getTopups };

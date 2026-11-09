@@ -4259,3 +4259,16 @@ model eos_log {
 
   @@index([settlement_id], map: "eos_log_settlement_idx")
 }
+
+// One row per weekly legacy top-up, with its report. Created by the migration loader itself, and
+// declared here so that a schema push does not treat it as a table to drop.
+model migration_topups {
+  id          BigInt    @id @default(autoincrement())
+  started_at  DateTime
+  finished_at DateTime?
+  status      String    @db.VarChar(20)
+  started_by  String?   @db.VarChar(100)
+  elapsed_ms  Int?
+  error       String?   @db.Text
+  report      Json?
+}

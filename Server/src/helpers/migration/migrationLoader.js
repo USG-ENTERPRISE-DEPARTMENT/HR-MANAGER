@@ -161,15 +161,81 @@ const EMPLOYEE_COLUMNS = [
   'status',
 ];
 
+/* ── top-up helpers ─────────────────────────────────────────────────────── */
+
+// What a top-up keeps in step with the old system. `titleid` is excluded because the loader never
+// resolves it (see loadEmployees), so the source has nothing to say about it.
+const TOPUP_EMPLOYEE_COLUMNS = EMPLOYEE_COLUMNS.filter(c => c !== 'employee_id' && c !== 'titleid');
+const EMPLOYEE_DATE_COLUMNS = new Set([
+  'dateofbirth', 'hiredate', 'confirmationdate', 'termination_date', 'retirement_date', 'approved_date',
+]);
+const EMPLOYEE_UNIQUE_COLUMNS = ['email', 'work_email', 'personal_email'];
+
+// How a changed column is named in the weekly report.
+const EMPLOYEE_FIELD_LABELS = {
+  email: 'Email', firstname: 'First name', middlename: 'Middle name', lastname: 'Last name',
+  dateofbirth: 'Date of birth', hiredate: 'Hire date', confirmationdate: 'Confirmation date',
+  termination_date: 'Termination date', retirement_date: 'Retirement date',
+  departmentid: 'Department', branchid: 'Branch', unitid: 'Unit', outletid: 'Outlet',
+  jobtitleid: 'Job title', employmentstatusid: 'Employment status', nationalityid: 'Nationality',
+  paygradeid: 'Pay grade', notcheid: 'Notch', genderid: 'Gender', religionid: 'Religion',
+  nassit_num: 'NASSIT number', ssn_num: 'SSN', work_email: 'Work email', personal_email: 'Personal email',
+  mobilephone: 'Mobile phone', phone: 'Phone', bankaccount: 'Bank account', address1: 'Address',
+  city: 'City', country: 'Country', place_of_birth: 'Place of birth', marital_status: 'Marital status',
+  lifecyclestatus: 'Status', approvalstatus: 'Approval status', approved_date: 'Approved date',
+  father_name: "Father's name", mother_name: "Mother's name", spouse_name: 'Spouse name',
+  staff_level: 'Staff level', staff_role: 'Staff role', status: 'Account status',
+};
+
+const dayKey = (v) => {
+  const d = date(v);
+  return d ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` : '';
+};
+const secondsKey = (v) => {
+  const d = date(v);
+  return d ? String(Math.floor(d.getTime() / 1000)) : '';
+};
+const textKey = (v) => String(v ?? '').trim();
+
+/**
+ * A decimal string as a whole number of millionths. Payroll amounts reach 196bn with 6 decimal places,
+ * more than a JS number holds exactly, and a rounding difference here would reload a run every week.
+ */
+const micro = (v) => {
+  const s = textKey(v) || '0';
+  const negative = s.startsWith('-');
+  const [whole, fraction = ''] = s.replace(/^[-+]/, '').split('.');
+  const value = BigInt(whole || '0') * 1000000n + BigInt(`${fraction}000000`.slice(0, 6));
+  return negative ? -value : value;
+};
+const fmtMicro = (v) => {
+  const abs = v < 0n ? -v : v;
+  const cents = String(abs % 1000000n).padStart(6, '0').slice(0, 2);
+  return `${v < 0n ? '-' : ''}${abs / 1000000n}.${cents}`;
+};
+
 /* ── the loader ─────────────────────────────────────────────────────────── */
 
 class MigrationRun {
-  constructor({ sourceCfg = {}, targetUrl, scopes = plan.SCOPES, onProgress = () => {} }) {
+  constructor({ sourceCfg = {}, targetUrl, scopes = plan.SCOPES, onProgress = () => {}, mode = 'full', startedBy = null }) {
     if (!targetUrl) throw new Error('A target database URL is required.');
     this.sourceCfg = sourceCfg;
     this.targetUrl = targetUrl;
     this.scopes = scopes;
     this.onProgress = onProgress;
+
+    // A top-up treats the target as a mirror of the old system: changed records are overwritten,
+    // only payroll runs that differ are reloaded, and everything is written up in `report`.
+    this.topup = mode === 'topup';
+    this.startedBy = startedBy;
+    this.report = {
+      employees: { new: [], changed: [], statusChanged: [], bankAccountsChanged: 0, onlyInNewSystem: [] },
+      payrollRuns: { new: [], updated: 0, statusChanged: [], onlyInNewSystem: [] },
+      payrollHistory: null,
+      dependents: { new: 0, updated: 0, onlyInNewSystem: 0 },
+      medical: [],
+    };
+    this.runNames = new Map();     // target payrollruns.id -> name, for the report
 
     // legacy id -> new id, per entity. Built as steps run; later steps depend on earlier ones.
     this.map = {
@@ -352,6 +418,17 @@ class MigrationRun {
   // has. No password is ever generated or logged here.
   async loadAccessControl() {
     const e = this.step('access', 'Roles, permissions and admin login');
+
+    // Roles and permissions are this application's own configuration, not legacy data. Re-copying
+    // them weekly would put back any permission an administrator had removed from a role.
+    if (this.topup) {
+      const [{ n }] = await this.tgt(`SELECT COUNT(*)::int AS n FROM users`);
+      if (n > 0) {
+        e.notes.push('Skipped on a top-up — logins, roles and permissions are left as they are');
+        this.done(e);
+        return;
+      }
+    }
 
     const referenceUrl = process.env.MIGRATION_REFERENCE_URL || process.env.PG_URL;
     if (!referenceUrl || referenceUrl === this.targetUrl) {
@@ -791,16 +868,20 @@ class MigrationRun {
 
     // Batched for the same reason as everywhere else: at ~550ms round-trip latency, a per-row
     // INSERT took 11 minutes for 1,280 employees.
-    e.inserted += await this.insertMany('employee', EMPLOYEE_COLUMNS, values,
-      `ON CONFLICT (employee_id) DO UPDATE SET
-         firstname = EXCLUDED.firstname, lastname = EXCLUDED.lastname,
-         middlename = EXCLUDED.middlename, nassit_num = EXCLUDED.nassit_num,
-         departmentid = EXCLUDED.departmentid, branchid = EXCLUDED.branchid,
-         jobtitleid = EXCLUDED.jobtitleid, employmentstatusid = EXCLUDED.employmentstatusid,
-         nationalityid = EXCLUDED.nationalityid, genderid = EXCLUDED.genderid,
-         religionid = EXCLUDED.religionid, paygradeid = EXCLUDED.paygradeid,
-         notcheid = EXCLUDED.notcheid, lifecyclestatus = EXCLUDED.lifecyclestatus,
-         updatedat = NOW()`, 'employees');
+    if (this.topup) {
+      await this.topUpEmployees(values, e);
+    } else {
+      e.inserted += await this.insertMany('employee', EMPLOYEE_COLUMNS, values,
+        `ON CONFLICT (employee_id) DO UPDATE SET
+           firstname = EXCLUDED.firstname, lastname = EXCLUDED.lastname,
+           middlename = EXCLUDED.middlename, nassit_num = EXCLUDED.nassit_num,
+           departmentid = EXCLUDED.departmentid, branchid = EXCLUDED.branchid,
+           jobtitleid = EXCLUDED.jobtitleid, employmentstatusid = EXCLUDED.employmentstatusid,
+           nationalityid = EXCLUDED.nationalityid, genderid = EXCLUDED.genderid,
+           religionid = EXCLUDED.religionid, paygradeid = EXCLUDED.paygradeid,
+           notcheid = EXCLUDED.notcheid, lifecyclestatus = EXCLUDED.lifecyclestatus,
+           updatedat = NOW()`, 'employees');
+    }
 
     // Read the ids back in one query rather than using RETURNING per row.
     for (const row of await this.tgt(`SELECT id, employee_id FROM employee`)) {
@@ -833,6 +914,89 @@ class MigrationRun {
     e.notes.push(`${clearedWorkEmail} work e-mails cleared as duplicates of a shared address (the first holder keeps it)`);
     e.notes.push(`${linked} supervisor links resolved`);
     this.done(e);
+  }
+
+  /**
+   * Write only the employees that are new or differ from the old system, and record what changed.
+   * Every migrated column is compared and overwritten, bank account included — unlike a full load,
+   * which refreshes a fixed subset. An employee who exists only in the new system is reported and
+   * left alone: nothing is ever deleted by a top-up.
+   */
+  async topUpEmployees(values, e) {
+    const at = Object.fromEntries(EMPLOYEE_COLUMNS.map((c, i) => [c, i]));
+    const code = (v) => textKey(v).toUpperCase();
+    const current = await this.tgt(`SELECT ${EMPLOYEE_COLUMNS.join(',')} FROM employee`);
+    const byCode = new Map(current.map(r => [code(r.employee_id), r]));
+    const sourceCodes = new Set(values.map(v => v[at.employee_id]));
+
+    // email, work_email and personal_email are UNIQUE. An address held by someone outside the old
+    // system cannot be taken from them, so this row falls back exactly as a shared address does.
+    const holders = Object.fromEntries(EMPLOYEE_UNIQUE_COLUMNS.map(c => [c, new Map()]));
+    for (const r of current) {
+      for (const c of EMPLOYEE_UNIQUE_COLUMNS) if (r[c]) holders[c].set(String(r[c]).toLowerCase(), code(r.employee_id));
+    }
+    const holderOf = (row, c) => {
+      const value = row[at[c]];
+      const holder = value ? holders[c].get(String(value).toLowerCase()) : null;
+      return holder && holder !== row[at.employee_id] ? holder : null;
+    };
+    let keptByOthers = 0;
+    for (const row of values) {
+      for (const c of EMPLOYEE_UNIQUE_COLUMNS) {
+        const holder = holderOf(row, c);
+        if (!holder || sourceCodes.has(holder)) continue;
+        row[at[c]] = c === 'email' ? syntheticEmail(row[at.employee_id]) : null;
+        keptByOthers++;
+      }
+    }
+
+    const toWrite = [];
+    for (const row of values) {
+      const staffCode = row[at.employee_id];
+      const name = `${row[at.firstname]} ${row[at.lastname]}`.trim();
+      const was = byCode.get(staffCode);
+      if (!was) {
+        toWrite.push(row);
+        this.report.employees.new.push({ code: staffCode, name });
+        continue;
+      }
+      const differs = TOPUP_EMPLOYEE_COLUMNS.filter((c) => (EMPLOYEE_DATE_COLUMNS.has(c)
+        ? dayKey(was[c]) !== dayKey(row[at[c]])
+        : textKey(was[c]) !== textKey(row[at[c]])));
+      if (!differs.length) continue;
+
+      toWrite.push(row);
+      // Field names only: account numbers and the like should not be copied into a log.
+      this.report.employees.changed.push({ code: staffCode, name, fields: differs.map(c => EMPLOYEE_FIELD_LABELS[c] ?? c) });
+      if (differs.includes('bankaccount')) this.report.employees.bankAccountsChanged++;
+      if (differs.includes('lifecyclestatus')) {
+        this.report.employees.statusChanged.push({ code: staffCode, name, from: was.lifecyclestatus, to: row[at.lifecyclestatus] });
+      }
+    }
+
+    // Addresses moving between two employees: the unique indexes are checked row by row, so the
+    // current holder has to let go before the batch can give the address to someone else. Each one
+    // released is in `toWrite`, so it receives its real values in the upsert straight after.
+    const release = [...new Set(toWrite.flatMap(row =>
+      EMPLOYEE_UNIQUE_COLUMNS.map(c => holderOf(row, c)).filter(Boolean)))];
+    if (release.length) {
+      await this.tgt(
+        `UPDATE employee SET email = LOWER(employee_id) || '@imported.local', work_email = NULL, personal_email = NULL
+          WHERE employee_id = ANY($1::varchar[])`, [release]);
+    }
+
+    await this.insertMany('employee', EMPLOYEE_COLUMNS, toWrite,
+      `ON CONFLICT (employee_id) DO UPDATE SET
+         ${TOPUP_EMPLOYEE_COLUMNS.map(c => `${c} = EXCLUDED.${c}`).join(', ')}, updatedat = NOW()`, 'employees');
+
+    e.inserted += this.report.employees.new.length;
+    e.updated  += this.report.employees.changed.length;
+    this.report.employees.onlyInNewSystem = current
+      .filter(r => !sourceCodes.has(code(r.employee_id)))
+      .map(r => ({ code: textKey(r.employee_id), name: `${r.firstname ?? ''} ${r.lastname ?? ''}`.trim() }));
+    e.notes.push(`${this.report.employees.new.length} new, ${this.report.employees.changed.length} changed, ` +
+      `${values.length - toWrite.length} already up to date`);
+    if (keptByOthers) e.notes.push(`${keptByOthers} e-mail address(es) are held by someone not in the old system, so they were not taken`);
   }
 
   /* ── 4b. Salary components ────────────────────────────────────────────── */
@@ -1036,7 +1200,10 @@ class MigrationRun {
 
     // Runs have no natural unique key in the target, so they are matched on (name, date_start).
     // Batched like everything else — a per-row insert-then-select took ~1s per run.
-    const existing = await this.tgt(`SELECT id, name, date_start FROM payrollruns`);
+    const existing = await this.tgt(
+      `SELECT id, name, date_start, date_end, status::text AS status, document_ref, payment_log,
+              finalized_at, approved_by, approved_at, columns
+         FROM payrollruns`);
     const runKey = (name, start) =>
       `${String(name).trim().toLowerCase()}|${start ? new Date(start).toISOString().slice(0, 10) : ''}`;
     const byKey = new Map(existing.map(r => [runKey(r.name, r.date_start), r.id]));
@@ -1082,12 +1249,15 @@ class MigrationRun {
       byKey.set(runKey(row.name, row.date_start), row.id);
     }
     const backfill = [];
+    const columnsByLegacyId = new Map();
     for (const r of src) {
       const name = clean(r.name) ?? `Run ${r.id}`;
       const id = byKey.get(runKey(name, date(r.date_start)));
       if (id) {
         this.map.payrollRun.set(String(r.id), id);
+        this.runNames.set(String(id), name);
         const cols = runColumns(r.columns);
+        columnsByLegacyId.set(String(r.id), cols);
         if (cols) backfill.push([String(id), cols]);
       } else e.skipped++;
     }
@@ -1101,6 +1271,63 @@ class MigrationRun {
           WHERE pr.id = v.id AND pr.columns IS NULL`, chunk.flat());
     }
     if (untranslated) e.notes.push(`${untranslated} run column reference(s) did not match a migrated payroll column and were dropped`);
+
+    // A run loaded as Draft and finalised in the old system since then has to follow it.
+    if (this.topup) {
+      const was = new Map(existing.map(r => [runKey(r.name, r.date_start), r]));
+      const sourceKeys = new Set();
+      const updates = [];
+      for (const r of src) {
+        const name = clean(r.name) ?? `Run ${r.id}`;
+        const key = runKey(name, date(r.date_start));
+        if (sourceKeys.has(key)) continue;
+        sourceKeys.add(key);
+        const status = clean(r.status) ?? 'Draft';
+        const cur = was.get(key);
+        if (!cur) { this.report.payrollRuns.new.push({ name, status }); continue; }
+
+        const next = {
+          status, date_end: date(r.date_end), document_ref: clean(r.documentRef),
+          payment_log: clean(r.payment_log), finalized_at: date(r.finalized_date) ?? date(r.posting_date),
+          approved_by: int(r.approved_by), approved_at: date(r.approved_date),
+          columns: columnsByLegacyId.get(String(r.id)) ?? null,
+        };
+        const differs = cur.status !== next.status
+          || dayKey(cur.date_end) !== dayKey(next.date_end)
+          || textKey(cur.document_ref) !== textKey(next.document_ref)
+          || textKey(cur.payment_log) !== textKey(next.payment_log)
+          || secondsKey(cur.finalized_at) !== secondsKey(next.finalized_at)
+          || textKey(cur.approved_by) !== textKey(next.approved_by)
+          || secondsKey(cur.approved_at) !== secondsKey(next.approved_at)
+          || (next.columns != null && cur.columns !== next.columns);
+        if (!differs) continue;
+        updates.push([cur.id, next.status, next.date_end, next.document_ref, next.payment_log,
+          next.finalized_at, next.approved_by, next.approved_at, next.columns]);
+        if (cur.status !== next.status) this.report.payrollRuns.statusChanged.push({ name, from: cur.status, to: next.status });
+      }
+
+      for (let i = 0; i < updates.length; i += 200) {
+        const chunk = updates.slice(i, i + 200);
+        const vals = chunk.map((_, k) => {
+          const p = k * 9;
+          return `($${p + 1}::bigint,$${p + 2}::text,$${p + 3}::date,$${p + 4}::varchar,$${p + 5}::text,` +
+            `$${p + 6}::timestamp,$${p + 7}::bigint,$${p + 8}::timestamp,$${p + 9}::text)`;
+        }).join(',');
+        await this.tgt(
+          `UPDATE payrollruns pr
+              SET status = v.status::payrollruns_status, date_end = v.date_end, document_ref = v.document_ref,
+                  payment_log = v.payment_log, finalized_at = v.finalized_at, approved_by = v.approved_by,
+                  approved_at = v.approved_at, columns = COALESCE(v.cols, pr.columns), updated_at = NOW()
+             FROM (VALUES ${vals}) AS v(id, status, date_end, document_ref, payment_log, finalized_at, approved_by, approved_at, cols)
+            WHERE pr.id = v.id`, chunk.flat());
+      }
+      this.report.payrollRuns.updated = updates.length;
+      this.report.payrollRuns.onlyInNewSystem = existing
+        .filter(r => !sourceKeys.has(runKey(r.name, r.date_start)))
+        .map(r => ({ name: r.name, status: r.status }));
+      e.updated = updates.length;
+      e.notes.push(`${toInsert.length} new, ${updates.length} updated from the old system`);
+    }
 
     this.done(e);
   }
@@ -2155,8 +2382,89 @@ class MigrationRun {
   /* ── 8. Payroll data — the big one ────────────────────────────────────── */
   // 787k source rows, of which ~628k survive the exclusions. Streamed and inserted in batches so
   // memory stays flat; the three JOINs enforce the exclusions declared in the plan.
+  /**
+   * Compare payroll history between the two systems, per run and per employee, with the same
+   * exclusions the load applies. Returns the target run ids that differ and the grand totals.
+   * Sums are rounded per row the way MySQL's CAST does, so equal data compares equal to the cent.
+   */
+  async payrollFingerprints() {
+    const add = (runs, run, employee, count, total) => {
+      if (!runs.has(run)) runs.set(run, new Map());
+      const perEmployee = runs.get(run);
+      const entry = perEmployee.get(employee) ?? { n: 0, total: 0n };
+      entry.n += Number(count);
+      entry.total += micro(total);
+      perEmployee.set(employee, entry);
+    };
+
+    const source = new Map();
+    for (const r of await this.src(`
+      SELECT pd.payroll, pd.employee, COUNT(*) AS n, SUM(CAST(pd.amount AS DECIMAL(30,6))) AS total
+        FROM payrolldata pd
+        JOIN payroll        p  ON p.id  = pd.payroll
+        JOIN employees      em ON em.id = pd.employee
+        JOIN payrollcolumns pc ON pc.id = pd.payroll_item
+       GROUP BY pd.payroll, pd.employee`)) {
+      const run = this.map.payrollRun.get(String(r.payroll));
+      const employee = this.map.employee.get(String(r.employee));
+      if (run && employee) add(source, String(run), String(employee), r.n, r.total);
+    }
+
+    const runIds = [...new Set([...this.map.payrollRun.values()].map(String))];
+    const target = new Map();
+    for (const r of await this.tgt(`
+      SELECT payroll, employee, COUNT(*)::int AS n,
+             SUM(ROUND(CASE WHEN TRIM(amount) ~ '^-?([0-9]+([.][0-9]*)?|[.][0-9]+)$'
+                            THEN TRIM(amount)::numeric ELSE 0 END, 6)) AS total
+        FROM payrolldata WHERE payroll = ANY($1::bigint[])
+       GROUP BY payroll, employee`, [runIds])) {
+      add(target, String(r.payroll), String(r.employee), r.n, r.total);
+    }
+
+    const sameRun = (a = new Map(), b = new Map()) => a.size === b.size
+      && [...a].every(([employee, x]) => b.get(employee)?.n === x.n && b.get(employee)?.total === x.total);
+    const totals = (runs) => {
+      let rows = 0, amount = 0n;
+      for (const perEmployee of runs.values()) {
+        for (const x of perEmployee.values()) { rows += x.n; amount += x.total; }
+      }
+      return { rows, amount: fmtMicro(amount) };
+    };
+    return {
+      runIds,
+      changed: runIds.filter(run => !sameRun(source.get(run), target.get(run))),
+      source: totals(source),
+      target: totals(target),
+    };
+  }
+
   async loadPayrollData() {
     const e = this.step('payrolldata', 'Payroll history');
+
+    // A top-up reloads only the runs that differ. Reloading all 628k rows weekly would take ten
+    // minutes to change, typically, one run.
+    let scopeRunIds = [...new Set(this.map.payrollRun.values())];
+    let legacyRunIds = null;
+    if (this.topup) {
+      const before = await this.payrollFingerprints();
+      const changed = new Set(before.changed);
+      scopeRunIds = before.changed;
+      legacyRunIds = [...this.map.payrollRun].filter(([, run]) => changed.has(String(run))).map(([legacy]) => legacy);
+      this.report.payrollHistory = {
+        runsCompared: before.runIds.length,
+        runsReloaded: before.changed.map(run => this.runNames.get(run) ?? run),
+        rowsLoaded: 0,
+        source: before.source,
+        target: before.target,
+        matches: before.changed.length === 0,
+      };
+      if (!before.changed.length) {
+        e.notes.push(`All ${before.runIds.length} runs already match the old system — nothing reloaded`);
+        this.done(e, { expected: 0 });
+        return;
+      }
+      e.notes.push(`${before.changed.length} of ${before.runIds.length} runs differ and were reloaded`);
+    }
 
     // payrolldata has NO unique constraint beyond its primary key, so ON CONFLICT DO NOTHING
     // cannot dedupe and a re-run would append the whole table again — a rehearsal produced
@@ -2165,18 +2473,20 @@ class MigrationRun {
     // The correct model is one row per (run, employee, column) — the live database has zero
     // duplicate groups — so the rows this migration owns are cleared first. Only rows belonging
     // to migrated runs are removed: anything entered in the target by other means is left alone.
-    const runIds = [...new Set(this.map.payrollRun.values())];
-    if (runIds.length) {
+    if (scopeRunIds.length) {
       const del = await this.tgt(
-        `DELETE FROM payrolldata WHERE payroll = ANY($1::bigint[]) RETURNING 1`, [runIds]);
+        `DELETE FROM payrolldata WHERE payroll = ANY($1::bigint[]) RETURNING 1`, [scopeRunIds]);
       if (del.length) e.notes.push(`${del.length.toLocaleString()} existing rows for these runs cleared before reload`);
     }
+
+    const onlyTheseRuns = legacyRunIds ? ' WHERE pd.payroll IN (?)' : '';
+    const runArgs = legacyRunIds ? [legacyRunIds] : [];
 
     const total = await this.src(`
       SELECT COUNT(*) AS n FROM payrolldata pd
         JOIN payroll        p  ON p.id  = pd.payroll
         JOIN employees      em ON em.id = pd.employee
-        JOIN payrollcolumns pc ON pc.id = pd.payroll_item`);
+        JOIN payrollcolumns pc ON pc.id = pd.payroll_item${onlyTheseRuns}`, runArgs);
     const expected = Number(total[0].n);
 
     let batch = [];
@@ -2203,7 +2513,7 @@ class MigrationRun {
             FROM payrolldata pd
             JOIN payroll        p  ON p.id  = pd.payroll
             JOIN employees      em ON em.id = pd.employee
-            JOIN payrollcolumns pc ON pc.id = pd.payroll_item`)
+            JOIN payrollcolumns pc ON pc.id = pd.payroll_item${onlyTheseRuns}`, runArgs)
       : null;
 
     if (stream) {
@@ -2229,6 +2539,18 @@ class MigrationRun {
     }
 
     e.notes.push(`${expected.toLocaleString()} rows passed the exclusion filters in the source`);
+
+    // Reconcile after loading: the report's figures are what the two databases hold NOW.
+    if (this.topup) {
+      const after = await this.payrollFingerprints();
+      Object.assign(this.report.payrollHistory, {
+        rowsLoaded: e.inserted, source: after.source, target: after.target, matches: after.changed.length === 0,
+      });
+      if (after.changed.length) {
+        this.warnings.push(`${after.changed.length} payroll run(s) still differ from the old system after reloading`);
+        e.notes.push(`${after.changed.length} run(s) still differ from the old system after reloading`);
+      }
+    }
     this.done(e, { expected });
   }
 
@@ -2237,6 +2559,15 @@ class MigrationRun {
   // the remapped id is written as text.
   async loadMedical() {
     const e = this.step('medical', 'Medical records');
+
+    // These tables are cleared and reloaded and their ids change, so a top-up reports the difference
+    // in totals: individual rows cannot be matched across two loads.
+    const medicalCounts = async () => (await this.tgt(`
+      SELECT (SELECT COUNT(*) FROM staffmedical)::int        AS staffmedical,
+             (SELECT COUNT(*) FROM staffmedical_hist)::int   AS staffmedical_hist,
+             (SELECT COUNT(*) FROM hospitalclaims)::int      AS hospitalclaims,
+             (SELECT COUNT(*) FROM hospitalclaims_hist)::int AS hospitalclaims_hist`))[0];
+    const medicalBefore = this.topup ? await medicalCounts() : null;
 
     // ── Who posted and who approved ────────────────────────────────────────
     //
@@ -2490,6 +2821,17 @@ class MigrationRun {
       e.notes.push(`${table}: ${n} ${label} loaded${unresolvedItems ? `, ${unresolvedItems} line item(s) had an employee that did not migrate` : ''}`);
     }
 
+    if (this.topup) {
+      const medicalAfter = await medicalCounts();
+      const labels = {
+        staffmedical: 'Staff medical claims', staffmedical_hist: 'Staff medical history',
+        hospitalclaims: 'Hospital claims', hospitalclaims_hist: 'Hospital claim history',
+      };
+      this.report.medical = Object.keys(labels).map(table => ({
+        label: labels[table], before: medicalBefore[table], after: medicalAfter[table],
+      }));
+    }
+
     this.done(e);
   }
 
@@ -2529,9 +2871,22 @@ class MigrationRun {
     // Dates are compared as calendar days: both drivers return a DATE as local midnight, so the
     // y-m-d parts agree even though the Date objects' text forms might not.
     const day = (v) => { const d = date(v); return d ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` : ''; };
-    const existing = await this.tgt(`SELECT employee, LOWER(TRIM(name)) AS name, dob FROM employeedependents`);
+    const existing = await this.tgt(
+      `SELECT id, employee, LOWER(TRIM(name)) AS name, dob, gender, place_of_birth, relationship, id_number
+         FROM employeedependents`);
     const key = (emp, name, dob) => `${emp}|${String(name ?? '').trim().toLowerCase()}|${day(dob)}`;
     const seen = new Set(existing.map(r => key(r.employee, r.name, r.dob)));
+    const existingByKey = new Map(existing.map(r => [key(r.employee, r.name, r.dob), r]));
+    const sourceKeys = new Set();
+    const updates = [];
+
+    const lookup = (r) => {
+      const relLabel = clean(r.relationship);
+      const rel = relLabel ? this.map.codelist.get(`Relationship Types#${relLabel.toLowerCase()}`) ?? null : null;
+      const genLabel = plan.normaliseGender(r.gender);
+      const gen = genLabel ? this.map.codelist.get(`Gender#${genLabel.toLowerCase()}`) ?? null : null;
+      return { relLabel, rel, gen };
+    };
 
     const values = [];
     let noEmployee = 0, unmappedRel = 0, unmappedGender = 0, duplicates = 0;
@@ -2541,14 +2896,29 @@ class MigrationRun {
       const name = clean(r.name);
       if (!name) { e.skipped++; continue; }
       const k = key(empId, name, r.dob);
-      if (seen.has(k)) { duplicates++; continue; }
+      const firstSighting = !sourceKeys.has(k);
+      sourceKeys.add(k);
+      if (seen.has(k)) {
+        duplicates++;
+        // A dependent is matched on employee, name and birth date, so those three cannot "change":
+        // an edit to one of them reads as a new dependent, and the old row is counted below.
+        const cur = existingByKey.get(k);
+        if (this.topup && firstSighting && cur) {
+          const { rel, gen } = lookup(r);
+          const next = {
+            gender: gen != null ? String(gen) : null, place_of_birth: clean(r.place_of_birth),
+            relationship: rel != null ? String(rel) : null, id_number: clean(r.id_number),
+          };
+          if (Object.keys(next).some(c => textKey(cur[c]) !== textKey(next[c]))) {
+            updates.push([cur.id, next.gender, next.place_of_birth, next.relationship, next.id_number]);
+          }
+        }
+        continue;
+      }
       seen.add(k);
 
-      const relLabel = clean(r.relationship);
-      const rel = relLabel ? this.map.codelist.get(`Relationship Types#${relLabel.toLowerCase()}`) ?? null : null;
+      const { relLabel, rel, gen } = lookup(r);
       if (relLabel && !rel) unmappedRel++;
-      const genLabel = plan.normaliseGender(r.gender);
-      const gen = genLabel ? this.map.codelist.get(`Gender#${genLabel.toLowerCase()}`) ?? null : null;
       if (clean(r.gender) && !gen) unmappedGender++;
 
       values.push([
@@ -2559,6 +2929,29 @@ class MigrationRun {
 
     e.inserted += await this.insertMany('employeedependents',
       ['employee', 'name', 'gender', 'place_of_birth', 'relationship', 'dob', 'id_number'], values, '');
+
+    if (this.topup) {
+      for (let i = 0; i < updates.length; i += 200) {
+        const chunk = updates.slice(i, i + 200);
+        const vals = chunk.map((_, k) => {
+          const p = k * 5;
+          return `($${p + 1}::bigint,$${p + 2}::text,$${p + 3}::varchar,$${p + 4}::varchar,$${p + 5}::varchar)`;
+        }).join(',');
+        await this.tgt(
+          `UPDATE employeedependents d
+              SET gender = v.gender, place_of_birth = v.place_of_birth, relationship = v.relationship, id_number = v.id_number
+             FROM (VALUES ${vals}) AS v(id, gender, place_of_birth, relationship, id_number)
+            WHERE d.id = v.id`, chunk.flat());
+      }
+      e.updated += updates.length;
+      const migrated = new Set([...this.map.employee.values()].map(String));
+      this.report.dependents = {
+        new: values.length,
+        updated: updates.length,
+        onlyInNewSystem: existing.filter(r =>
+          migrated.has(String(r.employee)) && !sourceKeys.has(key(r.employee, r.name, r.dob))).length,
+      };
+    }
 
     e.notes.push(`${e.inserted} dependent(s) loaded for ${new Set(values.map(v => String(v[0]))).size} employee(s)`);
     if (duplicates)     e.notes.push(`${duplicates} already present from an earlier run — left as they are`);
@@ -2595,6 +2988,30 @@ class MigrationRun {
       e.notes.push(`Not assigned: ${err.message || err.code} — run node src/scripts/backfillPcCodes.js after fixing`);
     }
     this.done(e);
+  }
+
+  /**
+   * Keep this top-up's report on the target, so past weeks can be read back. The table is created
+   * here because the target is chosen at run time and may never have been through a manual migration.
+   */
+  async saveTopup(status, started, error = null) {
+    await this.tgt(`
+      CREATE TABLE IF NOT EXISTS migration_topups (
+        id          BIGSERIAL PRIMARY KEY,
+        started_at  TIMESTAMP(3) NOT NULL,
+        finished_at TIMESTAMP(3),
+        status      VARCHAR(20) NOT NULL,
+        started_by  VARCHAR(100),
+        elapsed_ms  INTEGER,
+        error       TEXT,
+        report      JSONB
+      )`);
+    const steps = this.stats.map(({ key, label, inserted, updated, skipped }) => ({ key, label, inserted, updated, skipped }));
+    await this.tgt(
+      `INSERT INTO migration_topups (started_at, finished_at, status, started_by, elapsed_ms, error, report)
+       VALUES ($1, NOW(), $2, $3, $4, $5, $6::jsonb)`,
+      [new Date(started), status, this.startedBy, Date.now() - started, error,
+       JSON.stringify({ ...this.report, steps, warnings: this.warnings })]);
   }
 
   /* ── orchestration ────────────────────────────────────────────────────── */
@@ -2639,13 +3056,19 @@ class MigrationRun {
       }
       if (this.scopes.medical?.enabled) await this.loadMedical();
 
+      if (this.topup) await this.saveTopup('completed', started);
       return {
         ok: true,
         target: (this.targetUrl.split('/').pop() || '').split('?')[0],
         steps: this.stats,
         warnings: this.warnings,
+        report: this.topup ? this.report : undefined,
         elapsedMs: Date.now() - started,
       };
+    } catch (err) {
+      // The original error is what the operator needs; a failure to record it must not replace it.
+      if (this.topup) await this.saveTopup('failed', started, err.message || String(err)).catch(() => {});
+      throw err;
     } finally {
       await this.close();
     }

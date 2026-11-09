@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
 import { inputClass } from '../ui/FormField';
-import { fmtDate as formatDmy } from '@/lib/dateFormat';
+import { fmtDate as formatDmy, fmtDateTime } from '@/lib/dateFormat';
 
 /* ── Types mirroring the analyzer's report ──────────────────────────────── */
 type Preflight = {
@@ -45,6 +45,7 @@ type JobStep = {
 type Job = {
   running: boolean;
   target?: string;
+  mode?: 'full' | 'topup';
   startedAt?: string;
   finishedAt?: string;
   currentStep?: string | null;
@@ -197,6 +198,175 @@ function StepRow({ step, active }: { step: JobStep; active: boolean }) {
   );
 }
 
+/* ── Weekly top-up ──────────────────────────────────────────────────────── */
+
+type TopupPerson = { code: string; name: string };
+type TopupReport = {
+  employees: {
+    new: TopupPerson[];
+    changed: (TopupPerson & { fields: string[] })[];
+    statusChanged: (TopupPerson & { from: string; to: string })[];
+    bankAccountsChanged: number;
+    onlyInNewSystem: TopupPerson[];
+  };
+  payrollRuns: {
+    new: { name: string; status: string }[];
+    updated: number;
+    statusChanged: { name: string; from: string; to: string }[];
+    onlyInNewSystem: { name: string; status: string }[];
+  };
+  payrollHistory: {
+    runsCompared: number; runsReloaded: string[]; rowsLoaded: number; matches: boolean;
+    source: { rows: number; amount: string }; target: { rows: number; amount: string };
+  } | null;
+  dependents: { new: number; updated: number; onlyInNewSystem: number };
+  medical: { label: string; before: number; after: number }[];
+  warnings?: string[];
+};
+type Topup = {
+  id: string; started_at: string; finished_at: string | null; status: 'completed' | 'failed';
+  started_by: string | null; elapsed_ms: number | null; error: string | null; report: TopupReport | null;
+};
+
+function NameList({ title, rows }: { title: string; rows: string[] }) {
+  if (!rows.length) return null;
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-[var(--text-primary)] mb-1">{title} ({n(rows.length)})</p>
+      <ul className="max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] divide-y divide-[var(--border)]">
+        {rows.map((row, i) => <li key={i} className="px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)]">{row}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function TopupReportView({ report }: { report: TopupReport }) {
+  const { employees: emp, payrollRuns: runs, payrollHistory: hist, dependents: dep, medical } = report;
+  const who = (p: TopupPerson) => `${p.code} — ${p.name}`;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <Stat label="New employees" value={n(emp.new.length)} />
+        <Stat label="Employees changed" value={n(emp.changed.length)} />
+        <Stat label="Bank accounts changed" value={n(emp.bankAccountsChanged)} tone={emp.bankAccountsChanged ? 'warn' : 'default'} />
+        <Stat label="New payroll runs" value={n(runs.new.length)} />
+      </div>
+
+      {hist && (
+        <div className="rounded-lg border border-[var(--border)] px-3 py-2.5 text-[12px]">
+          <p className="font-semibold" style={{ color: hist.matches ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>
+            {hist.matches ? 'Payroll history matches the old system' : 'Payroll history does NOT match the old system'}
+          </p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            Old system {n(hist.source.rows)} rows, {hist.source.amount} · New system {n(hist.target.rows)} rows, {hist.target.amount}
+            {' '}· {n(hist.runsReloaded.length)} of {n(hist.runsCompared)} runs reloaded
+          </p>
+        </div>
+      )}
+
+      <p className="text-[11px] text-[var(--text-muted)]">
+        Dependents: {n(dep.new)} new, {n(dep.updated)} updated
+        {medical.map(m => ` · ${m.label}: ${n(m.before)} → ${n(m.after)}`).join('')}
+      </p>
+
+      <NameList title="Reasons to check — status changes" rows={emp.statusChanged.map(p => `${who(p)}: ${p.from} → ${p.to}`)} />
+      <NameList title="Payroll runs that changed status" rows={runs.statusChanged.map(r => `${r.name}: ${r.from} → ${r.to}`)} />
+      <NameList title="New employees" rows={emp.new.map(who)} />
+      <NameList title="Employees changed" rows={emp.changed.map(p => `${who(p)}: ${p.fields.join(', ')}`)} />
+      <NameList title="New payroll runs" rows={runs.new.map(r => `${r.name} (${r.status})`)} />
+      <NameList title="Payroll runs reloaded" rows={hist?.runsReloaded ?? []} />
+      <NameList title="Employees only in the new system (left as they are)" rows={emp.onlyInNewSystem.map(who)} />
+      <NameList title="Payroll runs only in the new system (left as they are)" rows={runs.onlyInNewSystem.map(r => `${r.name} (${r.status})`)} />
+      {dep.onlyInNewSystem > 0 && (
+        <p className="text-[11px]" style={{ color: '#b45309' }}>
+          {n(dep.onlyInNewSystem)} dependent(s) exist only in the new system and were left as they are.
+        </p>
+      )}
+      {!!report.warnings?.length && <NameList title="Warnings" rows={report.warnings} />}
+    </div>
+  );
+}
+
+function TopupCard({ target, canRun, busy, refreshKey, onRun }: {
+  target: 'rehearsal' | 'live'; canRun: boolean; busy: boolean; refreshKey: number;
+  onRun: (which: 'rehearsal' | 'live') => void;
+}) {
+  const [history, setHistory] = useState<Topup[] | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    setHistory(null);
+    api.get('/migration/topups', { params: { target } })
+      .then(r => { if (alive) setHistory(r.data?.data ?? []); })
+      .catch(() => { if (alive) setHistory([]); });
+    return () => { alive = false; };
+  }, [target, refreshKey]);
+
+  const start = () => { setConfirming(false); setTyped(''); onRun(target); };
+
+  return (
+    <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-[var(--text-primary)]">
+            Weekly top-up — {target === 'live' ? 'LIVE database' : 'rehearsal database'}
+          </p>
+          <p className="text-[12px] text-[var(--text-muted)] mt-0.5 leading-relaxed">
+            Brings this database in line with the old system and reports what changed. The old system wins:
+            edits made here to migrated records are overwritten. Nothing is deleted.
+          </p>
+        </div>
+        <button
+          onClick={() => (target === 'live' ? setConfirming(true) : start())}
+          disabled={busy || !canRun}
+          className="primary-btn shrink-0 disabled:opacity-50"
+          style={target === 'live' ? { background: '#dc2626' } : undefined}
+        >
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+          {busy ? 'Running…' : 'Top up now'}
+        </button>
+      </div>
+
+      {confirming && (
+        <div className="pt-3 border-t border-[var(--border)]">
+          <p className="text-[12px] text-[var(--text-primary)] mb-2">
+            Type <code className="px-1 py-0.5 rounded bg-[var(--bg)] font-mono text-[11px]">MIGRATE LIVE</code> to confirm.
+          </p>
+          <div className="flex items-center gap-2">
+            <input value={typed} onChange={e => setTyped(e.target.value)} placeholder="MIGRATE LIVE" className={`${inputClass} flex-1 font-mono`} />
+            <button onClick={start} disabled={typed !== 'MIGRATE LIVE' || busy} className="primary-btn shrink-0 disabled:opacity-50" style={{ background: '#dc2626' }}>
+              Confirm
+            </button>
+            <button onClick={() => { setConfirming(false); setTyped(''); }} className="ghost-btn shrink-0">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {history === null && <p className="text-[11px] text-[var(--text-muted)]">Loading past top-ups…</p>}
+      {history?.length === 0 && <p className="text-[11px] text-[var(--text-muted)]">No top-ups have been run into this database yet.</p>}
+      {!!history?.length && (
+        <div className="space-y-2">
+          {history.map((t, i) => (
+            <Section
+              key={t.id}
+              defaultOpen={i === 0}
+              title={fmtDateTime(t.started_at)}
+              badge={t.status === 'failed' ? 'Failed'
+                : `${n(t.report?.employees.new.length)} new · ${n(t.report?.employees.changed.length)} changed`}
+              subtitle={`${t.started_by ?? 'Unknown'}${t.elapsed_ms != null ? ` · ${ms(t.elapsed_ms)}` : ''}`}
+            >
+              {t.error && <p className="text-[12px] text-red-700 mb-3">{t.error}</p>}
+              {t.report && <TopupReportView report={t.report} />}
+            </Section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Section({ title, subtitle, children, defaultOpen = false, badge }: {
   title: string; subtitle?: string; children: React.ReactNode; defaultOpen?: boolean; badge?: string;
 }) {
@@ -246,6 +416,7 @@ export function MigrationPanel() {
   const [confirmLive, setConfirmLive] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [job, setJob]           = useState<Job | null>(null);
+  const [topupsVersion, setTopupsVersion] = useState(0);   // bumped to re-read the saved reports
 
   // Preflight is cheap (~300ms), so check the connection as soon as the tab opens.
   useEffect(() => { void runPreflight(true); }, []);
@@ -302,6 +473,7 @@ export function MigrationPanel() {
       const data = await pollJob();
       if (data && !data.running) {
         setLoading(false);
+        setTopupsVersion(v => v + 1);
         const failedStep = data.steps.find(x => x.state === 'failed');
         const anyDone    = data.steps.some(x => x.state === 'done');
         if (data.error || failedStep) toast.error(`Migration failed${failedStep ? ` at "${failedStep.label}"` : ''}: ${data.error || 'no error message — check the server log'}`);
@@ -310,7 +482,9 @@ export function MigrationPanel() {
         else if (!anyDone) toast.error('Migration did not run any steps — check the server log. If the backend runs as several processes (PM2 cluster), run it as a single instance.');
         else {
           const rows = data.steps.reduce((s, x) => s + x.inserted, 0);
-          toast.success(`Migration complete — ${rows.toLocaleString()} rows into ${data.target}`);
+          toast.success(data.mode === 'topup'
+            ? `Top-up of ${data.target} complete — see the report below`
+            : `Migration complete — ${rows.toLocaleString()} rows into ${data.target}`);
           void runPreflight(true);
         }
       }
@@ -318,12 +492,12 @@ export function MigrationPanel() {
     return () => clearInterval(t);
   }, [loading]);
 
-  async function runMigration(which: 'rehearsal' | 'live') {
+  async function runMigration(which: 'rehearsal' | 'live', mode: 'full' | 'topup' = 'full') {
     setConfirmLive(false);
     setConfirmText('');
     try {
       await api.post('/migration/execute',
-        which === 'live' ? { target: 'live', confirm: 'MIGRATE LIVE' } : { target: 'rehearsal' });
+        { ...(which === 'live' ? { target: 'live', confirm: 'MIGRATE LIVE' } : { target: 'rehearsal' }), mode });
       setLoading(true);           // starts the poll loop above
       void pollJob();
     } catch (e: any) {
@@ -402,6 +576,15 @@ export function MigrationPanel() {
           as you like. Review the exceptions below before any load is attempted.
         </p>
       </div>
+
+      {/* Outside the dry-run block: a weekly top-up should not need a dry run first. */}
+      <TopupCard
+        target={target}
+        canRun={!!pre?.ok}
+        busy={loading}
+        refreshKey={topupsVersion}
+        onRun={(which) => runMigration(which, 'topup')}
+      />
 
       {!report && !running && (
         <p className="text-[12px] text-[var(--text-muted)] px-1">
@@ -725,7 +908,9 @@ export function MigrationPanel() {
           <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-[var(--text-primary)]">
-                {job.running ? 'Migration in progress' : job.error ? 'Migration failed' : 'Last migration'}
+                {job.mode === 'topup'
+                  ? (job.running ? 'Top-up in progress' : job.error ? 'Top-up failed' : 'Last top-up')
+                  : (job.running ? 'Migration in progress' : job.error ? 'Migration failed' : 'Last migration')}
               </p>
               <p className="text-[11px] text-[var(--text-muted)]">
                 {job.target}

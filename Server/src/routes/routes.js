@@ -828,6 +828,8 @@ router.post('/migration/dry-run',   permissionGuard('manage_settings'), migratio
 router.get ('/migration/status',    permissionGuard('manage_settings'), migration.getStatus);
 // Live progress of the running (or last) migration — polled by the UI while a load is in flight.
 router.get ('/migration/job',       permissionGuard('manage_settings'), migration.getJob);
+// Saved report of each weekly top-up.
+router.get ('/migration/topups',    permissionGuard('manage_settings'), migration.getTopups);
 // Writes. Requires an explicit target, and confirm:"MIGRATE LIVE" for the production database.
 router.post('/migration/execute',   permissionGuard('manage_settings'), migration.postExecute);
 
