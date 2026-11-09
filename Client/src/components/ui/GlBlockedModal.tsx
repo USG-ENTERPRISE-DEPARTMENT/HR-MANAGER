@@ -11,6 +11,10 @@ export interface InvalidAccount {
    * 'branch' → a branch code on the journal lines (`account` then holds the code).
    */
   kind?: 'employee' | 'component' | 'branch';
+  /** Why it was refused: the core system's account status (e.g. DO, CLOS), INVALID or NO_RESPONSE. */
+  status?: string | null;
+  /** The validator's wording for that status, when it gave any. */
+  description?: string | null;
   /** GL component names the account was used for, e.g. ["Salary Basic", "Lunch"]. */
   sourceNames?: string[];
   /** Employee names taken from the journal narration. */
@@ -46,6 +50,34 @@ const money = (n: number) =>
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+/** The core banking system's account statuses, in the bank's own wording. */
+const ACCOUNT_STATUS_TEXT: Record<string, string> = {
+  N: 'NORMAL',
+  CR: 'CREDIT BLOCK',
+  DR: 'DEBIT BLOCK',
+  BO: 'TOTAL BLOCKAGE',
+  DO: 'DORMANT',
+  CLOS: 'ACCOUNT CLOSED',
+  DA: 'NO DEBITS ALLOWED APPROVAL NEEDED',
+  AP: 'APPROVAL REQUIRED FOR POSTING',
+  NF: 'ACCOUNT NOT FOUND',
+};
+
+/** Outcomes this app reports itself; they are not bank codes, so no code is shown beside them. */
+const VALIDATION_OUTCOME_TEXT: Record<string, string> = {
+  INVALID: 'Invalid',
+  NO_RESPONSE: 'No response',
+};
+
+/** "DO · DORMANT" for a known bank code; any other code the core system sends is shown as it came. */
+function statusText(status?: string | null): string {
+  const code = String(status ?? '').trim();
+  if (!code) return '—';
+  const upper = code.toUpperCase();
+  if (VALIDATION_OUTCOME_TEXT[upper]) return VALIDATION_OUTCOME_TEXT[upper];
+  return ACCOUNT_STATUS_TEXT[upper] ? `${code} · ${ACCOUNT_STATUS_TEXT[upper]}` : code;
+}
+
 /** "2 branch codes and 3 accounts" — what the core system refused, counted by kind. */
 export function blockedSummary(list: InvalidAccount[]): string {
   const branches = list.filter(a => a.kind === 'branch').length;
@@ -76,7 +108,7 @@ export function GlBlockedModal({ isOpen, accounts, imbalance, context, onClose }
 
   const subtitle = [
     hasImbalance ? 'Journal does not balance' : null,
-    hasAccounts ? `${blockedSummary(accountList)} not recognised` : null,
+    hasAccounts ? `${blockedSummary(accountList)} did not clear validation` : null,
   ].filter(Boolean).join(' · ');
 
   const copyAll = () => {
@@ -87,8 +119,8 @@ export function GlBlockedModal({ isOpen, accounts, imbalance, context, onClose }
       lines.push('');
     }
     if (hasAccounts) {
-      lines.push('Account / branch\tUsed for');
-      for (const a of accountList) lines.push(`${a.kind === 'branch' ? `Branch ${a.account}` : a.account}\t${describe(a)}`);
+      lines.push('Account / branch\tStatus\tUsed for');
+      for (const a of accountList) lines.push(`${a.kind === 'branch' ? `Branch ${a.account}` : a.account}\t${statusText(a.status)}\t${describe(a)}`);
     }
     navigator.clipboard?.writeText(lines.join('\n'))
       .then(() => toast.success('Copied to clipboard'))
@@ -295,6 +327,7 @@ function Section({ icon, title, hint, rows, showStaffId = false, keyLabel = 'Acc
             <thead>
               <tr className="bg-[var(--bg)]">
                 <th className="th text-left whitespace-nowrap">{keyLabel}</th>
+                <th className="th text-left whitespace-nowrap">Status</th>
                 <th className="th text-left">Used for</th>
                 {showStaffId && <th className="th text-left whitespace-nowrap">Staff ID</th>}
               </tr>
@@ -303,6 +336,11 @@ function Section({ icon, title, hint, rows, showStaffId = false, keyLabel = 'Acc
               {rows.map(a => (
                 <tr key={a.account} className="tr border-t border-[var(--border)]">
                   <td className="td font-mono font-semibold text-[var(--danger)] whitespace-nowrap">{a.account}</td>
+                  <td className="td whitespace-nowrap" title={a.description ?? undefined}>
+                    {a.status ? (
+                      <span className="pill pill-danger">{statusText(a.status)}</span>
+                    ) : <span className="text-[var(--text-muted)]">—</span>}
+                  </td>
                   <td className="td text-[var(--text-secondary)]">{describe(a)}</td>
                   {showStaffId && (
                     <td className="td text-[var(--text-muted)] whitespace-nowrap">

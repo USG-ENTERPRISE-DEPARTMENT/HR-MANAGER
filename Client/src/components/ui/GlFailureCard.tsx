@@ -119,7 +119,7 @@ export function GlFailureCard({ paymentLog, failedAt, runName, canRetry, retryin
   const summary = imbalance
     ? 'The journal\'s debits and credits do not agree, so it was not posted.'
     : invalidAccounts?.length
-      ? `${blockedSummary(invalidAccounts)} ${invalidAccounts.length !== 1 ? 'are' : 'is'} not recognised by the core banking system.`
+      ? `${blockedSummary(invalidAccounts)} did not clear validation by the core banking system.`
       : info.message || 'The general ledger rejected the posting.';
 
   return (
@@ -165,8 +165,8 @@ export function GlFailureCard({ paymentLog, failedAt, runName, canRetry, retryin
           <div className="flex items-start gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3">
             <FileWarning size={15} className="text-[var(--danger)] mt-0.5 shrink-0" />
             <p className="text-[12px] text-[var(--text-secondary)]">
-              The core banking system did not recognise {blockedSummary(invalidAccounts)} in this journal.
-              Open the full report to see which ones and where each was used.
+              {blockedSummary(invalidAccounts)} in this journal did not clear validation by the core banking system.
+              Open the full report to see which ones, their status and where each was used.
             </p>
           </div>
         )}

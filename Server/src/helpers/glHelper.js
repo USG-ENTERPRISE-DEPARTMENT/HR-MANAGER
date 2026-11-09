@@ -69,7 +69,9 @@ function glLog(section, body) {
 // screened through the core system's bulk-account-status-validator first.
 //
 // That service returns a STATUS per account rather than a simple valid/invalid list:
-//   N  NORMAL             — the only status a payroll credit may be posted to
+//   N  NORMAL             — may be posted to
+//   DR DEBIT BLOCK        — may only be credited (so it does not hold up a salary)
+//   CR CREDIT BLOCK       — may only be debited
 //   DO DORMANT            — the account exists but cannot receive a credit
 //   NF ACCOUNT NOT FOUND  — no such account
 // Anything else is treated as blocking too: an unrecognised status must never be assumed postable.
@@ -77,9 +79,46 @@ function glLog(section, body) {
 // It is a SEPARATE service from the GL posting API — different host, port and credentials — so it is
 // configured independently (Settings → API, or GL_VALIDATE_URL / _KEY / _SECRET).
 
-// Statuses that may be posted to. Deliberately an allowlist: a status the bank adds later blocks
-// until someone decides it is safe, rather than silently passing.
-const POSTABLE_STATUSES = new Set(['N']);
+// Which journal sides each status may be posted on. Deliberately an allowlist: a status the bank adds
+// later blocks until someone decides it is safe, rather than silently passing.
+const POSTABLE_SIDES = {
+  N:  ['debit', 'credit'],
+  DR: ['credit'],
+  CR: ['debit'],
+};
+
+/** Can every side this account is used on take a posting at this status? No known side means no. */
+function statusAllows(status, sides) {
+  const allowed = POSTABLE_SIDES[String(status).trim().toUpperCase()];
+  return !!allowed && !!sides?.size && [...sides].every(side => allowed.includes(side));
+}
+
+/** Map of account → Set of the journal sides ('debit' / 'credit') it appears on. */
+function accountSides(debitAccounts, creditAccounts) {
+  const out = new Map();
+  const add = (acct, side) => {
+    const key = String(acct ?? '').trim();
+    if (!key) return;
+    if (!out.has(key)) out.set(key, new Set());
+    out.get(key).add(side);
+  };
+  for (const d of debitAccounts  || []) add(d.debitAccount,  'debit');
+  for (const c of creditAccounts || []) add(c.creditAccount, 'credit');
+  return out;
+}
+
+// The bank's own wording for each status; it heads the "GL posting blocked" message.
+const ACCOUNT_STATUS_TEXT = {
+  N: 'NORMAL',
+  CR: 'CREDIT BLOCK',
+  DR: 'DEBIT BLOCK',
+  BO: 'TOTAL BLOCKAGE',
+  DO: 'DORMANT',
+  CLOS: 'ACCOUNT CLOSED',
+  DA: 'NO DEBITS ALLOWED APPROVAL NEEDED',
+  AP: 'APPROVAL REQUIRED FOR POSTING',
+  NF: 'ACCOUNT NOT FOUND',
+};
 
 function validateUrlFrom(cfg, extra) {
   return cfg.gl_validate_url || process.env.GL_VALIDATE_URL || extra.validate_url || null;
@@ -114,19 +153,51 @@ function parseStatuses(data, list) {
   return out;
 }
 
+/** One entry of the core API's account lists — a bare number, or an object with the account and its status. */
+function verdictEntry(entry) {
+  if (!entry || typeof entry !== 'object') return { account: String(entry ?? '').trim(), status: null, description: null };
+  const keys = Object.keys(entry);
+  const accountKey = keys.find(k => /^(account|acct)[_-]?(no|num|number|nbr)?$/i.test(k));
+  const statusKey  = keys.find(k => /^(account|acct)[_-]?status$/i.test(k)) ?? keys.find(k => /^status$/i.test(k));
+  const status = String(entry[statusKey] ?? '').trim();
+  return {
+    account:     String(entry[accountKey] ?? '').trim(),
+    status:      status || null,
+    description: entry.description ?? null,
+  };
+}
+
 /**
  * Turn the core API's `{ validAccounts, invalidAccounts }` into the same Map invalidAccounts returns.
  * Only an account named in validAccounts passes; one in neither list is blocked as NO_RESPONSE, for the
  * same reason as below — silence is not evidence that an account is good.
+ *
+ * Entries may be plain account numbers or objects that also carry the account status. A status, when
+ * present, decides the outcome whichever list the account is in: a DR account being credited must not
+ * stop a salary even if core lists it as invalid, and a status statusAllows refuses blocks even from
+ * the valid list.
  */
-function listVerdicts({ validAccounts, invalidAccounts: invalid }, list, tag) {
-  const valid = new Set(validAccounts.map(a => String(a).trim()));
-  const bad   = new Set(invalid.map(a => String(a).trim()));
+function listVerdicts({ validAccounts, invalidAccounts: invalid }, list, tag, sides) {
+  const index = entries => new Map(entries.map(verdictEntry).map(e => [e.account, e]));
+  const valid = index(validAccounts);
+  const bad   = index(invalid);
   const out = new Map();
   const unanswered = [];
   for (const acct of list) {
-    if (bad.has(acct))        out.set(acct, { status: 'INVALID', description: 'The core banking system reports this account as invalid' });
-    else if (!valid.has(acct)) { unanswered.push(acct); out.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' }); }
+    const entry = bad.get(acct) ?? valid.get(acct);
+    if (!entry) {
+      unanswered.push(acct);
+      out.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' });
+    } else if (entry.status) {
+      if (!statusAllows(entry.status, sides.get(acct))) {
+        out.set(acct, {
+          status:      entry.status,
+          description: ACCOUNT_STATUS_TEXT[entry.status.toUpperCase()] ?? entry.description ?? `Account status ${entry.status}`,
+        });
+      }
+    } else if (bad.has(acct)) {
+      out.set(acct, { status: 'INVALID', description: 'The core banking system reports this account as invalid' });
+    }
   }
   glLog(`VALIDATE RESULT${tag}`, {
     submitted:    list.length,
@@ -282,7 +353,7 @@ function describeBranches(blocked, debitAccounts, creditAccounts, empBranches = 
  * Null means "unknown", NOT "all valid" — the caller decides what to do with that, and must never
  * treat it as a pass.
  */
-async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '') {
+async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '', sides = new Map()) {
   const tag = referenceNo ? ` ${referenceNo}` : '';
   // Blank entries are dropped before sending: an empty string makes the validator answer HTTP 500
   // for the whole batch, which would block a posting over a field that was simply not filled in.
@@ -322,7 +393,7 @@ async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '')
       const lists = r.decrypted.ok ? r.decrypted.data?.data : null;
       if (lists && Array.isArray(lists.validAccounts) && Array.isArray(lists.invalidAccounts)) {
         glLog(`VALIDATE RESPONSE${tag} (HTTP ${r.status})`, r.decrypted.data);
-        return listVerdicts(lists, list, tag);
+        return listVerdicts(lists, list, tag, sides);
       }
       if (!r.decrypted.ok || r.status >= 400) {
         glLog(`VALIDATE TRANSPORT FAILURE${tag}`, {
@@ -378,7 +449,7 @@ async function invalidAccounts(accounts, cfg, extra, _headers, referenceNo = '')
     const s = statuses.get(acct);
     // An account the validator did not answer for is not evidence that it is good.
     if (!s) { unanswered.push(acct); bad.set(acct, { status: 'NO_RESPONSE', description: 'The validator returned no status for this account' }); continue; }
-    if (!POSTABLE_STATUSES.has(String(s.status).toUpperCase())) bad.set(acct, s);
+    if (!statusAllows(s.status, sides.get(acct))) bad.set(acct, s);
   }
 
   glLog(`VALIDATE RESULT${tag}`, {
@@ -566,7 +637,8 @@ async function postToGL({
 
   // ── Account validation gate ─────────────────────────────────────────────────
   // Screen every account in the journal against the core system's account-status validator before
-  // sending. Only accounts reported NORMAL may be posted to: a DORMANT or missing account produces
+  // sending. Only N accounts, DR accounts being credited and CR accounts being debited may be posted
+  // to: a DORMANT or missing account produces
   // entries that have to be traced and unwound by hand at the bank, so a refusal the user can act on
   // is always the better outcome.
   //
@@ -614,7 +686,7 @@ async function postToGL({
       ...(debitAccounts  || []).map(d => d.debitAccount),
       ...(creditAccounts || []).map(c => c.creditAccount),
     ];
-    const blocked = await invalidAccounts(accounts, cfg, extra, headers, referenceNo);
+    const blocked = await invalidAccounts(accounts, cfg, extra, headers, referenceNo, accountSides(debitAccounts, creditAccounts));
 
     if (blocked === null) {
       glLog(`VALIDATE SKIPPED ${referenceNo}`, 'Account validation unavailable — posting proceeded unchecked.');
