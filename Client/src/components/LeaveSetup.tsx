@@ -436,6 +436,16 @@ export function LeaveSetup() {
     }, { label: 'Cancel Leave', variant: 'warning' });
   };
 
+  const ellMarkReturned = (id: string) => {
+    askConfirm('Mark as Returned', 'Records that the employee is back at work today. Today and the remaining leave days go back to their balance, and core banking is updated to ACTIVE. This cannot be undone.', async () => {
+      try {
+        const res = await api.post(`/leave/leaves/${id}/return`);
+        toast.success(res.data?.message ?? 'Return recorded');
+        fetchEllLeaves(ellStatus);
+      } catch (e: any) { toast.error(e.response?.data?.message ?? 'Failed to record the return'); }
+    }, { label: 'Mark as Returned', variant: 'warning' });
+  };
+
   const ellRetryGL = async (id: string) => {
     try {
       const res = await api.post(`/leave/leaves/${id}/retry-gl`);
@@ -1145,6 +1155,14 @@ export function LeaveSetup() {
               >
                 <XCircle size={14} className="mr-1.5 inline" />Cancel
               </button>
+              {!ellViewRow.returned_on && toIsoDate(ellViewRow.date_start) <= toIsoDate(new Date()) && toIsoDate(new Date()) <= toIsoDate(ellViewRow.date_end) && (
+                <button
+                  className="secondary-btn shadow-sm"
+                  onClick={() => { setEllViewRow(null); ellMarkReturned(ellViewRow.id); }}
+                >
+                  <Check size={14} className="mr-1.5 inline" />Mark as Returned
+                </button>
+              )}
               {ellViewRow.allowance_status === 'Failed GL Posting' && (
                 <button
                   className="primary-btn shadow-sm bg-red-600 hover:opacity-90"
@@ -1176,11 +1194,12 @@ export function LeaveSetup() {
                   {ellViewRow.status}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className={`grid gap-2 mt-4 ${ellViewRow.returned_on ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                 {[
                   { label: 'Days',  value: ellViewRow.day_count ?? '—' },
                   { label: 'Start', value: fmtDate(ellViewRow.date_start) },
                   { label: 'End',   value: fmtDate(ellViewRow.date_end) },
+                  ...(ellViewRow.returned_on ? [{ label: 'Returned', value: fmtDate(ellViewRow.returned_on) }] : []),
                 ].map(s => (
                   <div key={s.label} className="text-center rounded-xl bg-[var(--surface)] border border-[var(--border)] py-2.5">
                     <p

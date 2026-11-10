@@ -625,6 +625,7 @@ router.post  ('/leave/leaves/:id/submit',            leave.submitLeave);
 router.post  ('/leave/leaves/:id/approve',           leave.approveLeave);
 router.post  ('/leave/leaves/:id/reject',            leave.rejectLeave);
 router.post  ('/leave/leaves/:id/cancel',            leave.cancelLeave);
+router.post  ('/leave/leaves/:id/return',            leave.returnFromLeave);
 router.post  ('/leave/leaves/:id/finalize',          leave.finalizeLeave);
 router.post  ('/leave/leaves/:id/retry-gl',          leave.retryLeaveGL);
 

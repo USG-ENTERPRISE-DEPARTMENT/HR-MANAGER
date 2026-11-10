@@ -140,8 +140,9 @@ async function recalcLeavesForHolidayDates(dates, actorUserId, holidayName) {
   const conds = ds.map(d => Prisma.sql`(date_start <= ${new Date(d)} AND date_end >= ${new Date(d)})`);
   const leaves = await prisma.$queryRaw`
     SELECT id, employee, status, date_start, date_end FROM employeeleaves
-     WHERE status NOT IN ('Rejected','Cancelled') AND (${Prisma.join(conds, ' OR ')})`.catch(() => []);
-  const ymd = (d) => new Date(d).toISOString().slice(0, 10);
+     WHERE status NOT IN ('Rejected','Cancelled') AND (returned_on IS NULL OR returned_on > date_start)
+       AND (${Prisma.join(conds, ' OR ')})`.catch(() => []);
+  const ymd =(d) => new Date(d).toISOString().slice(0, 10);
   for (const l of leaves) {
     out.checked++;
     try {
@@ -2212,6 +2213,53 @@ exports.cancelLeave = asyncHandler(async (req, res) => {
   notifyLeaveInApp(id, 'cancelled');
   logActivity({ module: 'Leave', action: 'cancel', entityId: req.params.id, ...fromReq(req) });
   respond.ok(res, 'Leave cancelled');
+});
+
+// POST /leave/leaves/:id/return — HR records that an employee came back before their leave ended, so
+// core banking is told they are ACTIVE now rather than on the original end date.
+exports.returnFromLeave = asyncHandler(async (req, res) => {
+  if (!isLeaveHr(req)) return respond.forbidden(res, 'Only HR can record a return from leave');
+
+  const id      = toBigInt(req.params.id);
+  const rows    = await prisma.$queryRaw`SELECT id, employee, status, date_start, date_end, returned_on FROM employeeleaves WHERE id=${id}`;
+  const current = rows[0] ?? null;
+  if (!current) return respond.notFound(res, 'Leave not found');
+  if (current.status !== 'Approved') return respond.badReq(res, 'Only Approved leaves can be marked as returned');
+  if (current.returned_on)           return respond.badReq(res, 'This return has already been recorded');
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const startDate = new Date(current.date_start); startDate.setHours(0, 0, 0, 0);
+  const endDate   = new Date(current.date_end);   endDate.setHours(0, 0, 0, 0);
+  if (startDate > today) return respond.badReq(res, 'This leave has not started yet — cancel it instead');
+  if (endDate < today)   return respond.badReq(res, 'This leave has already ended');
+
+  // Today and every later day are unused. Removing those day rows is what puts them back on the balance.
+  // The end date moves too, because attendance, the overlap check and the managers-on-leave email all
+  // read the date range; without that the restored days could not be booked again. A return on the
+  // first day leaves the end date on that day, since a leave cannot end before it starts.
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const lastDayTaken = startDate > yesterday ? startDate : yesterday;
+  const newEnd = iso(lastDayTaken);
+  const [restored] = await prisma.$transaction([
+    prisma.$executeRaw`DELETE FROM employeeleavedays WHERE employee_leave=${id} AND leave_date >= CURRENT_DATE`,
+    prisma.$executeRaw`UPDATE employeeleaves SET returned_on=CURRENT_DATE WHERE id=${id}`,
+    prisma.employeeleaves.update({ where: { id }, data: { date_end: new Date(`${newEnd}T00:00:00.000Z`) }, select: { id: true } }),
+  ]);
+
+  await writeLog(id, req.user.id,
+    `Employee returned from leave early — ${restored} unused day(s) restored; end date moved from ${iso(endDate)} to ${newEnd}`,
+    'Approved', 'Approved');
+  logActivity({ module: 'Leave', action: 'return', entityId: req.params.id, details: { restoredDays: Number(restored), originalEnd: iso(endDate), newEnd }, ...fromReq(req) });
+
+  // Required here, not at the top of the file, so the two controllers cannot load each other in a cycle.
+  const { syncEmployeeToExternalSystem } = require('./employeeController');
+  const sync = await syncEmployeeToExternalSystem(current.employee).catch(err => ({ success: false, message: err.message }));
+  if (sync && !sync.success) {
+    console.error('[leave] return recorded but core update failed for leave', req.params.id, '|', sync.message);
+    return respond.ok(res, `Return recorded and ${restored} day(s) restored. Core banking could not be updated yet — it will be retried automatically`);
+  }
+  respond.ok(res, `Return recorded and ${restored} day(s) restored to the leave balance`);
 });
 
 // ── Balance & Entitlement ─────────────────────────────────────────────────────

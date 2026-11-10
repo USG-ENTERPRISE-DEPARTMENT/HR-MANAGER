@@ -28,6 +28,7 @@ const iso = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10
       FROM employeeleaves el
       LEFT JOIN employee e ON e.id = el.employee
      WHERE el.date_start IS NOT NULL AND el.date_end IS NOT NULL
+       AND el.returned_on IS NULL
        AND NOT EXISTS (SELECT 1 FROM employeeleavedays d WHERE d.employee_leave = el.id)
      ORDER BY el.date_start`;
 

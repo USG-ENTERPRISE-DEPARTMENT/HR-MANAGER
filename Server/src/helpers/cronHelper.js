@@ -62,6 +62,14 @@ cron.schedule('*/15 * * * *', () => {
     .catch(err => console.error('[cron] Employee sync retry failed:', err.message));
 });
 
+// Runs hourly — tells core banking who has gone on leave (ON_LEAVE) and who is back (ACTIVE). Only
+// differences are sent, so most runs send nothing.
+cron.schedule('20 * * * *', () => {
+  employeeCtrl.runLeaveStatusSync()
+    .then(({ started, ended, failed }) => { if (started || ended) console.log(`[cron] Leave status sync: ${started} on leave, ${ended} back, ${failed} failed`); })
+    .catch(err => console.error('[cron] Leave status sync failed:', err.message));
+});
+
 // Every minute — sends queued payslip emails in small, rate-limited batches (see payslipMailer.js).
 // No-ops unless "Email payslips when a payroll run is completed" is switched on; a failed send is
 // retried with back-off, so a mail-server outage only delays payslips rather than losing them.
@@ -81,5 +89,5 @@ cron.schedule('*/30 * * * *', () => {
   aiRag.ensureIndexed().catch(err => console.error('[ai] scheduled auto-index failed:', err.message));
 });
 
-console.log('[cron] Daily leave GL (06:00), managers-on-leave email (07:30 weekdays), attendance auto-absent, attendance digest (08:00), employee transfers (hourly), sync retry (15m) scheduled');
+console.log('[cron] Daily leave GL (06:00), managers-on-leave email (07:30 weekdays), attendance auto-absent, attendance digest (08:00), employee transfers (hourly), leave status sync (hourly), sync retry (15m) scheduled');
 console.log('[cron] AI knowledge auto-index scheduled (startup + every 30m)');

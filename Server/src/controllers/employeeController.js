@@ -124,15 +124,47 @@ async function loadEmployeeFieldConfig() {
 
 /** Push employee data to the external HR system and record the result. */
 // Map our internal lifecycle status to the external system's `staffStatus` value:
-//   SUSPENDED → DEACTIVATED, TERMINATED/RESIGNED → TERMINATED, ACTIVE/PENDING → ACTIVE.
-function externalStaffStatus(lifecycle) {
+//   SUSPENDED → DEACTIVATED, TERMINATED/RESIGNED → TERMINATED, PENDING → ACTIVE,
+//   ACTIVE → ON_LEAVE while on leave, otherwise ACTIVE.
+// Leave exists only on this side: the lifecycle stays ACTIVE, because payroll, reports and the
+// organogram all select ACTIVE staff.
+function externalStaffStatus(lifecycle, onLeave = false) {
   switch (lifecycle) {
     case LIFECYCLE.SUSPENDED:  return 'DEACTIVATED';
     case LIFECYCLE.TERMINATED:
     case LIFECYCLE.RESIGNED:   return 'TERMINATED';
-    case LIFECYCLE.ACTIVE:
+    case LIFECYCLE.ACTIVE:     return onLeave ? 'ON_LEAVE' : 'ACTIVE';
     case LIFECYCLE.PENDING:    return 'ACTIVE';
     default:                   return lifecycle || '';
+  }
+}
+
+/**
+ * Is this employee on approved leave today? Asked on every push, so an ordinary edit made during leave
+ * does not tell core banking they are ACTIVE. If the check itself fails the answer is "no", and the
+ * scheduled job corrects core banking on its next run.
+ */
+async function isOnLeaveToday(id) {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT 1 AS on_leave FROM employeeleaves
+       WHERE employee = ${id} AND status = 'Approved' AND returned_on IS NULL
+         AND date_start <= CURRENT_DATE AND date_end >= CURRENT_DATE
+       LIMIT 1`;
+    return rows.length > 0;
+  } catch (err) {
+    console.error('[EmployeeSync] leave check failed for employee', String(id), '|', err.message);
+    return false;
+  }
+}
+
+/** Remember what core banking last accepted. Never fails a sync that has already succeeded. */
+async function recordCoreStatus(id, staffStatus) {
+  try {
+    const updated = await prisma.$executeRaw`UPDATE employee_core_status SET staff_status = ${staffStatus}, updated_at = CURRENT_TIMESTAMP WHERE employee = ${id}`;
+    if (!updated) await prisma.$executeRaw`INSERT INTO employee_core_status (employee, staff_status) VALUES (${id}, ${staffStatus})`;
+  } catch (err) {
+    console.error('[EmployeeSync] could not record core status for employee', String(id), '|', err.message);
   }
 }
 
@@ -142,6 +174,8 @@ async function pushEmployeeToExternalSystem(e) {
   if (!url) return;
   const id = toBigInt(e.id);
   if (!id) return;
+  const onLeave     = e.lifecycleStatus === LIFECYCLE.ACTIVE && await isOnLeaveToday(id);
+  const staffStatus = externalStaffStatus(e.lifecycleStatus, onLeave);
 
   const fmtDate = d => d ? String(d).substring(0, 10) : '';
   const payload = {
@@ -185,7 +219,7 @@ async function pushEmployeeToExternalSystem(e) {
     ssn:               e.ssn_num                  || '',
     staffCat:          e.staffLevel?.label        || '',
     staffGrade:        e.paygradeId               || '',
-    staffStatus:       externalStaffStatus(e.lifecycleStatus),
+    staffStatus,
     supervisorID:      e.supervisor?.employee_id  || '',
     unit:              e.unit?.comp_code           || '',
     workEmail:         e.work_email               || '',
@@ -205,6 +239,7 @@ async function pushEmployeeToExternalSystem(e) {
       }
       console.log('[EmployeeSync] pushed', e.employee_id, 'via core API → status:', r.status, '| response:', JSON.stringify(body));
       await prisma.$executeRaw`UPDATE employee SET sync_status='synced', sync_error=NULL WHERE id=${id}`;
+      await recordCoreStatus(id, staffStatus);
       return { success: true, httpStatus: r.status, data: body };
     } catch (err) {
       console.error('[EmployeeSync] core API call failed for', e.employee_id, '|', err.message);
@@ -241,6 +276,7 @@ async function pushEmployeeToExternalSystem(e) {
     });
     console.log('[EmployeeSync] pushed', e.employee_id, '→ status:', r.status, '| response:', JSON.stringify(r.data));
     await prisma.$executeRaw`UPDATE employee SET sync_status='synced', sync_error=NULL WHERE id=${id}`;
+    await recordCoreStatus(id, staffStatus);
     return { success: true, httpStatus: r.status, data: r.data };
   } catch (err) {
     const msg = (err.response?.data ? JSON.stringify(err.response.data) : err.message) || 'Unknown error';
@@ -501,6 +537,52 @@ async function syncEmployeeToExternalSystem(employeeId) {
   if (!employee) return { success: false, message: 'Employee not found' };
   const [enriched] = await enrichEmployees([employee]);
   return pushEmployeeToExternalSystem(enriched);
+}
+
+// ── Leave status in core banking ─────────────────────────────────────────────
+// Compares who is on leave today with what core banking last accepted, and pushes the full record for
+// anyone who differs: ON_LEAVE once a leave has started, back to their normal status once it is over or
+// HR has recorded an early return. Working from the difference, rather than from "leaves starting
+// today", means a missed run or a failed call is simply picked up by the next one, and that leave
+// approved on its own start date still gets sent.
+let _leaveStatusSyncRunning = false;
+
+async function runLeaveStatusSync() {
+  if (_leaveStatusSyncRunning) return { started: 0, ended: 0, failed: 0 };
+  _leaveStatusSyncRunning = true;
+  try {
+    const apiCfg = await getApiConfig().catch(() => ({}));
+    if (!apiCfg?.employee_sync_url) return { started: 0, ended: 0, failed: 0 };
+
+    const starting = await prisma.$queryRaw`
+      SELECT DISTINCT e.id
+        FROM employee e
+        JOIN employeeleaves el ON el.employee = e.id
+        LEFT JOIN employee_core_status s ON s.employee = e.id
+       WHERE e.lifecyclestatus = ${LIFECYCLE.ACTIVE} AND e.approvalstatus = ${APPROVAL.APPROVED}
+         AND el.status = 'Approved' AND el.returned_on IS NULL
+         AND el.date_start <= CURRENT_DATE AND el.date_end >= CURRENT_DATE
+         AND (s.staff_status IS NULL OR s.staff_status <> 'ON_LEAVE')`;
+    const ending = await prisma.$queryRaw`
+      SELECT e.id
+        FROM employee_core_status s
+        JOIN employee e ON e.id = s.employee
+       WHERE s.staff_status = 'ON_LEAVE'
+         AND NOT EXISTS (
+           SELECT 1 FROM employeeleaves el
+            WHERE el.employee = s.employee AND el.status = 'Approved' AND el.returned_on IS NULL
+              AND el.date_start <= CURRENT_DATE AND el.date_end >= CURRENT_DATE
+         )`;
+
+    let failed = 0;
+    for (const { id } of [...starting, ...ending]) {
+      const res = await syncEmployeeToExternalSystem(id).catch(err => ({ success: false, message: err.message }));
+      if (!res?.success) failed += 1;
+    }
+    return { started: starting.length, ended: ending.length, failed };
+  } finally {
+    _leaveStatusSyncRunning = false;
+  }
 }
 
 // ── Automatic retry of failed external syncs ─────────────────────────────────
@@ -1960,6 +2042,7 @@ module.exports = {
   syncEmployee,
   syncEmployeeToExternalSystem,
   retryFailedSyncs,
+  runLeaveStatusSync,
   getEmployeePositionImpact,
   getEmployeeActivity,
 };

@@ -99,6 +99,8 @@ model employee {
   pending_lifecycle_action String?   @db.VarChar(20)
   resignation_letter       String?   @db.VarChar(150)
   rmRoType                 String?   @db.VarChar(2) @map("rmrotype")
+
+  @@index([nassit_num], map: "employee_nassit_num_idx")
 }
 
 // Performance Codes (positions/seats). Self-referential hierarchy via reportsToId;
@@ -112,6 +114,7 @@ model pccodes {
   createdAt   DateTime @default(now()) @map("createdat")
   updatedAt   DateTime @default(now()) @updatedAt @map("updatedat")
 
+  @@index([reportsToId], map: "pccodes_reportsto_idx")
   @@map("pccodes")
 }
 
@@ -972,6 +975,14 @@ model employeeleaves {
   leave_tax        String?   @db.VarChar(30)
   api_response     String?   @db.Text
   branch           String?   @db.VarChar(50)
+  returned_on      DateTime? @db.Date
+}
+
+/// staffStatus last accepted by core banking. Read and written with raw SQL only.
+model employee_core_status {
+  employee     BigInt   @id
+  staff_status String   @db.VarChar(20)
+  updated_at   DateTime @default(now()) @db.Timestamp(0)
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
@@ -1758,6 +1769,28 @@ model payrollemployees {
   deduction_exemptions String? @db.VarChar(250)
   deduction_allowed    String? @db.VarChar(250)
   deduction_group      BigInt?
+
+  @@unique([employee, pay_frequency], map: "payrollemployees_employee_frequency_key")
+}
+
+/// Outbox for payslip emails, sent by helpers/payslipMailer.js. See manual-migrations/20261013_payslip_email_queue.
+model payslip_email_queue {
+  id              BigInt    @id @default(autoincrement())
+  run_id          BigInt
+  employee_id     BigInt
+  email           String?   @db.VarChar(150)
+  status          String    @default("pending") @db.VarChar(10)
+  attempts        Int       @default(0)
+  last_error      String?   @db.VarChar(500)
+  next_attempt_at DateTime  @default(now()) @db.Timestamp(0)
+  claimed_at      DateTime? @db.Timestamp(0)
+  sent_at         DateTime? @db.Timestamp(0)
+  created_at      DateTime  @default(now()) @db.Timestamp(0)
+  updated_at      DateTime  @default(now()) @db.Timestamp(0)
+
+  @@unique([run_id, employee_id], map: "payslip_email_queue_run_employee_key")
+  @@index([status, next_attempt_at], map: "payslip_email_queue_due_idx")
+  @@index([run_id], map: "payslip_email_queue_run_idx")
 }
 
 model paysliptemplates {
