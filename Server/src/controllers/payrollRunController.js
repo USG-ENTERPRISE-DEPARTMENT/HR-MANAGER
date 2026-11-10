@@ -378,6 +378,7 @@ const getPayrollRuns = asyncHandler(async (_req, res) => {
 // POST /payroll/runs — create a new payroll run in Draft status for a given pay frequency and date range.
 /**
  * The column list a new run should start with, and where it came from, in this order:
+ *   0. the report template chosen on the run form, when one is;
  *   1. the group's most recent run (by period, then id) with the SAME payment type;
  *   2. the report template set up for this payment type (group + type, then type alone) — what HR
  *      said this kind of run is made of;
@@ -434,6 +435,14 @@ async function suggestRunColumns(deductionGroup, paymentTypeId, excludeRunId = n
   const dg = deductionGroup ? BigInt(deductionGroup) : null;
   const pt = paymentTypeId ? BigInt(paymentTypeId) : null;
 
+  // A template chosen on the run form decides: the run calculates exactly what that template uses.
+  if (templateId) {
+    const [picked] = await query`
+      SELECT template_name, visible_columns, net_columns, payslip_columns FROM payslip_settings WHERE id = ${Number(templateId)}`;
+    const cols = templateColumnsJson(picked);
+    if (cols) return { columns: cols, source: `the report template "${picked.template_name ?? 'unnamed'}"` };
+  }
+
   if (dg) {
     // Built here, not as `${pt} IS NULL`: Postgres cannot type a bare NULL parameter.
     const samePaymentType = pt ? Prisma.sql`payment_type_id = ${pt}` : Prisma.sql`payment_type_id IS NULL`;
@@ -444,12 +453,9 @@ async function suggestRunColumns(deductionGroup, paymentTypeId, excludeRunId = n
     if (parseRunColumns(same?.columns)) return { columns: same.columns, source: `the previous run "${same.name}"` };
   }
 
-  // The template chosen on the form; otherwise the one set up for this payment type.
+  // Otherwise the template set up for this payment type.
   let tpl = null;
-  if (templateId) {
-    [tpl] = await query`
-      SELECT template_name, visible_columns, net_columns, payslip_columns FROM payslip_settings WHERE id = ${Number(templateId)}`;
-  } else if (pt) {
+  if (pt) {
     const templates = await query`
       SELECT template_name, deduction_group_id, visible_columns, net_columns, payslip_columns
         FROM payslip_settings WHERE payment_type_id = ${pt}`;
@@ -491,14 +497,9 @@ async function explicitColumns(raw) {
 const getRunColumnSuggestion = asyncHandler(async (req, res) => {
   const num = (v) => (/^\d+$/.test(String(v ?? '')) ? String(v) : null);
   const s = await suggestRunColumns(num(req.query.deduction_group), num(req.query.payment_type), num(req.query.exclude), num(req.query.template));
-  // The chosen template's own columns too, so the form can offer them when a previous run was used.
-  let templateColumns = null;
-  if (num(req.query.template)) {
-    const [tpl] = await query`SELECT visible_columns, net_columns, payslip_columns FROM payslip_settings WHERE id = ${Number(req.query.template)}`;
-    templateColumns = parseTemplateColumns(templateColumnsJson(tpl));
-  }
   respond.ok(res, 'Column suggestion', {
-    columns: parseTemplateColumns(s.columns), source: s.source, templateColumns,
+    columns: parseTemplateColumns(s.columns), source: s.source,
+    // False until manual-migrations/20261110_payrollrun_template is run on this database.
     templateChoiceAvailable: await hasRunTemplateColumn(),
   });
 });
@@ -542,10 +543,11 @@ const updatePayrollRun = asyncHandler(async (req, res) => {
   const nextTemplate = template !== undefined ? template : currentTemplate;
   const chosen = await explicitColumns(req.body.columns);
   if (chosen?.error) return respond.badReq(res, chosen.error);
-  const groupChanged = String(run.deduction_group ?? '') !== String(deduction_group ?? '');
-  const typeChanged  = String(run.payment_type_id ?? '') !== String(payment_type ?? '');
+  const groupChanged    = String(run.deduction_group ?? '') !== String(deduction_group ?? '');
+  const typeChanged     = String(run.payment_type_id ?? '') !== String(payment_type ?? '');
+  const templateChanged = String(nextTemplate ?? '') !== String(currentTemplate ?? '');
   const columns = chosen !== undefined ? chosen
-    : (groupChanged || typeChanged) ? (await suggestRunColumns(deduction_group, payment_type, id, nextTemplate)).columns
+    : (groupChanged || typeChanged || templateChanged) ? (await suggestRunColumns(deduction_group, payment_type, id, nextTemplate)).columns
     : run.columns;
   // An approver is looking at this exact report — its columns and layout must not move under them.
   if (['Pending Approval', 'Approved'].includes(run.status)

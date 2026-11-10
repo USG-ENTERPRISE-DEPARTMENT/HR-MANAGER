@@ -29,7 +29,6 @@ import { PageHeader } from './ui/PageHeader';
 import { DateInput } from './ui/DateInput';
 import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 import { Select } from './ui/Select';
-import { MultiSearchSelect } from './ui/SearchSelect';
 import { useRealtimeRefresh } from '@/lib/realtime';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -254,13 +253,9 @@ const BLANK_PC = {
 
 const BLANK_PE  = { employee: '', pay_frequency: '', currency: '', deduction_group: '', deduction_exemptions: '' };
 const BLANK_PF  = { name: '', description: '', sort_order: '' };
-// template_id: '' = match the report template automatically. columns: the payroll columns the run
-// calculates (and posts) — [] = every enabled column for the group's employees.
-const BLANK_RUN = { name: '', pay_frequency: '', date_start: '', date_end: '', deduction_group: '', payment_type: '', template_id: '', columns: [] as string[] };
-const parseIdList = (raw: unknown): string[] => {
-  if (Array.isArray(raw)) return raw.map(String);
-  try { const a = JSON.parse(String(raw ?? '')); return Array.isArray(a) ? a.map(String) : []; } catch { return []; }
-};
+// template_id: '' = match the report template automatically. A chosen template also decides which
+// columns the run calculates (the server applies it on save).
+const BLANK_RUN = { name: '', pay_frequency: '', date_start: '', date_end: '', deduction_group: '', payment_type: '', template_id: '' };
 /** The run form's fields for an existing run (edit or duplicate). */
 const runFormFrom = (run: PayrollRun, name = run.name) => ({
   name,
@@ -270,7 +265,6 @@ const runFormFrom = (run: PayrollRun, name = run.name) => ({
   deduction_group: run.deduction_group != null ? String(run.deduction_group) : '',
   payment_type: run.payment_type_id != null ? String(run.payment_type_id) : '',
   template_id: run.template_id != null ? String(run.template_id) : '',
-  columns: parseIdList(run.columns),
 });
 
 const fmt = (n: number) =>
@@ -2190,41 +2184,26 @@ export function Payroll() {
   function openRunDuplicate(run: PayrollRun) {
     // Coerce numeric ids to strings so the Combobox fields pre-select (value must equal option.id).
     setRunForm(runFormFrom(run, `${run.name} (Copy)`));
-    setRunColSource('the run being copied');
-    setRunTplColumns(null);
     setEditingRun(null);
     setRunModalOpen(true);
+    checkTemplateChoice();
   }
 
-  // Which columns the run calculates. The server suggests a list whenever the group, payment type or
-  // chosen template changes (previous run of the same type → the template → any previous run), and the
-  // form shows it so nobody saves a Rent run that would quietly pay the whole salary.
-  const [runColSource, setRunColSource] = useState<string | null>(null);
-  const [runTplColumns, setRunTplColumns] = useState<string[] | null>(null);
+  // Choosing a report template needs payrollruns.template_id (manual migration 20261110_payrollrun_template).
+  // The server says whether its database has it; until then the field is shown disabled with the reason.
   const [runTplChoice, setRunTplChoice] = useState(true);
-  async function suggestRunColumns(next: typeof BLANK_RUN, excludeId?: string) {
-    try {
-      const r = await api.get('/payroll/runs/column-suggestion', { params: {
-        deduction_group: next.deduction_group || undefined, payment_type: next.payment_type || undefined,
-        template: next.template_id || undefined, exclude: excludeId,
-      } });
-      const d = r.data.data ?? {};
-      setRunForm(f => ({ ...f, columns: (d.columns ?? []).map(String) }));
-      setRunColSource(d.source ?? null);
-      setRunTplColumns(d.templateColumns ? d.templateColumns.map(String) : null);
-      setRunTplChoice(d.templateChoiceAvailable !== false);
-    } catch { /* keep what is there; the server applies the same rule on save */ }
+  function checkTemplateChoice() {
+    api.get('/payroll/runs/column-suggestion')
+      .then(r => setRunTplChoice(r.data?.data?.templateChoiceAvailable !== false))
+      .catch(() => {});
   }
-  /** Change group / payment type / template, then re-suggest the columns. */
   function setRunKey(key: 'deduction_group' | 'payment_type' | 'template_id', value: string) {
-    const next = { ...runForm, [key]: value };
-    setRunForm(next);
-    suggestRunColumns(next, editingRun?.id);
+    setRunForm(f => ({ ...f, [key]: value }));
   }
   function openNewRun() {
-    setRunForm(BLANK_RUN); setEditingRun(null); setRunColSource(null); setRunTplColumns(null);
+    setRunForm(BLANK_RUN); setEditingRun(null);
     setRunModalOpen(true);
-    suggestRunColumns(BLANK_RUN);
+    checkTemplateChoice();
   }
 
   async function generateRun() {
@@ -3923,8 +3902,7 @@ export function Payroll() {
                                 // Combobox matches value === option.id (a String), so coerce the run's
                                 // numeric ids to strings or the fields render empty.
                                 setRunForm(runFormFrom(run));
-                                setRunColSource('this run');
-                                setRunTplColumns(null);
+                                checkTemplateChoice();
                                 setEditingRun(run);
                                 setRunModalOpen(true);
                               },
@@ -3952,7 +3930,7 @@ export function Payroll() {
           {runModalOpen && (
             <FormModal
               title={editingRun ? 'Edit Payroll Run' : 'New Payroll Run'}
-              maxWidth="lg"
+              maxWidth="md"
               onClose={() => setRunModalOpen(false)}
               onSave={saveRun}
               saveLabel={runSaving ? 'Saving…' : 'Save'}
@@ -3999,40 +3977,19 @@ export function Payroll() {
                     placeholder="Select group…"
                   />
                 </FormField>
-                {runTplChoice && (
-                  <FormField label="Report Template" hint="The layout this run's report and payslips use. A new kind of run takes its columns from it.">
-                    <Combobox
-                      options={[{ id: '', label: 'Automatic — match payment type and group' },
-                        ...psTemplates.map((t: any) => ({ id: String(t.id), label: t.template_name || `Template ${t.id}` }))]}
-                      value={runForm.template_id}
-                      onChange={id => setRunKey('template_id', id)}
-                      placeholder="Automatic"
-                    />
-                  </FormField>
-                )}
-                <FormField label={`Columns Calculated (${runForm.columns.length || 'all'})`}
-                  hint="Only these are calculated and posted to the GL. Leave empty to calculate every column for the group.">
-                  <MultiSearchSelect
-                    options={pcRows
-                      .filter(c => c.enabled === 'Yes' || runForm.columns.includes(String(c.id)))
-                      .map(c => ({ id: String(c.id), label: c.name + (c.enabled === 'Yes' ? '' : ' (disabled)') }))}
-                    value={runForm.columns}
-                    onChange={ids => { setRunForm(f => ({ ...f, columns: ids })); setRunColSource(null); }}
-                    placeholder="Every column for the group"
+                <FormField label="Report Template"
+                  hint={runTplChoice
+                    ? "The run calculates and posts only the columns this template uses, and its report and payslips use this layout."
+                    : "Not available yet: run the migration 20261110_payrollrun_template on this database, then reopen this form."}>
+                  <Combobox
+                    options={[{ id: '', label: 'Automatic — match payment type and group' },
+                      ...psTemplates.map((t: any) => ({ id: String(t.id), label: t.template_name || `Template ${t.id}` }))]}
+                    value={runForm.template_id}
+                    onChange={id => setRunKey('template_id', id)}
+                    placeholder="Automatic"
+                    disabled={!runTplChoice}
                   />
                 </FormField>
-                <div className="text-[11px] text-[var(--text-muted)] -mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {runColSource
-                    ? <span>Taken from {runColSource}.</span>
-                    : !runForm.columns.length && <span>No list — every enabled column for the group's employees will be calculated.</span>}
-                  {runTplColumns && runTplColumns.length > 0 &&
-                    [...runTplColumns].sort().join() !== [...runForm.columns].sort().join() && (
-                    <button type="button" className="text-[var(--accent)] hover:underline font-medium"
-                      onClick={() => { setRunForm(f => ({ ...f, columns: runTplColumns })); setRunColSource('the chosen report template'); }}>
-                      Use the template's {runTplColumns.length} column{runTplColumns.length !== 1 ? 's' : ''} instead
-                    </button>
-                  )}
-                </div>
               </div>
             </FormModal>
           )}
