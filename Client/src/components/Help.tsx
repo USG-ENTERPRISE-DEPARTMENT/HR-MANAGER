@@ -1718,7 +1718,7 @@ const MODULES: HelpModule[] = [
               { label: 'Open the cycle card and click "Add Employees".' },
               { label: 'Use the search box to find employees by name.' },
               { label: 'Use the Department filter to show only employees from a specific department.' },
-              { label: 'Click "Add All from [Department]" to select the whole department at once, or tick individual employees.' },
+              { label: 'Pick a department, then click "Add All" to select the whole department at once, or tick individual employees.' },
               { label: 'Click "Add X Employees" to save. Each employee gets a "Not Started" review record.' },
             ],
           },

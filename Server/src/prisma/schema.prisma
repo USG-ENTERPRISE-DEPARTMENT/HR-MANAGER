@@ -4047,8 +4047,34 @@ model performance_goal {
   supervisor_comment     String?  @db.Text
   hr_comment             String?  @db.Text
   document_ref           String?  @db.VarChar(150)
+  template_id            BigInt?
+  template_item_id       BigInt?
   created_at             DateTime? @default(now()) @db.DateTime(0)
   updated_at             DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([template_id, cycle_id], map: "performance_goal_template_idx")
+}
+
+/// A named set of goals assigned to a group of employees at once. See manual-migrations/20261110_performance_goal_templates.
+model performance_goal_template {
+  id          BigInt   @id
+  name        String   @db.VarChar(150)
+  description String?  @db.Text
+  created_by  BigInt?
+  created_at  DateTime @default(now()) @db.DateTime(0)
+  updated_at  DateTime @default(now()) @db.DateTime(0)
+}
+
+model performance_goal_template_item {
+  id          BigInt  @id
+  template_id BigInt
+  title       String  @db.VarChar(200)
+  description String? @db.Text
+  weight      Int?
+  target      String? @db.VarChar(300)
+  sort_order  Int     @default(0)
+
+  @@index([template_id], map: "performance_goal_template_item_template_idx")
 }
 
 model performance_competency {

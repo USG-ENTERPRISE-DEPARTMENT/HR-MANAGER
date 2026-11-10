@@ -411,8 +411,8 @@ function AddEmployeesModal({ cycleId, existingEmployeeIds = [], onClose, onSaved
       onClose={onClose} onSave={save} saveLabel={saving ? 'Adding…' : 'Add Employees'}>
       <div className="flex flex-col gap-4">
         {departments.length > 0 && (
-          <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1 flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
               <label className="text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Filter by Department</label>
               <Select className={inputClass} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
                 <option value="">All departments</option>
@@ -420,9 +420,9 @@ function AddEmployeesModal({ cycleId, existingEmployeeIds = [], onClose, onSaved
               </Select>
             </div>
             {deptFilter && (
-              <button type="button" onClick={addAllFromDept}
-                className="secondary-btn shrink-0 flex items-center gap-1.5 whitespace-nowrap">
-                <Users size={13} /> Add All from {deptFilter}
+              <button type="button" onClick={addAllFromDept} title={`Add every employee in ${deptFilter}`}
+                className="secondary-btn shrink-0 flex items-center justify-center gap-1.5 whitespace-nowrap">
+                <Users size={13} /> Add All
               </button>
             )}
           </div>

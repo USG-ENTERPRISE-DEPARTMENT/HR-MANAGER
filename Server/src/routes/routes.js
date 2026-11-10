@@ -741,6 +741,14 @@ router.post  ('/performance/reviews/:id/supervisor',         perf.submitSupervis
 router.post  ('/performance/reviews/:id/hr',                 permissionGuard('review_performance'), perf.submitHRReview);
 router.post  ('/performance/reviews/:id/ratings',            perf.saveCompRatings);
 
+// Goal templates: one set of goals assigned to a group of employees at once.
+const perfTpl = require('../controllers/performanceTemplateController');
+router.get   ('/performance/goal-templates',             permissionGuard.any('create_performance', 'review_performance'), perfTpl.listTemplates);
+router.post  ('/performance/goal-templates',             permissionGuard('create_performance'), perfTpl.createTemplate);
+router.put   ('/performance/goal-templates/:id',         permissionGuard('create_performance'), perfTpl.updateTemplate);
+router.delete('/performance/goal-templates/:id',         permissionGuard('delete_performance'), perfTpl.deleteTemplate);
+router.post  ('/performance/goal-templates/:id/assign',  permissionGuard('create_performance'), perfTpl.assignTemplate);
+
 router.get   ('/performance/goals',                          perf.getGoals);
 router.post  ('/performance/goals',                          perf.createGoal);
 router.put   ('/performance/goals/:id',                      perf.updateGoal);
