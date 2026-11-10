@@ -824,12 +824,23 @@ const getActiveEmployees = asyncHandler(async (req, res) => {
     depts.forEach(d => { deptMap[d.id.toString()] = d.title; });
   }
 
+  // Branch names, for pickers that filter by branch (e.g. assigning performance goals).
+  const branchIds = [...new Set(employees.map(e => e.branchId).filter(Boolean))];
+  const branchMap = {};
+  if (branchIds.length > 0) {
+    const branches = await prisma.companystructures.findMany({
+      where: { id: { in: branchIds } }, select: { id: true, title: true },
+    });
+    branches.forEach(b => { branchMap[b.id.toString()] = b.title; });
+  }
+
   respond.ok(res, 'Active employees retrieved', employees.map(e => ({
     id:          e.id.toString(),
     employee_id: e.employee_id,
     name:        `${e.firstName} ${e.lastName}`.trim(),
     jobTitle:    e.jobTitleId   ? (jtMap[e.jobTitleId]              ?? null) : null,
     department:  e.departmentId ? (deptMap[e.departmentId.toString()] ?? null) : null,
+    branch:      e.branchId     ? (branchMap[e.branchId.toString()]   ?? null) : null,
     // Raw id: the transfer form needs the CURRENT branch to apply the Head-Office-only department rule.
     branchId:    e.branchId ? e.branchId.toString() : null,
   })));

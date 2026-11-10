@@ -4,7 +4,7 @@ import {
   BarChart2, ClipboardList, Target, Brain,
   Plus, Pencil, Trash2, Eye, Play, ChevronLeft,
   CheckCircle2, Users, Loader2, Filter, X,
-  CalendarRange, Flag, AlertTriangle,
+  CalendarRange, Flag, AlertTriangle, Layers,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCan } from '@/hooks/useCan';
@@ -112,6 +112,7 @@ const TABS = [
   { label: 'Cycles',       icon: BarChart2     },
   { label: 'Reviews',      icon: ClipboardList },
   { label: 'Goals',        icon: Target        },
+  { label: 'Templates',    icon: Layers        },
   { label: 'Competencies', icon: Brain         },
 ];
 
@@ -1029,6 +1030,16 @@ function GoalsTab() {
     setDeletePending(null);
   };
 
+  const [templates, setTemplates] = useState<any[] | null>(null);
+  const openAssign = async () => {
+    try {
+      const r = await api.get('/performance/goal-templates');
+      const list = r.data.data ?? [];
+      if (!list.length) return toast.info('No goal templates yet — create one in the Templates tab first');
+      setTemplates(list);
+    } catch (e: any) { toast.error(e?.response?.data?.message ?? 'Failed to load templates'); }
+  };
+
   const filtered = goals.filter(g =>
     !search || (g.title ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (g.employee?.name ?? '').toLowerCase().includes(search.toLowerCase())
@@ -1055,6 +1066,9 @@ function GoalsTab() {
                   </span>
                 )}
               </button>
+              {can('create_performance') && <button className="secondary-btn shrink-0" onClick={openAssign}>
+                <Layers size={14} /> Assign from Template
+              </button>}
               {can('create_performance') && <button className="primary-btn" onClick={() => { setEditGoal(null); setShowForm(true); }}>
                 <Plus size={14} /> Add Goal
               </button>}
@@ -1142,12 +1156,382 @@ function GoalsTab() {
           <GoalFormModal goal={editGoal} cycles={cycles} employees={employeeOptions}
             onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />
         )}
+        {templates && (
+          <AssignTemplateModal templates={templates}
+            onClose={() => setTemplates(null)} onSaved={() => { setTemplates(null); load(); }} />
+        )}
       </AnimatePresence>
 
       {deletePending && (
         <ConfirmModal
           title="Delete goal?"
           message={`Remove "${deletePending.title}"?`}
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={del}
+          onCancel={() => setDeletePending(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Goal templates ───────────────────────────────────────────────────────────
+// A named set of goals assigned to a group of employees at once. Each employee gets their own copy,
+// which is scored separately; editing a template reaches copies whose review has not started.
+
+interface TemplateItem { id?: string; title: string; weight: string; target: string; description: string }
+const blankItem = (): TemplateItem => ({ title: '', weight: '', target: '', description: '' });
+const weightTotal = (items: { weight: string | number | null }[]) =>
+  items.reduce((n, it) => n + (Number(it.weight) || 0), 0);
+
+function TemplateFormModal({ template, onClose, onSaved }: { template: any | null; onClose: () => void; onSaved: () => void }) {
+  const isEdit = Boolean(template?.id);
+  const [name, setName] = useState(template?.name ?? '');
+  const [description, setDescription] = useState(template?.description ?? '');
+  const [items, setItems] = useState<TemplateItem[]>(
+    template?.items?.length
+      ? template.items.map((it: any) => ({
+          id: String(it.id), title: it.title ?? '', weight: it.weight != null ? String(it.weight) : '',
+          target: it.target ?? '', description: it.description ?? '',
+        }))
+      : [blankItem()],
+  );
+  const [saving, setSaving] = useState(false);
+  const total = weightTotal(items);
+  const assigned = template?.usage?.employees ?? 0;
+
+  const setItem = (i: number, k: keyof TemplateItem, v: string) =>
+    setItems(list => list.map((it, j) => (j === i ? { ...it, [k]: v } : it)));
+
+  const save = async () => {
+    if (!name.trim()) return toast.error('Template name is required');
+    if (!items.length) return toast.error('Add at least one goal');
+    const missing = items.findIndex(it => !it.title.trim());
+    if (missing >= 0) return toast.error(`Goal ${missing + 1} needs a title`);
+    setSaving(true);
+    try {
+      const body = {
+        name: name.trim(), description: description.trim() || null,
+        items: items.map(it => ({
+          id: it.id, title: it.title.trim(), weight: it.weight === '' ? null : Number(it.weight),
+          target: it.target.trim() || null, description: it.description.trim() || null,
+        })),
+      };
+      const r = isEdit
+        ? await api.put(`/performance/goal-templates/${template.id}`, body)
+        : await api.post('/performance/goal-templates', body);
+      toast.success(r.data?.message ?? 'Template saved');
+      onSaved();
+    } catch (e: any) { toast.error(e?.response?.data?.message ?? 'Failed to save template'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <FormModal title={isEdit ? 'Edit Goal Template' : 'New Goal Template'} maxWidth="3xl" scrollable
+      onClose={onClose} onSave={save} saveLabel={saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Template')}>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Template Name" required>
+            <input className={inputClass} value={name} maxLength={150} onChange={e => setName(e.target.value)} placeholder="e.g. Teller KPIs 2027" />
+          </FormField>
+          <FormField label="Description">
+            <input className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Who this set of goals is for" />
+          </FormField>
+        </div>
+
+        {isEdit && assigned > 0 && (
+          <div className="flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>Assigned to {assigned} employee(s). Changes reach employees whose review has not started; anyone who has started, or has a score on a goal, keeps their goals as they are.</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Goals ({items.length})</p>
+          <span className={`text-[12px] font-semibold tabular-nums ${total === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+            Total weight {total}%{total !== 100 ? ' — usually 100%' : ''}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {items.map((it, i) => (
+            <div key={it.id ?? `new-${i}`} className="rounded-[12px] border border-[var(--border)] bg-[var(--bg)] p-3 flex flex-col gap-2.5">
+              <div className="flex items-start gap-2">
+                <span className="mt-2 w-5 shrink-0 text-[12px] font-bold text-[var(--text-muted)] tabular-nums">{i + 1}.</span>
+                <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_96px] gap-2">
+                  <input className={inputClass} value={it.title} maxLength={200} placeholder="Goal title"
+                    onChange={e => setItem(i, 'title', e.target.value)} />
+                  <input type="number" min={0} max={100} className={inputClass} value={it.weight} placeholder="Weight %"
+                    onWheel={e => e.currentTarget.blur()} onChange={e => setItem(i, 'weight', e.target.value)} />
+                  <input className={`${inputClass} sm:col-span-2`} value={it.target} maxLength={300} placeholder="Measurable target (optional)"
+                    onChange={e => setItem(i, 'target', e.target.value)} />
+                  <input className={`${inputClass} sm:col-span-2`} value={it.description} placeholder="Description (optional)"
+                    onChange={e => setItem(i, 'description', e.target.value)} />
+                </div>
+                <button type="button" title="Remove goal" disabled={items.length === 1}
+                  onClick={() => setItems(list => list.filter((_, j) => j !== i))}
+                  className="mt-1.5 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 disabled:opacity-30 disabled:pointer-events-none">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="secondary-btn self-start" onClick={() => setItems(list => [...list, blankItem()])}>
+          <Plus size={14} /> Add Goal
+        </button>
+      </div>
+    </FormModal>
+  );
+}
+
+function AssignTemplateModal({ templates, initialTemplateId, onClose, onSaved }: {
+  templates: any[]; initialTemplateId?: string; onClose: () => void; onSaved: () => void;
+}) {
+  const [templateId, setTemplateId] = useState(initialTemplateId ?? (templates[0] ? String(templates[0].id) : ''));
+  const [cycles, setCycles] = useState<any[]>([]);
+  const [cycleId, setCycleId] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [dept, setDept] = useState('');
+  const [branch, setBranch] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([api.get('/performance/cycles'), api.get('/employees/active')]).then(([rc, re]) => {
+      const open = (rc.data.data ?? rc.data).filter((c: any) => c.status !== 'Closed');
+      setCycles(open);
+      if (open.length === 1) setCycleId(String(open[0].id));
+      setEmployees(re.data.data ?? re.data);
+    }).catch(() => toast.error('Failed to load cycles and employees'));
+  }, []);
+
+  const template = templates.find(t => String(t.id) === templateId);
+  const uniq = (k: string) => Array.from(new Set(employees.map((e: any) => e[k]).filter(Boolean))).sort() as string[];
+  const departments = uniq('department'), branches = uniq('branch'), jobTitles = uniq('jobTitle');
+  const matching = employees.filter((e: any) =>
+    (!dept || e.department === dept) && (!branch || e.branch === branch) && (!jobTitle || e.jobTitle === jobTitle));
+  const anyFilter = Boolean(dept || branch || jobTitle);
+  const options = employees.map((e: any) => ({
+    id: String(e.id),
+    label: e.name + (e.employee_id ? ` (${e.employee_id})` : '') + (e.department ? ` — ${e.department}` : ''),
+  }));
+
+  const addMatching = () => {
+    const ids = matching.map((e: any) => String(e.id));
+    setSelected(prev => Array.from(new Set([...prev, ...ids])));
+    toast.success(`${ids.length} employee(s) added to the selection`);
+  };
+  const addCycleMembers = async () => {
+    if (!cycleId) return toast.error('Choose the cycle first');
+    try {
+      const r = await api.get(`/performance/cycles/${cycleId}`);
+      const ids = ((r.data.data ?? r.data).reviews ?? []).map((rv: any) => String(rv.employee?.id ?? rv.employee));
+      if (!ids.length) return toast.info('Nobody is in this cycle yet');
+      setSelected(prev => Array.from(new Set([...prev, ...ids])));
+      toast.success(`${ids.length} employee(s) from the cycle added to the selection`);
+    } catch { toast.error('Failed to load the cycle'); }
+  };
+
+  const save = async () => {
+    if (!templateId) return toast.error('Choose a template');
+    if (!cycleId) return toast.error('Choose the cycle');
+    if (!selected.length) return toast.error('Choose at least one employee');
+    setSaving(true);
+    try {
+      const r = await api.post(`/performance/goal-templates/${templateId}/assign`, {
+        cycle_id: cycleId, employee_ids: selected, due_date: dueDate || null,
+      });
+      toast.success(r.data?.message ?? 'Goals assigned');
+      onSaved();
+    } catch (e: any) { toast.error(e?.response?.data?.message ?? 'Failed to assign goals'); }
+    finally { setSaving(false); }
+  };
+
+  const goalCount = template?.items?.length ?? 0;
+
+  return (
+    <FormModal title="Assign Goal Template" maxWidth="2xl" scrollable
+      onClose={onClose} onSave={save} saveLabel={saving ? 'Assigning…' : 'Assign Goals'}>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Template" required>
+            <SearchSelect value={templateId} onChange={setTemplateId}
+              options={templates.map(t => ({ id: String(t.id), label: `${t.name} (${t.items?.length ?? 0} goals)` }))} placeholder="Choose a template…" />
+          </FormField>
+          <FormField label="Cycle" required>
+            <Select className={inputClass} value={cycleId} onChange={e => setCycleId(e.target.value)}>
+              <option value="">Choose a cycle…</option>
+              {cycles.map(c => <option key={c.id} value={c.id}>{c.name} ({c.status})</option>)}
+            </Select>
+          </FormField>
+          <FormField label="Goal Due Date" hint="Optional — applied to every goal assigned.">
+            <DateInput className={inputClass} value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          </FormField>
+        </div>
+
+        {template && (
+          <div className="rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">Goals in this template</p>
+            <ul className="text-[12px] text-[var(--text-secondary)] space-y-0.5">
+              {template.items.map((it: any) => (
+                <li key={it.id} className="flex justify-between gap-3">
+                  <span className="truncate">{it.title}</span>
+                  <span className="tabular-nums shrink-0 text-[var(--text-muted)]">{it.weight != null ? `${it.weight}%` : '—'}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="rounded-[12px] border border-[var(--border)] p-3 flex flex-col gap-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Select employees by group</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Select className={inputClass} value={dept} onChange={e => setDept(e.target.value)}>
+              <option value="">Any department</option>
+              {departments.map(d => <option key={d}>{d}</option>)}
+            </Select>
+            <Select className={inputClass} value={branch} onChange={e => setBranch(e.target.value)}>
+              <option value="">Any branch</option>
+              {branches.map(b => <option key={b}>{b}</option>)}
+            </Select>
+            <Select className={inputClass} value={jobTitle} onChange={e => setJobTitle(e.target.value)}>
+              <option value="">Any job title</option>
+              {jobTitles.map(j => <option key={j}>{j}</option>)}
+            </Select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="secondary-btn" disabled={!anyFilter || !matching.length} onClick={addMatching}>
+              <Users size={13} /> Add {anyFilter ? `${matching.length} matching` : 'matching'}
+            </button>
+            <button type="button" className="secondary-btn" disabled={!cycleId} onClick={addCycleMembers}>
+              <Users size={13} /> Add everyone in the cycle
+            </button>
+            {selected.length > 0 && (
+              <button type="button" className="text-[12px] text-[var(--danger)] hover:underline" onClick={() => setSelected([])}>Clear selection</button>
+            )}
+          </div>
+        </div>
+
+        <FormField label="Employees" required hint="Adjust the selection here. Anyone not yet in the cycle is added to it.">
+          <MultiSearchSelect options={options} value={selected} onChange={setSelected} placeholder="Search employees…" />
+        </FormField>
+
+        {selected.length > 0 && goalCount > 0 && (
+          <p className="text-[12px] text-[var(--text-secondary)]">
+            {goalCount} goal{goalCount !== 1 ? 's' : ''} × {selected.length} employee{selected.length !== 1 ? 's' : ''} = <span className="font-semibold">{goalCount * selected.length} goals</span>.
+            Employees who already have this template in the cycle are skipped.
+          </p>
+        )}
+      </div>
+    </FormModal>
+  );
+}
+
+function TemplatesTab() {
+  const { can } = useCan();
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState<any | null | undefined>(undefined);   // undefined = closed, null = new
+  const [assigning, setAssigning] = useState<string | null>(null);
+  const [deletePending, setDeletePending] = useState<any>(null);
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try { const r = await api.get('/performance/goal-templates'); setTemplates(r.data.data ?? []); }
+    catch (e: any) { setError(e?.response?.data?.message ?? 'Failed to load templates'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const del = async () => {
+    if (!deletePending) return;
+    try { const r = await api.delete(`/performance/goal-templates/${deletePending.id}`); toast.success(r.data?.message ?? 'Template deleted'); load(); }
+    catch (e: any) { toast.error(e?.response?.data?.message ?? 'Failed'); }
+    setDeletePending(null);
+  };
+
+  const filtered = templates.filter(t => !search || (t.name ?? '').toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col drop-shadow-sm">
+        <TableToolbar
+          searchQuery={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search templates…"
+          actions={can('create_performance') ? (
+            <button className="primary-btn" onClick={() => setEditing(null)}><Plus size={14} /> New Template</button>
+          ) : undefined}
+        />
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                {['Template', 'Goals', 'Total Weight', 'Assigned To', ''].map((h, i) => (
+                  <th key={i} className={`th${i === 4 ? ' !text-right' : ''}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} className="td text-center py-10"><Loader2 className="animate-spin inline text-[var(--accent)]" /></td></tr>
+              ) : error ? (
+                <tr><td colSpan={5} className="td text-center py-8 text-[var(--danger)]">{error}</td></tr>
+              ) : filtered.map(t => {
+                const total = weightTotal(t.items ?? []);
+                return (
+                  <tr key={t.id} className="tr">
+                    <td className="td">
+                      <p className="font-medium">{t.name}</p>
+                      {t.description && <p className="text-[11px] text-[var(--text-muted)] truncate max-w-[320px]">{t.description}</p>}
+                    </td>
+                    <td className="td">{t.items?.length ?? 0}</td>
+                    <td className={`td tabular-nums ${total === 100 ? '' : 'text-amber-600'}`}>{total}%</td>
+                    <td className="td text-[var(--text-muted)]">
+                      {t.usage?.employees ? `${t.usage.employees} employee(s) · ${t.usage.cycles} cycle(s)` : 'Not assigned yet'}
+                    </td>
+                    <td className="td text-right">
+                      <div className="inline-flex justify-end">
+                        <RowActions actions={[
+                          { label: 'Assign to Employees', icon: Users, onClick: () => setAssigning(String(t.id)), hidden: !can('create_performance') },
+                          { label: 'Edit', icon: Pencil, onClick: () => setEditing(t), hidden: !can('create_performance') },
+                          { label: 'Delete', icon: Trash2, danger: true, onClick: () => setDeletePending(t), hidden: !can('delete_performance') },
+                        ]} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && !error && !filtered.length && (
+                <tr><td colSpan={5} className="td text-center py-8 text-[var(--text-muted)]">
+                  No templates yet. Create one to give a department or job title the same goals in one step.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {editing !== undefined && (
+          <TemplateFormModal template={editing} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load(); }} />
+        )}
+        {assigning && (
+          <AssignTemplateModal templates={templates} initialTemplateId={assigning}
+            onClose={() => setAssigning(null)} onSaved={() => { setAssigning(null); load(); }} />
+        )}
+      </AnimatePresence>
+
+      {deletePending && (
+        <ConfirmModal
+          title="Delete template?"
+          message={`Delete "${deletePending.name}"? Goals already assigned from it stay with the employees.`}
           confirmLabel="Delete"
           variant="danger"
           onConfirm={del}
@@ -1311,6 +1695,7 @@ export function ManagePerformance() {
       {activeTab === 'Cycles'       && <CyclesTab />}
       {activeTab === 'Reviews'      && <ReviewsTab />}
       {activeTab === 'Goals'        && <GoalsTab />}
+      {activeTab === 'Templates'    && <TemplatesTab />}
       {activeTab === 'Competencies' && <CompetenciesTab />}
     </div>
   );

@@ -167,14 +167,23 @@ const updateCycle = asyncHandler(async (req, res) => {
 });
 
 // DELETE /performance/cycles/:id — delete a cycle; blocked unless status is Draft.
+// The cycle's reviews (one per employee added) and their competency ratings go with it, all in one
+// transaction. Goals set against the cycle are kept, unlinked from it, because goals belong to the
+// employee and are not created by adding someone to a cycle.
 const deleteCycle = asyncHandler(async (req, res) => {
   const id = toBigInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
   const [ex] = await query`SELECT status FROM performance_cycle WHERE id = ${id} LIMIT 1`;
   if (!ex) return respond.notFound(res, 'Cycle not found');
   if (ex.status !== 'Draft') return respond.badReq(res, 'Only Draft cycles can be deleted');
-  await exec`DELETE FROM performance_cycle WHERE id = ${id}`;
-  respond.ok(res, 'Cycle deleted');
+  const [, removedReviews] = await prisma.$transaction([
+    prisma.$executeRaw`DELETE FROM performance_comp_rating WHERE review_id IN (SELECT id FROM performance_review WHERE cycle_id = ${id})`,
+    prisma.$executeRaw`DELETE FROM performance_review WHERE cycle_id = ${id}`,
+    prisma.$executeRaw`UPDATE performance_goal SET cycle_id = NULL WHERE cycle_id = ${id}`,
+    prisma.$executeRaw`DELETE FROM performance_cycle WHERE id = ${id}`,
+  ]);
+  logActivity({ module: 'Performance', action: 'delete_cycle', entityId: String(id), details: { removedEmployees: Number(removedReviews) }, ...fromReq(req) });
+  respond.ok(res, `Cycle deleted, with its ${removedReviews} employee(s)`);
 });
 
 // POST /performance/cycles/:id/close — transition an Active cycle to Closed.
