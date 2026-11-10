@@ -223,7 +223,11 @@ async function renderPayslip(runId, empId) {
     .concat(allTemplates.filter(t => runPaymentType && String(t.payment_type_id) === runPaymentType && !t.deduction_group_id))
     .concat(allTemplates.filter(t => empGroup && !t.payment_type_id && String(t.deduction_group_id) === empGroup))
     .concat(allTemplates.filter(t => !t.payment_type_id && !t.deduction_group_id));
-  const settings = snapshot ?? matched;
+  // The template chosen on the run form wins over matching (payrollruns.template_id; absent until the
+  // 20261110_payrollrun_template migration, hence the catch).
+  const [pick] = snapshot ? [] : await query`SELECT template_id FROM payrollruns WHERE id = ${BigInt(runId)}`.catch(() => []);
+  const chosen = pick?.template_id != null ? allTemplates.find(t => String(t.id) === String(pick.template_id)) : null;
+  const settings = snapshot ?? chosen ?? matched;
   const hasTemplate = !!settings;
   const s = settings || {};
 

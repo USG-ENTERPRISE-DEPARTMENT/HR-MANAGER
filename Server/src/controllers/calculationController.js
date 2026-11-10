@@ -709,6 +709,9 @@ const deletePayslipTemplate = asyncHandler(async (req, res) => {
   const id = toBigInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
   await exec`DELETE FROM payslip_settings WHERE id = ${id}`;
+  // Runs that chose this template go back to matching one automatically (column absent until the
+  // 20261110_payrollrun_template migration, hence the catch).
+  await exec`UPDATE payrollruns SET template_id = NULL WHERE template_id = ${id}`.catch(() => {});
   respond.ok(res, 'Template deleted', null);
 });
 

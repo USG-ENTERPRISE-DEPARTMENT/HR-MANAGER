@@ -3246,6 +3246,9 @@ model payrollruns {
   // The run's own payroll-column list (JSON array of payrollcolumns ids), as the legacy payroll stored
   // on every run. Generate calculates only these when set; NULL = every enabled column in the group.
   columns           String?             @db.Text
+  // The report template (payslip_settings.id) chosen on the run form. NULL = matched by payment type
+  // + group. See manual-migrations/20261110_payrollrun_template.
+  template_id       BigInt?
 }
 
 // Per-run snapshot of the configured multi-stage approval flow + each stage's outcome. Written when a

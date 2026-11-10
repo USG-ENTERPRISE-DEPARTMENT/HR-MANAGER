@@ -371,43 +371,158 @@ const getPayrollRuns = asyncHandler(async (_req, res) => {
   // inserts them in legacy-id order (= the order they were created in the old system), so `id DESC`
   // as the tie-break restores their original creation order beneath the runs created since.
   const rows = await query`${RUNS_SELECT} ORDER BY pr.created_at DESC, pr.id DESC`;
+  await attachTemplateIds(rows);
   respond.ok(res, 'Payroll runs retrieved', rows);
 });
 
 // POST /payroll/runs — create a new payroll run in Draft status for a given pay frequency and date range.
 /**
- * The column list a new run in this group should start with: the list of the group's most recent run
- * (by period, then id), preferring one with the same payment type so a bonus run does not inherit a
- * salary run's columns. Null when the group has no run with a list — the run then falls back to
- * every enabled column in its group.
+ * The column list a new run should start with, and where it came from, in this order:
+ *   1. the group's most recent run (by period, then id) with the SAME payment type;
+ *   2. the report template set up for this payment type (group + type, then type alone) — what HR
+ *      said this kind of run is made of;
+ *   3. the group's most recent run of any type.
+ * Step 3 used to come straight after step 1, so the first run of a new payment type (e.g. a Rent
+ * Allowance run for Management) copied the group's salary run and calculated — and would have posted —
+ * the whole salary. { columns: null } when nothing applies: the run then falls back to every enabled
+ * column in its group.
  */
-async function latestGroupColumns(deductionGroup, paymentTypeId, excludeRunId = null) {
-  if (!deductionGroup) return null;
-  const exclude = excludeRunId ? Prisma.sql`AND id <> ${BigInt(excludeRunId)}` : Prisma.empty;
-  // Built here, not as `${pt} IS NULL`: Postgres cannot type a bare NULL parameter.
-  const samePaymentType = paymentTypeId
-    ? Prisma.sql`payment_type_id = ${BigInt(paymentTypeId)}`
-    : Prisma.sql`payment_type_id IS NULL`;
-  const [row] = await query`
-    SELECT columns FROM payrollruns
-     WHERE deduction_group = ${BigInt(deductionGroup)} AND columns IS NOT NULL ${exclude}
-     ORDER BY CASE WHEN ${samePaymentType} THEN 0 ELSE 1 END,
-              date_start IS NULL, date_start DESC, id DESC
-     LIMIT 1`;
-  return row?.columns ?? null;
+/** Every column a template shows, totals or prints, as a JSON array string — or null when it lists none.
+ *  A column the report uses must be calculated. */
+function templateColumnsJson(tpl) {
+  const ids = [...new Set([
+    ...parseTemplateColumns(tpl?.visible_columns),
+    ...parseTemplateColumns(tpl?.net_columns),
+    ...parseTemplateColumns(tpl?.payslip_columns),
+  ])];
+  return ids.length ? JSON.stringify(ids) : null;
 }
+
+// payrollruns.template_id comes from manual-migrations/20261110_payrollrun_template. Until a database has
+// it, runs work exactly as before: the template is matched by payment type + group and cannot be chosen.
+let runTemplateColumn = false;
+async function hasRunTemplateColumn() {
+  if (runTemplateColumn) return true;
+  try { await query`SELECT template_id FROM payrollruns WHERE 1 = 0`; runTemplateColumn = true; }
+  catch { /* not migrated yet — checked again next time */ }
+  return runTemplateColumn;
+}
+const RUN_TEMPLATE_NOT_MIGRATED = 'Choosing a report template on a run is not set up on this database yet. Run manual-migrations/20261110_payrollrun_template on it, or leave the template on Automatic.';
+
+/** Add `template_id` to run rows (null when unset or not migrated). */
+async function attachTemplateIds(rows) {
+  const list = (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
+  if (!list.length || !(await hasRunTemplateColumn())) return rows;
+  const found = await query`SELECT id, template_id FROM payrollruns WHERE id IN (${Prisma.join(list.map(r => BigInt(r.id)))})`;
+  const m = new Map(found.map(r => [String(r.id), r.template_id != null ? String(r.template_id) : null]));
+  for (const r of list) r.template_id = m.get(String(r.id)) ?? null;
+  return rows;
+}
+
+/** The template id sent on the run form: undefined (not sent), null (Automatic), a valid id, or { error }. */
+async function chosenTemplate(raw) {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  if (!/^\d+$/.test(String(raw))) return { error: 'Invalid report template' };
+  if (!(await hasRunTemplateColumn())) return { error: RUN_TEMPLATE_NOT_MIGRATED };
+  const [tpl] = await query`SELECT id FROM payslip_settings WHERE id = ${Number(raw)}`;
+  return tpl ? String(tpl.id) : { error: 'That report template no longer exists — choose another' };
+}
+
+async function suggestRunColumns(deductionGroup, paymentTypeId, excludeRunId = null, templateId = null) {
+  const exclude = excludeRunId ? Prisma.sql`AND id <> ${BigInt(excludeRunId)}` : Prisma.empty;
+  const dg = deductionGroup ? BigInt(deductionGroup) : null;
+  const pt = paymentTypeId ? BigInt(paymentTypeId) : null;
+
+  if (dg) {
+    // Built here, not as `${pt} IS NULL`: Postgres cannot type a bare NULL parameter.
+    const samePaymentType = pt ? Prisma.sql`payment_type_id = ${pt}` : Prisma.sql`payment_type_id IS NULL`;
+    const [same] = await query`
+      SELECT name, columns FROM payrollruns
+       WHERE deduction_group = ${dg} AND columns IS NOT NULL AND ${samePaymentType} ${exclude}
+       ORDER BY date_start IS NULL, date_start DESC, id DESC LIMIT 1`;
+    if (parseRunColumns(same?.columns)) return { columns: same.columns, source: `the previous run "${same.name}"` };
+  }
+
+  // The template chosen on the form; otherwise the one set up for this payment type.
+  let tpl = null;
+  if (templateId) {
+    [tpl] = await query`
+      SELECT template_name, visible_columns, net_columns, payslip_columns FROM payslip_settings WHERE id = ${Number(templateId)}`;
+  } else if (pt) {
+    const templates = await query`
+      SELECT template_name, deduction_group_id, visible_columns, net_columns, payslip_columns
+        FROM payslip_settings WHERE payment_type_id = ${pt}`;
+    const eqDg = (t) => dg != null && String(t.deduction_group_id ?? '') === String(dg);
+    tpl = templates.find(eqDg) ?? templates.find(t => t.deduction_group_id == null || t.deduction_group_id === '') ?? null;
+  }
+  const fromTemplate = templateColumnsJson(tpl);
+  if (fromTemplate) return { columns: fromTemplate, source: `the report template "${tpl.template_name ?? 'unnamed'}"` };
+
+  if (dg) {
+    const [any] = await query`
+      SELECT name, columns FROM payrollruns
+       WHERE deduction_group = ${dg} AND columns IS NOT NULL ${exclude}
+       ORDER BY date_start IS NULL, date_start DESC, id DESC LIMIT 1`;
+    if (parseRunColumns(any?.columns)) return { columns: any.columns, source: `the previous run "${any.name}" (a different payment type)` };
+  }
+  return { columns: null, source: null };
+}
+
+/**
+ * A column list sent by the client: an array of payroll column ids. Returns
+ *   undefined   — not sent (the caller decides),
+ *   null        — sent empty: no list, every enabled column in the group runs,
+ *   JSON string — the ids, all of which exist,
+ *   { error }   — unknown ids.
+ */
+async function explicitColumns(raw) {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) return { error: 'columns must be a list of payroll column ids' };
+  const ids = [...new Set(raw.map(String).filter(v => /^\d+$/.test(v)))];
+  if (!ids.length) return null;
+  const found = await query`SELECT id FROM payrollcolumns WHERE id IN (${Prisma.join(ids.map(Number))})`;
+  if (found.length !== ids.length) return { error: 'Some of the selected payroll columns no longer exist — reopen the form and choose again' };
+  return JSON.stringify(ids);
+}
+
+// GET /payroll/runs/column-suggestion?deduction_group=&payment_type=&exclude= — the column list a run
+// with this group and payment type would start with, so the run form can show it before saving.
+const getRunColumnSuggestion = asyncHandler(async (req, res) => {
+  const num = (v) => (/^\d+$/.test(String(v ?? '')) ? String(v) : null);
+  const s = await suggestRunColumns(num(req.query.deduction_group), num(req.query.payment_type), num(req.query.exclude), num(req.query.template));
+  // The chosen template's own columns too, so the form can offer them when a previous run was used.
+  let templateColumns = null;
+  if (num(req.query.template)) {
+    const [tpl] = await query`SELECT visible_columns, net_columns, payslip_columns FROM payslip_settings WHERE id = ${Number(req.query.template)}`;
+    templateColumns = parseTemplateColumns(templateColumnsJson(tpl));
+  }
+  respond.ok(res, 'Column suggestion', {
+    columns: parseTemplateColumns(s.columns), source: s.source, templateColumns,
+    templateChoiceAvailable: await hasRunTemplateColumn(),
+  });
+});
 
 const createPayrollRun = asyncHandler(async (req, res) => {
   const { name, pay_frequency, date_start, date_end, deduction_group, payment_type } = req.body;
   if (!name?.trim()) return respond.badReq(res, 'Run name is required');
   if (!pay_frequency)  return respond.badReq(res, 'Pay frequency is required');
-  const columns = await latestGroupColumns(deduction_group, payment_type);
+  const template = await chosenTemplate(req.body.template_id);
+  if (template?.error) return respond.badReq(res, template.error);
+  const chosen = await explicitColumns(req.body.columns);
+  if (chosen?.error) return respond.badReq(res, chosen.error);
+  const columns = chosen !== undefined ? chosen
+    : (await suggestRunColumns(deduction_group, payment_type, null, template || null)).columns;
   await exec`
     INSERT INTO payrollruns (name, pay_frequency, date_start, date_end, deduction_group, payment_type_id, columns)
      VALUES (${name.trim()}, ${parseInt(pay_frequency)}, ${toDate(date_start)}, ${toDate(date_end)},
              ${deduction_group ? BigInt(deduction_group) : null}, ${payment_type ? BigInt(payment_type) : null},
              ${columns})`;
   const rows = await query`${RUNS_SELECT} ORDER BY pr.id DESC LIMIT 1`;
+  if (rows[0] && template) {
+    await exec`UPDATE payrollruns SET template_id = ${BigInt(template)} WHERE id = ${BigInt(rows[0].id)}`;
+  }
+  await attachTemplateIds(rows[0]);
   respond.created(res, 'Payroll run created', rows[0] || null);
 });
 
@@ -415,13 +530,31 @@ const createPayrollRun = asyncHandler(async (req, res) => {
 const updatePayrollRun = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { name, pay_frequency, date_start, date_end, deduction_group, payment_type } = req.body;
-  const [run] = await query`SELECT status, name, deduction_group, columns FROM payrollruns WHERE id = ${BigInt(id)}`;
+  const [run] = await query`SELECT status, name, deduction_group, payment_type_id, columns FROM payrollruns WHERE id = ${BigInt(id)}`;
   if (!run) return respond.notFound(res, 'Run not found');
   if (isRunLocked(run.status)) return respond.badReq(res, `Cannot edit a payroll run that is ${run.status} — its journal has already been posted to the general ledger`);
-  // Moving the run to another group swaps in that group's latest column list — the old group's
-  // columns would calculate the wrong pay for the new group's employees.
+  // An explicit list from the form wins. Otherwise, moving the run to another group or payment type
+  // swaps in the list for the new combination — the old one would calculate the wrong pay.
+  const template = await chosenTemplate(req.body.template_id);
+  if (template?.error) return respond.badReq(res, template.error);
+  const [current] = await attachTemplateIds([{ id }]);
+  const currentTemplate = current.template_id ?? null;
+  const nextTemplate = template !== undefined ? template : currentTemplate;
+  const chosen = await explicitColumns(req.body.columns);
+  if (chosen?.error) return respond.badReq(res, chosen.error);
   const groupChanged = String(run.deduction_group ?? '') !== String(deduction_group ?? '');
-  const columns = groupChanged ? await latestGroupColumns(deduction_group, payment_type, id) : run.columns;
+  const typeChanged  = String(run.payment_type_id ?? '') !== String(payment_type ?? '');
+  const columns = chosen !== undefined ? chosen
+    : (groupChanged || typeChanged) ? (await suggestRunColumns(deduction_group, payment_type, id, nextTemplate)).columns
+    : run.columns;
+  // An approver is looking at this exact report — its columns and layout must not move under them.
+  if (['Pending Approval', 'Approved'].includes(run.status)
+      && (String(columns ?? '') !== String(run.columns ?? '') || String(nextTemplate ?? '') !== String(currentTemplate ?? ''))) {
+    return respond.badReq(res, `Cannot change the columns or report template of a run that is ${run.status} — withdraw or reject it first`);
+  }
+  if (template !== undefined && template !== currentTemplate) {
+    await exec`UPDATE payrollruns SET template_id = ${template ? BigInt(template) : null} WHERE id = ${BigInt(id)}`;
+  }
   await exec`
     UPDATE payrollruns SET
       name=${name?.trim() || run.name},
@@ -434,7 +567,9 @@ const updatePayrollRun = asyncHandler(async (req, res) => {
       updated_at=NOW()
      WHERE id=${BigInt(id)}`;
   const rows = await query`${RUNS_SELECT} WHERE pr.id = ${BigInt(id)}`;
-  respond.ok(res, 'Updated', rows[0] || null);
+  await attachTemplateIds(rows[0]);
+  const columnsChanged = String(columns ?? '') !== String(run.columns ?? '');
+  respond.ok(res, columnsChanged && run.status !== 'Draft' ? 'Updated — generate the payroll again so it uses the new columns' : 'Updated', rows[0] || null);
 });
 
 // DELETE /payroll/runs/:id — delete a Draft or Processing run and its payroll data; blocked on Completed runs.
@@ -614,10 +749,19 @@ function parseTemplateColumns(raw) {
   return Array.isArray(arr) ? arr.map(String).filter(v => v !== '') : [];
 }
 
+/** The template chosen on the run form (payrollruns.template_id), or null when none is set, it was
+ *  deleted, or the database is not migrated. `fields` is the column list to read. */
+async function chosenRunTemplate(runId, fields) {
+  const chosenId = (await attachTemplateIds([{ id: runId }]))[0]?.template_id;
+  if (!chosenId) return null;
+  const [tpl] = await query`SELECT ${fields} FROM payslip_settings WHERE id = ${Number(chosenId)}`;
+  return tpl ?? null;
+}
+
 /**
- * Resolve the report template (payslip_settings row) that applies to a run, mirroring the client's
- * precedence: exact payment-type + deduction-group match, then payment-type-only, then group-only, then a
- * global default (neither set). Returns null when nothing matches.
+ * Resolve the report template (payslip_settings row) that applies to a run: the one chosen on the run
+ * form when set, else the client's precedence — exact payment-type + deduction-group match, then
+ * payment-type-only, then group-only, then a global default (neither set). Returns null when nothing matches.
  */
 async function resolveRunTemplate(runId) {
   const [run] = await query`SELECT payment_type_id, deduction_group, template_snapshot FROM payrollruns WHERE id = ${BigInt(runId)} LIMIT 1`;
@@ -638,6 +782,9 @@ async function resolveRunTemplate(runId) {
       console.warn(`[payroll] run ${runId} has an unreadable template_snapshot — resolving live instead`);
     }
   }
+
+  const chosen = await chosenRunTemplate(runId, Prisma.sql`payment_type_id, deduction_group_id, visible_columns, net_columns, payslip_columns`);
+  if (chosen) return chosen;
 
   const pt = run.payment_type_id != null ? String(run.payment_type_id) : '';
   const dg = run.deduction_group != null ? String(run.deduction_group) : '';
@@ -669,7 +816,9 @@ async function snapshotRunTemplate(runId) {
   const dg = run.deduction_group != null ? String(run.deduction_group) : '';
   const templates = await query`SELECT * FROM payslip_settings`;
   const eq = (a, b) => String(a ?? '') === String(b ?? '');
+  const chosenId = (await attachTemplateIds([{ id: runId }]))[0]?.template_id;
   const t = (
+    (chosenId && templates.find(x => eq(x.id, chosenId))) ||
     (pt && dg && templates.find(x => eq(x.payment_type_id, pt) && eq(x.deduction_group_id, dg))) ||
     (pt && templates.find(x => eq(x.payment_type_id, pt) && (x.deduction_group_id == null || x.deduction_group_id === ''))) ||
     (dg && templates.find(x => (x.payment_type_id == null || x.payment_type_id === '') && eq(x.deduction_group_id, dg))) ||
@@ -1604,6 +1753,12 @@ const duplicatePayrollRun = asyncHandler(async (req, res) => {
              ${run.deduction_group ? BigInt(run.deduction_group) : null}, ${run.payment_type_id ? BigInt(run.payment_type_id) : null}, 'Draft',
              ${run.columns ?? null})`;
   const rows = await query`${RUNS_SELECT} ORDER BY pr.id DESC LIMIT 1`;
+  // …and the chosen report template, for the same reason.
+  const [source] = await attachTemplateIds([{ id }]);
+  if (rows[0] && source.template_id) {
+    await exec`UPDATE payrollruns SET template_id = ${BigInt(source.template_id)} WHERE id = ${BigInt(rows[0].id)}`;
+  }
+  await attachTemplateIds(rows[0]);
   logActivity({ module: 'Payroll', action: 'duplicate_run', entityId: String(id), entityName: run.name, ...fromReq(req) });
   respond.created(res, 'Run duplicated', rows[0] || null);
 });
@@ -2145,7 +2300,7 @@ const getMyNassit = asyncHandler(async (req, res) => {
 
 module.exports = {
   getNassitReport, getPayslipEmailStatus, retryPayslipEmails, getPayeReport, getGlSummary, getMyNassit,
-  getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun,
+  getPayrollRuns, createPayrollRun, updatePayrollRun, deletePayrollRun, getRunColumnSuggestion,
   generatePayroll, getPayrollData, updatePayrollDataItem, finalizePayroll, retryGLPosting,
   getPayrollByReference, rejectPayrollFromBank, confirmPayrollFromBank, confirmPayrollManually,
   submitPayroll, approvePayroll, rejectPayroll, getPayrollAudit, duplicatePayrollRun,
