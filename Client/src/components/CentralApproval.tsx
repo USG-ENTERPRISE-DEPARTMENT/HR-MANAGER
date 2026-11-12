@@ -965,7 +965,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
       if (claimRes.status === 'fulfilled') {
         (claimRes.value.data.data ?? []).filter((r: any) => r.status === 'Pending Approval').forEach((r: any) => {
           medItems.push({ id: String(r.id), module: 'Medical', title: r.hospital_name || r.employee_name || 'Hospital Claim',
-            subtitle: `Claim — ${r.total_amount != null ? Number(r.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}`,
+            subtitle: `Claim${r.invoice_no ? ` · Inv ${r.invoice_no}` : ''} — ${r.total_amount != null ? Number(r.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : ''}`,
             submittedAt: r.posted_date || r.createdAt || null, status: r.status || 'Pending Approval', raw: { ...r, _medType: 'claim' } });
         });
       }

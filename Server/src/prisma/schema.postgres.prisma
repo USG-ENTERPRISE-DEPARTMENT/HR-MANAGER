@@ -2566,6 +2566,11 @@ model hospitalclaims {
   response            String?   @db.Text
   document_ref        String?   @db.VarChar(100)
   payment_log         String?   @db.Text
+  // The hospital's invoice number; one invoice per hospital may be claimed only once (rejected claims
+  // aside). Read and written with raw SQL. See manual-migrations/20261111_hospitalclaim_invoice.
+  invoice_no          String?   @db.VarChar(50)
+
+  @@index([hospital, invoice_no], map: "hospitalclaims_hospital_invoice_idx")
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.

@@ -2054,6 +2054,7 @@ function HospitalClaimDetailPanel({ row: initialRow, onClose, onRefresh }: { row
             </div>
           )}
 
+          <DetailRow label="Invoice No.">{row.invoice_no || '—'}</DetailRow>
           {row.comment && <DetailRow label="Comment">{row.comment}</DetailRow>}
 
           <div className="rounded-[10px] border border-[var(--border)] p-3 bg-[var(--bg)] space-y-1.5">
@@ -2216,6 +2217,7 @@ function HospitalClaimsTab() {
   const [hospital, setHospital]       = useState('');
   const [hospitalType, setHospitalType] = useState('Hospital');
   const [comment, setComment]         = useState('');
+  const [invoiceNo, setInvoiceNo]     = useState('');
   const [claimItems, setClaimItems]   = useState<ClaimItem[]>([]);
   const [itemLimits, setItemLimits]   = useState<Record<string, any>>({});
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -2305,7 +2307,7 @@ function HospitalClaimsTab() {
   }
 
   function openAdd() {
-    setSel(null); setHospital(''); setHospitalType('Hospital'); setComment('');
+    setSel(null); setHospital(''); setHospitalType('Hospital'); setComment(''); setInvoiceNo('');
     setClaimItems([]); setItemLimits({}); setUploadErrors([]); resetItemBuilder(); setOpen(true);
   }
 
@@ -2314,6 +2316,7 @@ function HospitalClaimsTab() {
     setHospital(String(row.hospital ?? ''));
     setHospitalType(row.hospital_type ?? 'Hospital');
     setComment(row.comment ?? '');
+    setInvoiceNo(row.invoice_no ?? '');
     setClaimItems(Array.isArray(row.items) ? row.items : []);
     setItemLimits({});
     setUploadErrors([]);
@@ -2325,10 +2328,11 @@ function HospitalClaimsTab() {
 
   async function handleSave() {
     if (!hospital) return toast.error('Select a hospital');
+    if (!invoiceNo.trim()) return toast.error('Enter the invoice number');
     if (claimItems.length === 0) return toast.error('Add at least one claim item');
     setSaving(true);
     try {
-      const payload = { hospital, items: claimItems, comment };
+      const payload = { hospital, invoice_no: invoiceNo.trim(), items: claimItems, comment };
       if (sel) await api.put(`/medical/claims/${sel.id}`, payload);
       else     await api.post('/medical/claims', payload);
       toast.success(sel ? 'Claim updated' : 'Claim saved');
@@ -2418,6 +2422,7 @@ function HospitalClaimsTab() {
   const filtered = rows.filter(r =>
     !search ||
     (r.hospital_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.invoice_no ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (r.status ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
@@ -2426,12 +2431,13 @@ function HospitalClaimsTab() {
   return (
     <>
       <MedTable search={search} onSearch={setSearch} onAdd={allowCreate ? openAdd : undefined} addLabel="Add Claim"
-        headers={['Hospital', 'Type', 'Items', `Total${appCurrency ? ` (${appCurrency})` : ''}`, 'WHT', 'Credit', 'Status', 'Actions']}
-        headerAligns={['left', 'left', 'center', 'right', 'right', 'right', 'left', 'right']}
-        rows={filtered} emptyColSpan={8} total={rows.length} filtered={filtered.length} loading={loading}
+        headers={['Hospital', 'Invoice No.', 'Type', 'Items', `Total${appCurrency ? ` (${appCurrency})` : ''}`, 'WHT', 'Credit', 'Status', 'Actions']}
+        headerAligns={['left', 'left', 'left', 'center', 'right', 'right', 'right', 'left', 'right']}
+        rows={filtered} emptyColSpan={9} total={rows.length} filtered={filtered.length} loading={loading}
         renderRow={(row, i) => (
           <tr key={i} className="tr">
             <td className="td font-medium">{row.hospital_name}</td>
+            <td className="td">{row.invoice_no || <span className="text-[var(--text-muted)]">—</span>}</td>
             <td className="td text-[var(--text-muted)]">{row.hospital_type ?? '—'}</td>
             <td className="td text-center">{row.item_count ?? (Array.isArray(row.items) ? row.items.length : 0)}</td>
             <td className="td text-right">{fmtN(row.total_amount)}</td>
@@ -2461,6 +2467,11 @@ function HospitalClaimsTab() {
             {/* Hospital selector */}
             <F label="Hospital" required>
               <SearchSelect value={hospital} onChange={setHospital} options={hospitalOptions} placeholder="Select hospital…" />
+            </F>
+            <F label="Invoice Number" required>
+              <input className={inputClass} value={invoiceNo} maxLength={50}
+                onChange={e => setInvoiceNo(e.target.value)} placeholder="The hospital's invoice number, e.g. INV-0012" />
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">An invoice from the same hospital can only be claimed once.</p>
             </F>
             {hospital && (
               <div className="mb-4 flex items-center gap-2 text-[12px]">

@@ -1355,6 +1355,65 @@ exports.deleteHospital = asyncHandler(async (req, res) => {
 // items = JSON array: [{ employee_id, employee_name, type:'self'|'dependent',
 //                        dependent_id, dependent_name, narration, amount }]
 
+// ── Invoice numbers ──
+// A claim carries the hospital's invoice number, and one invoice from one hospital may be claimed only
+// once. Numbers are compared ignoring case, spaces and punctuation ("INV-0012" = "inv 0012"). Rejected
+// claims don't count, so a rejected invoice can be claimed again. The column is read and written with
+// raw SQL, and its presence is checked at runtime: a database without the migration refuses to save
+// claims with a clear message rather than silently skipping the duplicate check.
+const INVOICE_MAX = 50;
+const INVOICE_NOT_MIGRATED = 'Hospital claim invoice numbers are not set up on this database yet. Run manual-migrations/20261111_hospitalclaim_invoice on it, then try again.';
+let invoiceColumn = false;
+async function hasInvoiceColumn() {
+  if (invoiceColumn) return true;
+  try { await prisma.$queryRaw`SELECT invoice_no FROM hospitalclaims WHERE 1 = 0`; invoiceColumn = true; }
+  catch { /* not migrated yet — checked again next time */ }
+  return invoiceColumn;
+}
+const normInvoice = v => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/** The other live claim (not rejected) from this hospital with the same invoice number, or null. */
+async function findDuplicateInvoice(hospId, invoiceNo, excludeId = null) {
+  const key = normInvoice(invoiceNo);
+  if (!hospId || !key) return null;
+  const rows = await prisma.$queryRaw`
+    SELECT id, invoice_no, status, posted_date FROM hospitalclaims
+    WHERE hospital = ${BigInt(hospId)} AND invoice_no IS NOT NULL AND status <> 'Rejected' AND id <> ${excludeId ?? 0}`;
+  return rows.find(r => normInvoice(r.invoice_no) === key) ?? null;
+}
+
+function duplicateInvoiceMessage(dup) {
+  const when = dup.posted_date ? ` on ${new Date(dup.posted_date).toISOString().slice(0, 10)}` : '';
+  return `Invoice ${dup.invoice_no} from this hospital was already claimed (claim #${dup.id}, ${dup.status}${when}). An invoice can only be claimed once.`;
+}
+
+/** Validate the invoice number sent on the claim form. Returns the trimmed number, or { error }. */
+async function checkInvoiceForSave(raw, hospId, excludeId = null) {
+  const invoice = String(raw ?? '').trim();
+  if (!invoice)                     return { error: 'Invoice number is required' };
+  if (invoice.length > INVOICE_MAX) return { error: `Invoice number can be at most ${INVOICE_MAX} characters` };
+  if (!normInvoice(invoice))        return { error: 'Invoice number must contain letters or digits' };
+  if (!(await hasInvoiceColumn()))  return { error: INVOICE_NOT_MIGRATED };
+  const dup = await findDuplicateInvoice(hospId, invoice, excludeId);
+  if (dup) return { error: duplicateInvoiceMessage(dup) };
+  return invoice;
+}
+
+/**
+ * Re-check a saved claim before it moves on (submit / approve): two drafts with the same invoice can
+ * both be saved before either is submitted. Returns an error message, or null when the claim may proceed.
+ * `requireInvoice` refuses claims saved before invoice numbers existed (used on submit, not approve,
+ * so claims already pending when this shipped can still be approved).
+ */
+async function invoiceBlocker(id, { requireInvoice }) {
+  if (!(await hasInvoiceColumn())) return INVOICE_NOT_MIGRATED;
+  const [claim] = await prisma.$queryRaw`SELECT id, hospital, invoice_no FROM hospitalclaims WHERE id = ${id}`;
+  if (!claim) return null;   // the caller reports the missing claim
+  if (!normInvoice(claim.invoice_no)) return requireInvoice ? 'Add the invoice number to this claim (Edit) before submitting it' : null;
+  const dup = await findDuplicateInvoice(claim.hospital, claim.invoice_no, id);
+  return dup ? duplicateInvoiceMessage(dup) : null;
+}
+
 // GET /medical/hospital-claims — list all hospital claims with resolved hospital name/type, item count, and totals.
 exports.getHospitalClaims = asyncHandler(async (req, res) => {
   const rows = await prisma.$queryRaw`SELECT * FROM hospitalclaims ORDER BY id DESC`;
@@ -1393,11 +1452,13 @@ exports.getHospitalClaims = asyncHandler(async (req, res) => {
 // POST /medical/hospital-claims — create a hospital claim in Draft status; automatically calculates
 // withholding tax from the hospital's WHT rate and derives total_credit_amount = total - WHT.
 exports.createHospitalClaim = asyncHandler(async (req, res) => {
-  const { hospital, items, comment = '' } = req.body;
+  const { hospital, items, comment = '', invoice_no } = req.body;
   if (!hospital)                                   return respond.badReq(res, 'Hospital is required');
   if (!Array.isArray(items) || items.length === 0) return respond.badReq(res, 'At least one item is required');
 
   const hospId = toInt(hospital);
+  const invoice = await checkInvoiceForSave(invoice_no, hospId);
+  if (invoice?.error) return respond.badReq(res, invoice.error);
   const hosp = await prisma.registeredhospitals.findUnique({ where: { id: hospId }, select: { type: true } }).catch(() => null);
   const rate = await getWhtRate(hosp?.type ?? 'Hospital');
 
@@ -1418,8 +1479,10 @@ exports.createHospitalClaim = asyncHandler(async (req, res) => {
       posted_date:        new Date(),
       status:             'Draft',
     },
+    select: { id: true, status: true },
   });
-  respond.created(res, 'Claim created', s(row));
+  await prisma.$executeRaw`UPDATE hospitalclaims SET invoice_no = ${invoice} WHERE id = ${row.id}`;
+  respond.created(res, 'Claim created', { ...s(row), invoice_no: invoice });
 });
 
 // PUT /medical/hospital-claims/:id — replace items and recalculate WHT totals for a hospital claim.
@@ -1427,13 +1490,23 @@ exports.updateHospitalClaim = asyncHandler(async (req, res) => {
   const id = toInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
 
-  const { hospital, items, comment } = req.body;
+  const { hospital, items, comment, invoice_no } = req.body;
   if (!Array.isArray(items) || items.length === 0) return respond.badReq(res, 'At least one item is required');
 
+  const [current] = await prisma.$queryRaw`SELECT id, hospital, status FROM hospitalclaims WHERE id = ${id}`;
+  if (!current) return respond.notFound(res, 'Claim not found');
+  // Only a Draft can be edited — otherwise an approved claim's invoice number (or amounts) could be changed after the fact.
+  if (current.status !== 'Draft') return respond.badReq(res, 'Only a Draft claim can be edited');
+
   const hospId = hospital ? toInt(hospital) : null;
+  // The hospital the claim will have after this save — duplicates and WHT are worked out against it.
+  const finalHosp = hospId ?? (current.hospital != null ? Number(current.hospital) : null);
+  const invoice = await checkInvoiceForSave(invoice_no, finalHosp, id);
+  if (invoice?.error) return respond.badReq(res, invoice.error);
+
   let rate = 0;
-  if (hospId) {
-    const hosp = await prisma.registeredhospitals.findUnique({ where: { id: hospId }, select: { type: true } }).catch(() => null);
+  if (finalHosp) {
+    const hosp = await prisma.registeredhospitals.findUnique({ where: { id: finalHosp }, select: { type: true } }).catch(() => null);
     rate = await getWhtRate(hosp?.type ?? 'Hospital');
   }
 
@@ -1441,7 +1514,7 @@ exports.updateHospitalClaim = asyncHandler(async (req, res) => {
   const withholding_tax     = parseFloat((total_amount * rate / 100).toFixed(2));
   const total_credit_amount = parseFloat((total_amount - withholding_tax).toFixed(2));
 
-  await prisma.hospitalclaims.update({
+  await prisma.hospitalclaims.updateMany({
     where: { id },
     data: {
       ...(hospId && { hospital: BigInt(hospId) }),
@@ -1452,6 +1525,7 @@ exports.updateHospitalClaim = asyncHandler(async (req, res) => {
       ...(comment !== undefined && { comment }),
     },
   });
+  await prisma.$executeRaw`UPDATE hospitalclaims SET invoice_no = ${invoice} WHERE id = ${id}`;
   respond.ok(res, 'Claim updated');
 });
 
@@ -1459,7 +1533,7 @@ exports.updateHospitalClaim = asyncHandler(async (req, res) => {
 exports.deleteHospitalClaim = asyncHandler(async (req, res) => {
   const id = toInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
-  await prisma.hospitalclaims.delete({ where: { id } });
+  await prisma.hospitalclaims.deleteMany({ where: { id } });
   respond.ok(res, 'Deleted');
 });
 
@@ -1467,7 +1541,9 @@ exports.deleteHospitalClaim = asyncHandler(async (req, res) => {
 exports.submitHospitalClaim = asyncHandler(async (req, res) => {
   const id = toInt(req.params.id);
   if (!id) return respond.badReq(res, 'Invalid ID');
-  await prisma.hospitalclaims.update({ where: { id }, data: { status: 'Pending Approval' } });
+  const blocked = await invoiceBlocker(id, { requireInvoice: true });
+  if (blocked) return respond.badReq(res, blocked);
+  await prisma.hospitalclaims.updateMany({ where: { id }, data: { status: 'Pending Approval' } });
   const flow = await readControlSetting('approval_medical', false)
     ? await snapshotMedicalStages('claim', id)
     : [];
@@ -1495,13 +1571,18 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
   // Enforce the "Allow Self-Approval" control — the originator can't approve their own claim when it's off.
   if (claim && !(await assertCanSelfApprove(req, res, claim))) return;
 
+  // The same invoice may have been claimed on another claim since this one was submitted — refuse it
+  // before any stage is recorded, so the approver sees why and can reject it.
+  const blocked = await invoiceBlocker(id, { requireInvoice: false });
+  if (blocked) return respond.badReq(res, blocked);
+
   // Multi-stage gate: only the last stage's approval proceeds to the status change + GL below.
   const stage = await medicalStageApprove(req, res, 'claim', 'hospitalclaims', id, null);
   if (stage.handled && !stage.done) return;
   if (!stage.handled && !assertCanApproveMedical(req, res)) return; // no flow → enforce blanket permission
 
   // Approve the claim
-  await prisma.hospitalclaims.update({
+  await prisma.hospitalclaims.updateMany({
     where: { id },
     data: { status: 'Approved', approved_by: BigInt(req.user?.id ?? 0), approved_date: new Date() },
   });
@@ -1622,10 +1703,10 @@ exports.rejectHospitalClaim = asyncHandler(async (req, res) => {
   const { reason = '' } = req.body;
   // Multi-stage gate: the current stage's approver rejects → claim Rejected (handled inside).
   const stage = await medicalStageReject(req, res, 'claim', 'hospitalclaims', id, null, 'hospital medical claim',
-    (rsn) => prisma.hospitalclaims.update({ where: { id }, data: { status: 'Rejected', approved_by: BigInt(req.user?.id ?? 0), response: rsn ?? '' } }));
+    (rsn) => prisma.hospitalclaims.updateMany({ where: { id }, data: { status: 'Rejected', approved_by: BigInt(req.user?.id ?? 0), response: rsn ?? '' } }));
   if (stage.handled) return;
   if (!assertCanApproveMedical(req, res)) return; // no flow → enforce blanket permission
-  await prisma.hospitalclaims.update({
+  await prisma.hospitalclaims.updateMany({
     where: { id },
     data: { status: 'Rejected', approved_by: BigInt(req.user?.id ?? 0), response: reason },
   });
