@@ -1,8 +1,9 @@
 // Out of Station allowance.
 //
 // Staff sent on duty away from their station are paid days × the daily rate for their pay grade.
-// Days run from the start date to the end date, both included — weekends and holidays count — and
-// the allowance is not taxed. Only staff with people reporting to them can raise a request — for
+// The number of days is entered on the request — not worked out from the dates, since some staff are
+// paid by nights away — and the allowance is not taxed. One form can raise requests for several employees
+// at once — one request each, same period and days, each at its own grade's rate. Only staff with people reporting to them can raise a request — for
 // their direct reports or for themselves (HR setup can raise for anyone); staff with no reports
 // cannot. It is approved like leave: a supervisor tier when switched on (skipped when the supervisor
 // raised it), then HR. HR's approval posts it to the GL: Dr the out-of-station expense account,
@@ -78,10 +79,11 @@ async function readSettings() {
   return map;
 }
 
-async function loadEmployee(employeeId) {
-  const id = toBigInt(employeeId);
-  if (!id) return null;
-  const [row] = await prisma.$queryRaw`
+/** Employees by id, in one query (the database link is slow). Map of id string → employee. */
+async function loadEmployees(employeeIds) {
+  const ids = [...new Set(employeeIds.map(toBigInt).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw`
     SELECT e.id, e.employee_id AS employee_code,
            TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name,
            e.status, e.paygradeId AS paygrade_id, e.supervisorId AS supervisor_id,
@@ -90,14 +92,24 @@ async function loadEmployee(employeeId) {
       FROM employee e
       LEFT JOIN paygrades pg ON pg.id = e.paygradeId
       LEFT JOIN companystructures b ON b.id = e.branchId
-     WHERE e.id = ${id}`.catch(() => []);
-  if (!row) return null;
-  return {
+     WHERE e.id IN (${Prisma.join(ids)})`.catch(() => []);
+  return new Map(rows.map(row => [String(row.id), {
     ...row,
     id:            String(row.id),
     paygrade_id:   row.paygrade_id   != null ? String(row.paygrade_id)   : null,
     supervisor_id: row.supervisor_id != null ? String(row.supervisor_id) : null,
-  };
+  }]));
+}
+
+async function loadEmployee(employeeId) {
+  const map = await loadEmployees([employeeId]);
+  return map.get(String(toBigInt(employeeId))) ?? null;
+}
+
+/** The employee ids in a request body: `employees` (list) or the older single `employee`. */
+function requestedIds(body) {
+  const list = Array.isArray(body?.employees) ? body.employees : (body?.employee ? [body.employee] : []);
+  return [...new Set(list.map(v => String(v ?? '').trim()).filter(v => /^\d+$/.test(v)))];
 }
 
 /** Does this employee have anyone (active) reporting to them? */
@@ -122,36 +134,94 @@ async function canActFor(req, emp) {
 const RAISE_FOR_MSG = 'Only staff with people reporting to them can raise out-of-station requests — for their direct reports or themselves';
 
 /**
- * Days, rate and amount for an employee over a date range, or { error }.
- * The rate is the one set for the employee's pay grade at the time of the quote.
+ * The period and the number of days to pay, or { error }. The days are entered by whoever raises the
+ * request and are not tied to the dates: some staff are paid by nights slept away, which counts
+ * differently from calendar days.
  */
-async function quoteFor(emp, startStr, endStr) {
+function checkPeriod(startStr, endStr, daysValue) {
   const start = parseDay(startStr), end = parseDay(endStr);
   if (!start || !end) return { error: 'Start and end dates are required (YYYY-MM-DD)' };
   if (start > end)    return { error: 'The start date must be on or before the end date' };
-  if (!emp.paygrade_id) return { error: `${emp.employee_name || 'This employee'} has no pay grade on record, so no out-of-station rate applies. Set their pay grade first.` };
-  const [rate] = await prisma.$queryRaw`
-    SELECT daily_rate FROM outofstation_rates WHERE paygrade_id = ${toBigInt(emp.paygrade_id)}`.catch(() => []);
-  if (!rate) return { error: `No out-of-station daily rate is set for pay grade ${emp.paygrade_name || emp.paygrade_id}. Add it in Manage Out of Station → Daily Rates.` };
-  const dailyRate = Number(s(rate.daily_rate));
-  const days = daysBetween(start, end);
-  return { start, end, days, daily_rate: dailyRate, amount: round2(days * dailyRate) };
+  const raw = String(daysValue ?? '').trim();
+  if (!raw) return { error: 'Enter the number of days to pay' };
+  const days = Number(raw);
+  if (!Number.isInteger(days) || days < 1) return { error: 'Number of days must be a whole number of 1 or more' };
+  return { start, end, days };
 }
 
-/** The first active request of this employee that shares a day with the range, or null. */
-async function findOverlap(employeeId, start, end, excludeId = null) {
+/** Daily rate per pay grade id, for the given grades. */
+async function loadRates(paygradeIds) {
+  const ids = [...new Set(paygradeIds.filter(Boolean).map(toBigInt).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw`
+    SELECT paygrade_id, daily_rate FROM outofstation_rates WHERE paygrade_id IN (${Prisma.join(ids)})`.catch(() => []);
+  return new Map(rows.map(r => [String(r.paygrade_id), Number(s(r.daily_rate))]));
+}
+
+/** Rate and amount for one employee over a checked period, or { error }. */
+function priceFor(emp, period, rates) {
+  if (!emp.paygrade_id) return { error: `${emp.employee_name || 'This employee'} has no pay grade on record, so no out-of-station rate applies. Set their pay grade first.` };
+  const dailyRate = rates.get(String(emp.paygrade_id));
+  if (dailyRate == null) return { error: `No out-of-station daily rate is set for pay grade ${emp.paygrade_name || emp.paygrade_id}. Add it in Manage Out of Station → Daily Rates.` };
+  return { ...period, daily_rate: dailyRate, amount: round2(period.days * dailyRate) };
+}
+
+/** Days, rate and amount for one employee, or { error }. The rate is the grade's rate now. */
+async function quoteFor(emp, startStr, endStr, daysValue) {
+  const period = checkPeriod(startStr, endStr, daysValue);
+  if (period.error) return period;
+  return priceFor(emp, period, await loadRates([emp.paygrade_id]));
+}
+
+/** Active requests that share a day with the range, first one per employee. Map of employee id → row. */
+async function findOverlaps(employeeIds, start, end, excludeId = null) {
+  const ids = employeeIds.map(toBigInt).filter(Boolean);
+  if (!ids.length) return new Map();
   const exclude = excludeId ? Prisma.sql`AND id <> ${toBigInt(excludeId)}` : Prisma.empty;
-  const [row] = await prisma.$queryRaw`
-    SELECT request_number, date_start, date_end, status FROM outofstation_requests
-     WHERE employee = ${toBigInt(employeeId)}
+  const rows = await prisma.$queryRaw`
+    SELECT employee, request_number, date_start, date_end, status FROM outofstation_requests
+     WHERE employee IN (${Prisma.join(ids)})
        AND status IN (${Prisma.join(ACTIVE_STATUSES)})
        AND date_end >= ${start} AND date_start <= ${end} ${exclude}
-     ORDER BY date_start LIMIT 1`.catch(() => []);
-  return row ?? null;
+     ORDER BY date_start`.catch(() => []);
+  const map = new Map();
+  for (const r of rows) if (!map.has(String(r.employee))) map.set(String(r.employee), r);
+  return map;
+}
+async function findOverlap(employeeId, start, end, excludeId = null) {
+  return (await findOverlaps([employeeId], start, end, excludeId)).get(String(toBigInt(employeeId))) ?? null;
 }
 
 const overlapMessage = (o) =>
   `These dates overlap out-of-station request ${o.request_number} (${fmtDay(o.date_start)} – ${fmtDay(o.date_end)}, ${o.status}). Change the dates or cancel that request first.`;
+
+/**
+ * Price every selected employee for one period. Each line carries its own `error` when that employee
+ * cannot be included (not found, inactive, not the caller's to raise for, no rate, dates clash).
+ * `checkOverlap` adds the clash check (on save, and on the quote so the form shows it early).
+ */
+async function quoteMany(req, ids, period, { checkOverlap = true } = {}) {
+  const emps  = await loadEmployees(ids);
+  const rates = await loadRates([...emps.values()].map(e => e.paygrade_id));
+  const clashes = checkOverlap ? await findOverlaps([...emps.keys()], period.start, period.end) : new Map();
+  const lines = [];
+  for (const id of ids) {
+    const emp = emps.get(id);
+    const base = { employee: id, employee_name: emp?.employee_name ?? `Employee ${id}`, employee_code: emp?.employee_code ?? null, paygrade_name: emp?.paygrade_name ?? null };
+    let error = null, price = null;
+    if (!emp)                               error = 'Employee not found';
+    else if (emp.status !== '1')            error = 'Not an active employee';
+    else if (!(await canActFor(req, emp)))  error = 'You cannot raise a request for this employee';
+    else {
+      price = priceFor(emp, period, rates);
+      if (price.error) error = price.error;
+      else if (clashes.has(id)) error = overlapMessage(clashes.get(id));
+    }
+    lines.push(error ? { ...base, error } : { ...base, emp, days: price.days, daily_rate: price.daily_rate, amount: price.amount });
+  }
+  return lines;
+}
+const publicLine = ({ emp, ...line }) => line;
 
 /** OOS-2026-0001, numbered per year. The unique key catches the rare race; the caller retries. */
 async function nextRequestNumber(year) {
@@ -405,9 +475,11 @@ exports.getRequestableEmployees = asyncHandler(async (req, res) => {
   const rows = await prisma.$queryRaw`
     SELECT e.id, e.employee_id AS employee_code,
            TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name,
-           e.paygradeId AS paygrade_id, pg.name AS paygrade_name, e.supervisorId AS supervisor_id
+           e.paygradeId AS paygrade_id, pg.name AS paygrade_name, e.supervisorId AS supervisor_id,
+           e.departmentId AS department_id, d.title AS department_name
       FROM employee e
       LEFT JOIN paygrades pg ON pg.id = e.paygradeId
+      LEFT JOIN companystructures d ON d.id = e.departmentId
      WHERE ${where}
      ORDER BY e.firstName, e.lastName`.catch(() => []);
   respond.ok(res, 'Employees', s(rows).map(r => ({
@@ -417,15 +489,28 @@ exports.getRequestableEmployees = asyncHandler(async (req, res) => {
   })));
 });
 
-// POST /out-of-station/quote — { employee, date_start, date_end } → days, rate and amount, for the form.
+// POST /out-of-station/quote — { employees: [id…], date_start, date_end, days, exclude_id? } → a line per
+// employee (rate and amount, or the reason they can't be included) and the total, for the form.
+// `exclude_id` is the draft being edited, so it does not clash with itself.
 exports.quote = asyncHandler(async (req, res) => {
-  if (!req.body.employee) return respond.badReq(res, 'Select the employee');
-  const emp = await loadEmployee(req.body.employee);
-  if (!emp) return respond.badReq(res, 'Employee not found');
-  if (!(await canActFor(req, emp))) return respond.forbidden(res, RAISE_FOR_MSG);
-  const q = await quoteFor(emp, req.body.date_start, req.body.date_end);
-  if (q.error) return respond.badReq(res, q.error);
-  respond.ok(res, 'Quote', { days: q.days, daily_rate: q.daily_rate, amount: q.amount, paygrade_name: emp.paygrade_name });
+  const ids = requestedIds(req.body);
+  if (!ids.length) return respond.badReq(res, 'Select at least one employee');
+  const period = checkPeriod(req.body.date_start, req.body.date_end, req.body.days);
+  if (period.error) return respond.badReq(res, period.error);
+  let lines;
+  if (req.body.exclude_id) {
+    // Editing a draft: one employee, already checked when it was raised.
+    const emp = await loadEmployee(ids[0]);
+    if (!emp) return respond.badReq(res, 'Employee not found');
+    const q = priceFor(emp, period, await loadRates([emp.paygrade_id]));
+    const clash = q.error ? null : await findOverlap(emp.id, period.start, period.end, req.body.exclude_id);
+    const base = { employee: emp.id, employee_name: emp.employee_name, employee_code: emp.employee_code, paygrade_name: emp.paygrade_name };
+    lines = [q.error || clash ? { ...base, error: q.error || overlapMessage(clash) } : { ...base, days: q.days, daily_rate: q.daily_rate, amount: q.amount }];
+  } else {
+    lines = (await quoteMany(req, ids, period)).map(publicLine);
+  }
+  const ok = lines.filter(l => !l.error);
+  respond.ok(res, 'Quote', { days: period.days, lines, total: round2(ok.reduce((n, l) => n + l.amount, 0)), count: ok.length });
 });
 
 // GET /out-of-station/requests?scope=mine|team|all&status=&from=&to=
@@ -494,8 +579,10 @@ exports.getHistory = asyncHandler(async (req, res) => {
   respond.ok(res, 'History', s(rows));
 });
 
-// POST /out-of-station/requests — { employee?, purpose, location, date_start, date_end, submit? }.
-// Saved as a Draft; `submit: true` sends it for approval straight away.
+// POST /out-of-station/requests — { employees: [id…] (or employee), purpose, location, date_start,
+// date_end, days, submit? }. One request per employee, all with the same period and days, each at its
+// own grade's rate. All or nothing: if any selected employee can't be included, nothing is saved and
+// the reasons are listed. Saved as Drafts; `submit: true` sends them for approval straight away.
 exports.createRequest = asyncHandler(async (req, res) => {
   const purpose  = String(req.body.purpose  ?? '').trim();
   const location = String(req.body.location ?? '').trim();
@@ -503,45 +590,58 @@ exports.createRequest = asyncHandler(async (req, res) => {
   if (!location) return respond.badReq(res, 'Location is required');
   if (purpose.length > 255 || location.length > 150) return respond.badReq(res, 'Purpose (255) or location (150) is too long');
 
-  const employeeId = req.body.employee;
-  if (!employeeId) return respond.badReq(res, 'Select the employee the request is for');
-  const emp = await loadEmployee(employeeId);
-  if (!emp) return respond.badReq(res, 'Employee not found');
-  if (emp.status !== '1') return respond.badReq(res, 'Out-of-station requests can only be raised for active employees');
-  if (!(await canActFor(req, emp))) return respond.forbidden(res, RAISE_FOR_MSG);
+  const ids = requestedIds(req.body);
+  if (!ids.length) return respond.badReq(res, 'Select at least one employee the request is for');
+  const period = checkPeriod(req.body.date_start, req.body.date_end, req.body.days);
+  if (period.error) return respond.badReq(res, period.error);
 
-  const q = await quoteFor(emp, req.body.date_start, req.body.date_end);
-  if (q.error) return respond.badReq(res, q.error);
-  const clash = await findOverlap(emp.id, q.start, q.end);
-  if (clash) return respond.badReq(res, overlapMessage(clash));
-
-  const id = newId();
-  for (let attempt = 0; ; attempt++) {
-    const number = await nextRequestNumber(q.start.getUTCFullYear());
-    try {
-      await prisma.$executeRaw`
-        INSERT INTO outofstation_requests
-          (id, request_number, employee, purpose, location, date_start, date_end, days,
-           paygrade_id, daily_rate, amount, account_no, branch, status, approval_level,
-           requested_by, created_at, updated_at)
-        VALUES (${id}, ${number}, ${toBigInt(emp.id)}, ${purpose}, ${location}, ${q.start}, ${q.end}, ${q.days},
-                ${toBigInt(emp.paygrade_id)}, ${q.daily_rate}, ${q.amount}, ${emp.bank_account ?? null}, ${emp.branch_code ?? null},
-                'Draft', 0, ${toBigInt(req.user?.id)}, NOW(), NOW())`;
-      break;
-    } catch (e) {
-      // Two requests numbered at the same moment: take the next number.
-      if (attempt < 4 && /unique|duplicate/i.test(String(e.message))) continue;
-      throw e;
+  const lines = await quoteMany(req, ids, period);
+  const bad = lines.filter(l => l.error);
+  if (bad.length) {
+    if (lines.length === 1) {
+      const msg = bad[0].error === 'You cannot raise a request for this employee' ? RAISE_FOR_MSG : bad[0].error;
+      return respond.badReq(res, msg);
     }
+    return respond.badReq(res, `Nothing was saved — ${bad.length} of the ${lines.length} selected employees cannot be included: ` +
+      bad.map(l => `${l.employee_name}: ${l.error}`).join(' | ') + '. Remove them and try again.');
   }
-  await writeLog(id, req.user?.id, emp.id === myEmployeeId(req) ? 'Request created' : `Request created on behalf of ${emp.employee_name}`, null, 'Draft');
-  logActivity({ module: 'Out of Station', action: 'create', entityId: String(id), entityName: emp.employee_name, ...fromReq(req) });
 
-  if (req.body.submit) {
-    const msg = await submitRequest(String(id), req);
-    return respond.created(res, msg, await getRow(id));
+  const me = myEmployeeId(req);
+  const createdIds = [];
+  for (const line of lines) {
+    const emp = line.emp;
+    const id = newId();
+    for (let attempt = 0; ; attempt++) {
+      const number = await nextRequestNumber(period.start.getUTCFullYear());
+      try {
+        await prisma.$executeRaw`
+          INSERT INTO outofstation_requests
+            (id, request_number, employee, purpose, location, date_start, date_end, days,
+             paygrade_id, daily_rate, amount, account_no, branch, status, approval_level,
+             requested_by, created_at, updated_at)
+          VALUES (${id}, ${number}, ${toBigInt(emp.id)}, ${purpose}, ${location}, ${period.start}, ${period.end}, ${line.days},
+                  ${toBigInt(emp.paygrade_id)}, ${line.daily_rate}, ${line.amount}, ${emp.bank_account ?? null}, ${emp.branch_code ?? null},
+                  'Draft', 0, ${toBigInt(req.user?.id)}, NOW(), NOW())`;
+        break;
+      } catch (e) {
+        // Two requests numbered at the same moment: take the next number.
+        if (attempt < 4 && /unique|duplicate/i.test(String(e.message))) continue;
+        throw e;
+      }
+    }
+    await writeLog(id, req.user?.id, emp.id === me ? 'Request created' : `Request created on behalf of ${emp.employee_name}`, null, 'Draft');
+    logActivity({ module: 'Out of Station', action: 'create', entityId: String(id), entityName: emp.employee_name, ...fromReq(req) });
+    createdIds.push(String(id));
   }
-  respond.created(res, 'Out-of-station request saved as a draft', await getRow(id));
+
+  let msg = null;
+  if (req.body.submit) for (const id of createdIds) msg = await submitRequest(id, req);
+
+  if (createdIds.length === 1) {
+    return respond.created(res, msg ?? 'Out-of-station request saved as a draft', await getRow(createdIds[0]));
+  }
+  const n = createdIds.length;
+  respond.created(res, req.body.submit ? `${n} out-of-station requests submitted for approval` : `${n} out-of-station requests saved as drafts`, { ids: createdIds });
 });
 
 // PUT /out-of-station/requests/:id — edit a Draft. Days, rate and amount are recalculated.
@@ -557,7 +657,8 @@ exports.updateRequest = asyncHandler(async (req, res) => {
   if (!location) return respond.badReq(res, 'Location is required');
 
   const emp = await loadEmployee(row.employee);
-  const q = await quoteFor(emp, req.body.date_start ?? String(row.date_start).slice(0, 10), req.body.date_end ?? String(row.date_end).slice(0, 10));
+  const q = await quoteFor(emp, req.body.date_start ?? String(row.date_start).slice(0, 10), req.body.date_end ?? String(row.date_end).slice(0, 10),
+                           req.body.days ?? row.days);
   if (q.error) return respond.badReq(res, q.error);
   const clash = await findOverlap(emp.id, q.start, q.end, row.id);
   if (clash) return respond.badReq(res, overlapMessage(clash));

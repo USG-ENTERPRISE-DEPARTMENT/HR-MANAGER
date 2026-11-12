@@ -14,7 +14,8 @@ import { FormModal } from './ui/FormModal';
 import { DetailSlideOver, DetailGrid, DetailField, DetailSection } from './ui/DetailSlideOver';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
-import { SearchSelect } from './ui/SearchSelect';
+import { SearchSelect, MultiSearchSelect } from './ui/SearchSelect';
+import { FilterSelect } from './ui/FilterSelect';
 import { DateInput } from './ui/DateInput';
 import { RowActions } from './ui/RowActions';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -24,8 +25,9 @@ import { exportReportExcel, reportPdf } from './ui/reportTools';
 import { fmtDate as formatDmy, fmtDateTime } from '@/lib/dateFormat';
 import { useRealtimeRefresh } from '@/lib/realtime';
 
-// Out of Station allowance: days (start to end, both included, weekends counted) × the daily rate for
-// the employee's pay grade. Raised by staff who have people reporting to them — for a subordinate or
+// Out of Station allowance: the number of days entered on the request (not tied to the dates — some
+// staff are paid by nights away) × the daily rate for the employee's pay grade. One form can raise a request for several
+// employees at once (filter by department, then pick). Raised by staff who have people reporting to them — for a subordinate or
 // for themselves; staff with no reports cannot raise one. Approved like leave
 // (supervisor, then HR), and paid to the employee's account through the GL on HR's approval.
 //
@@ -44,7 +46,12 @@ type Request = {
   requested_by?: string | null; requested_by_name?: string | null; submitted_at?: string | null;
   approved_at?: string | null; posted_at?: string | null; updated_at?: string | null; created_at?: string;
 };
-type Employee = { id: string; employee_name: string; employee_code?: string; paygrade_name?: string; is_self?: boolean; is_report?: boolean };
+type Employee = {
+  id: string; employee_name: string; employee_code?: string; paygrade_name?: string; is_self?: boolean; is_report?: boolean;
+  department_id?: string | null; department_name?: string | null;
+};
+type QuoteLine = { employee: string; employee_name: string; employee_code?: string | null; paygrade_name?: string | null; daily_rate?: number; amount?: number; error?: string };
+type Quote = { days: number; lines: QuoteLine[]; total: number; count: number };
 type Rate = { paygrade_id: string; paygrade_name: string; daily_rate: number | null };
 type GlBlock = { accounts: InvalidAccount[] | null; imbalance: GlImbalance | null } | null;
 
@@ -90,33 +97,53 @@ function RequestForm({ initial, employees, title, subtitle, onClose, onSaved }: 
   initial: Request | null; employees: Employee[]; title: string; subtitle: string; onClose: () => void; onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    employee: initial?.employee ? String(initial.employee) : (employees.length === 1 ? String(employees[0].id) : ''),
     location: initial?.location ?? '', purpose: initial?.purpose ?? '',
     date_start: day(initial?.date_start), date_end: day(initial?.date_end),
+    days: initial?.days != null ? String(initial.days) : '',
   });
-  const [quote, setQuote] = useState<{ days: number; daily_rate: number; amount: number; paygrade_name?: string } | null>(null);
+  // Several employees can be picked at once (one request each); editing a draft keeps its one employee.
+  const [selected, setSelected] = useState<string[]>(
+    initial?.employee ? [String(initial.employee)] : (employees.length === 1 ? [String(employees[0].id)] : []));
+  const [department, setDepartment] = useState('');
+  const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteError, setQuoteError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (key: keyof typeof form, value: string) => setForm(f => ({ ...f, [key]: value }));
 
-  // Days × rate comes from the server: the rate belongs to the employee's pay grade.
+  // Calendar days in the period — shown for reference only. The days paid are whatever is entered
+  // (some staff are paid by nights away, which counts differently).
+  const span = form.date_start && form.date_end && form.date_end >= form.date_start
+    ? Math.round((Date.parse(form.date_end) - Date.parse(form.date_start)) / 86400000) + 1 : 0;
+  const daysNum = Number(form.days);
+  const daysError = form.days === '' ? '' : !Number.isInteger(daysNum) || daysNum < 1 ? 'Enter a whole number of 1 or more' : '';
+
+  // Days × rate comes from the server: each employee's rate belongs to their pay grade.
+  const selectedKey = selected.join(',');
   useEffect(() => {
     setQuote(null); setQuoteError('');
-    if (!form.employee || !form.date_start || !form.date_end || form.date_end < form.date_start) return;
+    if (!selected.length || !span || !form.days || daysError) return;
     const t = setTimeout(() => {
-      api.post('/out-of-station/quote', { employee: form.employee, date_start: form.date_start, date_end: form.date_end })
+      api.post('/out-of-station/quote', {
+        employees: selected, date_start: form.date_start, date_end: form.date_end, days: form.days,
+        ...(initial ? { exclude_id: initial.id } : {}),
+      })
         .then(r => setQuote(r.data?.data ?? null))
         .catch(e => setQuoteError(e.response?.data?.message || 'Could not work out the allowance'));
     }, 300);
     return () => clearTimeout(t);
-  }, [form.employee, form.date_start, form.date_end]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, form.date_start, form.date_end, form.days, daysError, span]);
 
   const save = async (submit: boolean) => {
     if (saving) return;
-    if (!form.employee) return toast.error('Select the employee');
+    if (!selected.length) return toast.error('Select at least one employee');
     if (!form.location.trim()) return toast.error('Location is required');
     if (!form.date_start || !form.date_end) return toast.error('Start and end dates are required');
+    if (!form.days) return toast.error('Enter the number of days');
+    if (daysError) return toast.error(`Number of days: ${daysError}`);
     if (!form.purpose.trim()) return toast.error('Purpose is required');
+    const blocked = quote?.lines.filter(l => l.error) ?? [];
+    if (blocked.length) return toast.error(`Remove ${blocked.length === 1 ? blocked[0].employee_name : `the ${blocked.length} employees marked in red`} first — they cannot be included.`);
     setSaving(true);
     try {
       if (initial) {
@@ -124,15 +151,30 @@ function RequestForm({ initial, employees, title, subtitle, onClose, onSaved }: 
         if (submit) await api.post(`/out-of-station/requests/${initial.id}/submit`);
         toast.success(submit ? 'Request submitted for approval' : 'Request updated');
       } else {
-        const res = await api.post('/out-of-station/requests', { ...form, submit });
+        const res = await api.post('/out-of-station/requests', { ...form, employees: selected, submit });
         toast.success(res.data?.message || 'Request saved');
       }
       onSaved(); onClose();
-    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save the request'); }
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to save the request', { duration: 8000 }); }
     finally { setSaving(false); }
   };
 
-  const options = employees.map(e => ({ id: String(e.id), label: `${e.employee_name}${e.employee_code ? ` (${e.employee_code})` : ''}` }));
+  const label = (e: Employee) => `${e.employee_name}${e.employee_code ? ` (${e.employee_code})` : ''}`;
+  const departments = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of employees) m.set(e.department_id ? String(e.department_id) : 'none', e.department_name || 'No department');
+    return [...m.entries()].map(([value, lbl]) => ({ value, label: lbl })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [employees]);
+  // The list shows the chosen department; anyone already picked stays listed so their chip still shows
+  // when the filter moves to another department.
+  const options = useMemo(() => employees
+    .filter(e => !department || (e.department_id ? String(e.department_id) : 'none') === department || selected.includes(String(e.id)))
+    .map(e => ({ id: String(e.id), label: label(e) })), [employees, department, selectedKey]);
+  const inDept = department ? employees.filter(e => (e.department_id ? String(e.department_id) : 'none') === department) : [];
+  const addDept = () => setSelected(s => [...new Set([...s, ...inDept.map(e => String(e.id))])]);
+
+  const okLines = quote?.lines.filter(l => !l.error) ?? [];
+  const badLines = quote?.lines.filter(l => l.error) ?? [];
 
   return (
     <FormModal
@@ -141,11 +183,28 @@ function RequestForm({ initial, employees, title, subtitle, onClose, onSaved }: 
       secondaryAction={{ label: 'Save as Draft', onClick: () => save(false) }}
       maxWidth="lg">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-        {employees.length > 1 && (
+        {initial && employees.length > 1 ? (
           <FormField label="Employee" required className="col-span-full">
-            <SearchSelect value={form.employee} onChange={v => set('employee', v)} options={options} placeholder="Search employee…" disabled={!!initial} />
+            <SearchSelect value={selected[0] ?? ''} onChange={() => {}} options={employees.map(e => ({ id: String(e.id), label: label(e) }))} disabled />
           </FormField>
-        )}
+        ) : !initial && employees.length > 1 && <>
+          {departments.length > 1 && (
+            <FormField label="Department" className="col-span-full">
+              <div className="flex flex-wrap items-end gap-2">
+                <FilterSelect value={department} onChange={setDepartment} placeholder="All departments" className="flex-1"
+                  options={[{ value: '', label: 'All departments' }, ...departments]} />
+                {department && (
+                  <button type="button" className="secondary-btn shrink-0 h-[34px]" onClick={addDept} disabled={!inDept.length}>
+                    Add all {inDept.length} from department
+                  </button>
+                )}
+              </div>
+            </FormField>
+          )}
+          <FormField label={`Employees${selected.length ? ` (${selected.length} selected)` : ''}`} required className="col-span-full">
+            <MultiSearchSelect value={selected} onChange={setSelected} options={options} placeholder="Search and select employees…" />
+          </FormField>
+        </>}
         <FormField label="Location" required className="col-span-full">
           <input id="oos-location" className={inputClass} value={form.location} maxLength={150} onChange={e => set('location', e.target.value)} placeholder="e.g. Makeni" />
         </FormField>
@@ -156,26 +215,52 @@ function RequestForm({ initial, employees, title, subtitle, onClose, onSaved }: 
         <FormField label="End Date" required>
           <DateInput className={inputClass} value={form.date_end} min={form.date_start || undefined} onChange={e => set('date_end', e.target.value)} />
         </FormField>
+        <FormField label="Number of Days" required>
+          <input type="number" min={1} step={1} className={inputClass} value={form.days}
+            onChange={e => set('days', e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="Days to pay" />
+          <p className={`mt-1 text-[11px] ${daysError ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
+            {daysError || (span ? `Paid at the daily rate. For reference, the dates span ${span} calendar day${span !== 1 ? 's' : ''}.` : 'Paid at the daily rate.')}
+          </p>
+        </FormField>
 
-        {form.date_start && form.date_end && (
-          form.date_end < form.date_start ? (
-            <div className="col-span-full rounded-[10px] border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-4 py-3 text-[12px] text-[var(--danger)]">
-              End date must be on or after start date.
+        {form.date_start && form.date_end && form.date_end < form.date_start ? (
+          <div className="col-span-full rounded-[10px] border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-4 py-3 text-[12px] text-[var(--danger)]">
+            End date must be on or after start date.
+          </div>
+        ) : quoteError ? (
+          <div className="col-span-full rounded-[10px] border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-4 py-3 text-[12px] text-[var(--danger)]">{quoteError}</div>
+        ) : selected.length > 0 && span > 0 && form.days && !daysError && (
+          <div className="col-span-full rounded-[10px] border border-[var(--border)] bg-[var(--bg)] overflow-hidden">
+            <div className="flex items-center justify-between flex-wrap gap-2 px-4 py-3">
+              <span className="text-[12px] font-semibold text-[var(--text-primary)]">
+                {!quote ? 'Working out the allowance…'
+                  : okLines.length === 1 ? `${quote.days} day${quote.days !== 1 ? 's' : ''} × ${amt(okLines[0].daily_rate)}`
+                  : `${okLines.length} employee${okLines.length !== 1 ? 's' : ''} × ${quote.days} day${quote.days !== 1 ? 's' : ''}`}
+              </span>
+              {quote && <span className="text-[13px] font-bold tabular-nums text-[var(--success)]">{money(quote.total)}</span>}
             </div>
-          ) : quoteError ? (
-            <div className="col-span-full rounded-[10px] border border-[var(--danger)]/40 bg-[var(--danger)]/5 px-4 py-3 text-[12px] text-[var(--danger)]">{quoteError}</div>
-          ) : (
-            <div className="col-span-full rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-4 py-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-[12px] font-semibold text-[var(--text-primary)]">
-                  {quote ? `${quote.days} day${quote.days !== 1 ? 's' : ''} × ${amt(quote.daily_rate)}` : 'Working out the allowance…'}
-                  <span className="ml-2 text-[11px] font-normal text-[var(--text-muted)]">weekends included</span>
-                </span>
-                {quote && <span className="text-[13px] font-bold tabular-nums text-[var(--success)]">{money(quote.amount)}</span>}
+            {quote && (quote.lines.length > 1 || badLines.length > 0) && (
+              <div className="max-h-56 overflow-y-auto border-t border-[var(--border)] divide-y divide-[var(--border)]">
+                {quote.lines.map(l => (
+                  <div key={l.employee} className="flex items-start justify-between gap-3 px-4 py-2 text-[12px]">
+                    <div className="min-w-0">
+                      <p className={`font-medium truncate ${l.error ? 'text-[var(--danger)]' : 'text-[var(--text-primary)]'}`}>{l.employee_name}</p>
+                      <p className={`text-[11px] ${l.error ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
+                        {l.error || `Grade ${l.paygrade_name || '—'} · ${amt(l.daily_rate)} a day`}
+                      </p>
+                    </div>
+                    {l.error ? (
+                      !initial && <button type="button" className="shrink-0 text-[11px] font-semibold text-[var(--danger)] hover:underline"
+                        onClick={() => setSelected(s => s.filter(id => id !== String(l.employee)))}>Remove</button>
+                    ) : <span className="shrink-0 font-semibold tabular-nums text-[var(--text-primary)]">{money(l.amount ?? 0)}</span>}
+                  </div>
+                ))}
               </div>
-              {quote?.paygrade_name && <p className="mt-1 text-[11px] text-[var(--text-muted)]">Daily rate for grade {quote.paygrade_name}</p>}
-            </div>
-          )
+            )}
+            {quote && quote.lines.length === 1 && okLines[0]?.paygrade_name && (
+              <p className="px-4 pb-3 -mt-1 text-[11px] text-[var(--text-muted)]">Daily rate for grade {okLines[0].paygrade_name}</p>
+            )}
+          </div>
         )}
 
         <FormField label="Purpose" required className="col-span-full">
