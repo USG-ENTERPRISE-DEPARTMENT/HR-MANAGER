@@ -632,12 +632,15 @@ router.post  ('/leave/leaves/:id/retry-gl',          leave.retryLeaveGL);
 
 // ─────────────────────────────────────────────
 // Out of Station allowance
-// Requesting is open to everyone, like leave; the controller checks who may act on each request
-// (self, supervisor, HR). Setup is gated here.
+// HR raises every request; employees only see their own under Personal Out of Station. Approval
+// follows the configured stages (role or user per stage), so the controller checks who may act on
+// each request. Setup is gated here.
 // ─────────────────────────────────────────────
 router.get   ('/out-of-station/settings',               oos.getSettings);
 // Edited in Settings → Controls (Postings, Approvals, Medical & GL).
 router.put   ('/out-of-station/settings',               permissionGuard.any('manage_settings', 'manage_out_of_station'), oos.saveSettings);
+router.get   ('/out-of-station/approval-flow',          oos.getApprovalFlow);
+router.put   ('/out-of-station/approval-flow',          permissionGuard.any('manage_settings', 'manage_out_of_station'), oos.saveApprovalFlow);
 router.get   ('/out-of-station/rates',                  oos.getRates);
 router.put   ('/out-of-station/rates',                  permissionGuard('manage_out_of_station'), oos.saveRates);
 router.get   ('/out-of-station/employees',              oos.getRequestableEmployees);
@@ -649,6 +652,7 @@ router.get   ('/out-of-station/requests/:id',           oos.getRequest);
 router.put   ('/out-of-station/requests/:id',           oos.updateRequest);
 router.delete('/out-of-station/requests/:id',           oos.deleteRequest);
 router.get   ('/out-of-station/requests/:id/history',   oos.getHistory);
+router.get   ('/out-of-station/requests/:id/stages',    oos.getStages);
 router.post  ('/out-of-station/requests/:id/submit',    oos.submit);
 router.post  ('/out-of-station/requests/:id/approve',   oos.approve);
 router.post  ('/out-of-station/requests/:id/reject',    oos.reject);

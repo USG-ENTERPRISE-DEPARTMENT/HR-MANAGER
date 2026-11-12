@@ -9,7 +9,17 @@ import { inputClass } from './ui/FormField';
 type Stage = { name: string; approverType: 'role' | 'user'; approverId: string; approverLabel: string };
 type Option = { id: string; label: string };
 
-export function EmployeeApprovalFlow({ onClose }: { onClose: () => void }) {
+/**
+ * Ordered role/user stage editor. Defaults to the employee approval flow; other modules (Out of
+ * Station) pass their own endpoint and wording.
+ */
+export function EmployeeApprovalFlow({
+  onClose,
+  endpoint = '/employees/approval-flow',
+  title = 'Employee Approval Flow',
+  subtitle = 'This one flow is shared by new employee approvals and employee detail-change approvals. Each request follows the stages in order.',
+  noun = 'employee approval flow',
+}: { onClose: () => void; endpoint?: string; title?: string; subtitle?: string; noun?: string }) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [roles, setRoles] = useState<Option[]>([]);
   const [users, setUsers] = useState<Option[]>([]);
@@ -17,7 +27,7 @@ export function EmployeeApprovalFlow({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.get('/employees/approval-flow'), api.get('/roles'), api.get('/users')])
+    Promise.all([api.get(endpoint), api.get('/roles'), api.get('/users')])
       .then(([flowResponse, roleResponse, userResponse]) => {
         setStages((flowResponse.data?.data || []).map((stage: any) => ({
           name: stage.name || '',
@@ -28,9 +38,9 @@ export function EmployeeApprovalFlow({ onClose }: { onClose: () => void }) {
         setRoles((roleResponse.data?.data || []).map((role: any) => ({ id: String(role.id), label: role.name })));
         setUsers((userResponse.data?.data || []).map((user: any) => ({ id: String(user.id), label: user.name || user.username || `User ${user.id}` })));
       })
-      .catch(() => toast.error('Failed to load the employee approval flow'))
+      .catch(() => toast.error(`Failed to load the ${noun}`))
       .finally(() => setLoading(false));
-  }, []);
+  }, [endpoint, noun]);
 
   const update = (index: number, patch: Partial<Stage>) => setStages(current => current.map((stage, i) => i === index ? { ...stage, ...patch } : stage));
   const move = (index: number, direction: -1 | 1) => setStages(current => {
@@ -48,17 +58,18 @@ export function EmployeeApprovalFlow({ onClose }: { onClose: () => void }) {
     }
     setSaving(true);
     try {
-      await api.put('/employees/approval-flow', { stages });
-      toast.success(stages.length ? 'Employee approval flow saved' : 'Employee approval flow cleared');
+      await api.put(endpoint, { stages });
+      const label = noun.charAt(0).toUpperCase() + noun.slice(1);
+      toast.success(stages.length ? `${label} saved` : `${label} cleared`);
       onClose();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to save the employee approval flow');
+      toast.error(error.response?.data?.message || `Failed to save the ${noun}`);
     } finally { setSaving(false); }
   };
 
   return (
-    <FormModal title="Employee Approval Flow"
-      subtitle="This one flow is shared by new employee approvals and employee detail-change approvals. Each request follows the stages in order."
+    <FormModal title={title}
+      subtitle={subtitle}
       onClose={onClose} onSave={save} saveLabel={saving ? 'Saving…' : 'Save Flow'} maxWidth="lg" scrollable>
       {loading ? <div className="py-10 text-center text-sm text-[var(--text-muted)]">Loading…</div> : (
         <div className="space-y-3">

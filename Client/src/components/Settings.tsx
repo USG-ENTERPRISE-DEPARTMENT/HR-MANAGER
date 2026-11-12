@@ -1128,7 +1128,7 @@ function MedicalGlSection({
 // Stored in their own settings category (out_of_station) and read by the server on every request
 // and posting. Each card loads and saves on its own, so the controls can sit in the sub-tab they
 // belong to — Postings, Approvals, and the GL accounts tab — as the other modules' do.
-type OosSettings = { oos_expense_gl: string; oos_gl_branch: string; oos_supervisor_approval: string; oos_payments_enabled: string };
+type OosSettings = { oos_expense_gl: string; oos_gl_branch: string; oos_payments_enabled: string };
 
 function useOosSettings() {
   const [cfg, setCfg] = useState<OosSettings | null>(null);
@@ -1149,7 +1149,7 @@ function OutOfStationPostingCard() {
     <SectionCard icon={<MapPin size={13} />} title="Out of Station">
       <ControlRow
         label="Post Out of Station Allowance Payments"
-        description="When on, HR's approval of an out-of-station request posts the allowance to the general ledger and pays the employee's account. When off, requests are approved and recorded only — nothing is posted or paid."
+        description="When on, the final approval of an out-of-station request posts the allowance to the general ledger and pays the employee's account. When off, requests are approved and recorded only — nothing is posted or paid."
         checked={(cfg?.oos_payments_enabled ?? 'Yes') === 'Yes'}
         onChange={(v) => { set('oos_payments_enabled', v ? 'Yes' : 'No'); persist({ oos_payments_enabled: v ? 'Yes' : 'No' }); }}
       />
@@ -1158,25 +1158,24 @@ function OutOfStationPostingCard() {
 }
 
 function OutOfStationApprovalCard() {
-  const { cfg, set, persist } = useOosSettings();
+  const [open, setOpen] = useState(false);
   return (
     <SectionCard icon={<MapPin size={13} />} title="Out of Station Approval Flow">
-      <div className="px-5 py-3 border-b border-[var(--border)]">
-        <p className="text-[12px] text-[var(--text-muted)] leading-relaxed">
-          Only staff with people reporting to them can raise requests — for a subordinate or for themselves. HR is always the final approver, and HR's approval pays the allowance. Requests a supervisor raises for their subordinate skip the supervisor step.
+      <div className="px-5 py-4">
+        <p className="text-[12px] text-[var(--text-muted)] mb-3 leading-relaxed">
+          HR raises every out-of-station request. Define the ordered role or user stages a submitted request passes through;
+          the last stage's approval pays the allowance. With no stages, one approval by anyone with the Approve Out of Station
+          permission is enough. Whoever raised a request can never approve it, and no one approves two stages of the same request.
         </p>
-        <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-[var(--text-muted)]">
-          <span className="font-semibold text-[var(--text-primary)]">Config</span><span className="font-semibold text-[var(--text-primary)]">Behaviour</span>
-          <span>Supervisor Off</span><span>Employee → HR → GL</span>
-          <span>Supervisor On</span><span>Employee → Supervisor → HR → GL</span>
-        </div>
+        <button type="button" onClick={() => setOpen(true)} className="secondary-btn text-[13px]">
+          <ShieldCheck size={14} /> Configure Approval Flow
+        </button>
       </div>
-      <ControlRow
-        label="Supervisor Approval"
-        description="When enabled, the employee's supervisor must approve an out-of-station request before it reaches HR — for example a manager's own request goes to their supervisor first."
-        checked={(cfg?.oos_supervisor_approval ?? 'Yes') === 'Yes'}
-        onChange={(v) => { set('oos_supervisor_approval', v ? 'Yes' : 'No'); persist({ oos_supervisor_approval: v ? 'Yes' : 'No' }); }}
-      />
+      {open && (
+        <EmployeeApprovalFlow onClose={() => setOpen(false)}
+          endpoint="/out-of-station/approval-flow" title="Out of Station Approval Flow" noun="out-of-station approval flow"
+          subtitle="A submitted out-of-station request must be approved at each stage below, in order. The last approval pays the allowance. Changes apply to requests submitted from now on." />
+      )}
     </SectionCard>
   );
 }

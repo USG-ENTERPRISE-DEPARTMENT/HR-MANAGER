@@ -525,7 +525,9 @@ function OutOfStationApprovalDetail({ item, onApprove, onReject, onClose, busy }
   const [reason, setReason]       = useState('');
   const r = item.raw;
   const money = (n: any) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const hrStage = r.status === 'Pending HR Approval';
+  // The server sends the stage this approver acts on, and whether approving it is the final (paying) one.
+  const finalStage = r.final_stage !== false;
+  const stageLabel = r.current_stage_name ? `${r.current_stage_name}${finalStage ? ' (final)' : ''}` : 'Single approval';
   const rows = [
     ['Employee',    r.employee_name || '—'],
     ['Employee ID', r.employee_code || '—'],
@@ -536,7 +538,7 @@ function OutOfStationApprovalDetail({ item, onApprove, onReject, onClose, busy }
     ['Days',        String(r.days ?? '—')],
     ['Grade',       r.paygrade_name || '—'],
     ['Raised by',   r.requested_by_name || '—'],
-    ['Status',      r.status || '—'],
+    ['Approval stage', stageLabel],
   ];
   return (
     <div className="space-y-4">
@@ -544,7 +546,7 @@ function OutOfStationApprovalDetail({ item, onApprove, onReject, onClose, busy }
         <div className="w-10 h-10 rounded-full bg-lime-500/10 flex items-center justify-center"><MapPin size={18} className="text-lime-700" /></div>
         <div>
           <p className="font-bold text-[var(--text-primary)]">{r.employee_name}</p>
-          <p className="text-xs text-[var(--text-muted)]">Out of station allowance — {hrStage ? 'HR approval' : 'supervisor approval'}</p>
+          <p className="text-xs text-[var(--text-muted)]">Out of station allowance — {r.request_number}</p>
         </div>
       </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -554,7 +556,9 @@ function OutOfStationApprovalDetail({ item, onApprove, onReject, onClose, busy }
       </dl>
       <div className="rounded-lg bg-lime-50 border border-lime-100 px-4 py-3 space-y-1">
         <div className="flex justify-between text-[13px]"><span className="text-[var(--text-muted)]">{r.days} day(s) × {money(r.daily_rate)}</span><span className="font-bold text-lime-800">{money(r.amount)}</span></div>
-        {hrStage && <p className="text-[11px] text-[var(--text-muted)]">Approving pays this to the employee's bank account through the GL.</p>}
+        <p className="text-[11px] text-[var(--text-muted)]">
+          {finalStage ? 'This is the final approval — approving pays this to the employee\'s bank account through the GL.' : 'Approving passes it to the next approval stage.'}
+        </p>
       </div>
       {r.purpose && (
         <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">

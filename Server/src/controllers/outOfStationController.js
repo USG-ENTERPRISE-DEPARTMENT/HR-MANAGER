@@ -2,20 +2,32 @@
 //
 // Staff sent on duty away from their station are paid days × the daily rate for their pay grade.
 // The number of days is entered on the request — not worked out from the dates, since some staff are
-// paid by nights away — and the allowance is not taxed. One form can raise requests for several employees
-// at once — one request each, same period and days, each at its own grade's rate. Only staff with people reporting to them can raise a request — for
-// their direct reports or for themselves (HR setup can raise for anyone); staff with no reports
-// cannot. It is approved like leave: a supervisor tier when switched on (skipped when the supervisor
-// raised it), then HR. HR's approval posts it to the GL: Dr the out-of-station expense account,
-// Cr the employee's bank account.
+// paid by nights away — and the allowance is not taxed.
 //
-// Status flow:  Draft → Pending Approval (supervisor) → Pending HR Approval → Approved → Paid
-//                                                                                  └→ GL Failed → (retry) → Paid
+// HR raises every request (manage_out_of_station); employees never raise their own and only see their
+// own requests, read-only, under Personal Out of Station. One form can raise requests for several
+// employees at once — one request each, same period and days, each at its own grade's rate.
+//
+// Approval follows the Out of Station approval flow (Settings → Controls → Approvals), like payroll:
+// an ordered list of stages, each approved by a role or a specific user. The flow is copied onto the
+// request when it is submitted, so editing the flow never changes a request already in approval. With
+// no stages configured, one approval by anyone with approve_out_of_station is enough. The final
+// approval posts it to the GL: Dr the out-of-station expense account, Cr the employee's bank account.
+//
+// Status flow:  Draft → Pending Approval (stage 1 … n) → Approved → Posting → Paid
+//                                                                       └→ GL Failed → (retry) → Posting → Paid
 //               Rejected / Cancelled from any open state.
 // With postings switched off a request stops at Approved (record only) and can be posted later.
 //
-// Tables come from manual-migrations/20261026_out_of_station.*.sql and are read with raw SQL, so
-// this module needs no regenerated Prisma client. Ids are generated here (as employeeleaves does).
+// Every status change is a conditional UPDATE (… WHERE status = <the status we read>) and only the
+// caller whose UPDATE changed the row goes on — two clicks, or two approvers at once, can never both
+// approve or both post. "Posting" is held while the GL call is in flight for the same reason.
+//
+// Maker-checker: whoever raised or submitted a request cannot approve it at any stage, and one person
+// cannot approve two stages of the same request.
+//
+// Tables come from manual-migrations/20261026_out_of_station.*.sql and 20261112_out_of_station_stages.*.sql
+// and are read with raw SQL, so this module needs no regenerated Prisma client. Ids are generated here.
 const { Prisma }   = require('@prisma/client');
 const { prisma }   = require('../helpers/dbQueryHelper');
 const asyncHandler = require('../middleware/asyncHandler');
@@ -24,23 +36,28 @@ const { toBigInt, s } = require('../helpers/controllerHelpers');
 const { postToGL } = require('../helpers/glHelper');
 const { getApiConfig } = require('./apiIntegrationController');
 const { upsertSetting, getSystemCurrency } = require('../helpers/settingsHelper');
-const { notifyEmployee, notifyUsersWithPermission } = require('../helpers/notificationHelper');
+const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
 const { logActivity, fromReq } = require('./auditController');
 
 const SETTINGS_CAT = 'out_of_station';
 const SETTING_DEFAULTS = {
-  oos_expense_gl:          '',     // Dr account for every posting
-  oos_gl_branch:           '',     // posting branch; blank → gl_extra.branch → '000'
-  oos_supervisor_approval: 'Yes',  // supervisor tier before HR, as leave does
-  oos_payments_enabled:    'Yes',  // No → requests stop at Approved, nothing is sent to the GL
+  oos_expense_gl:       '',     // Dr account for every posting
+  oos_gl_branch:        '',     // posting branch; blank → gl_extra.branch → '000'
+  oos_payments_enabled: 'Yes',  // No → requests stop at Approved, nothing is sent to the GL
 };
 const SETTING_KEYS = Object.keys(SETTING_DEFAULTS);
+const FLOW_KEY = 'out_of_station_approval_flow';   // app_controls, JSON list of stages
 
 // The database is a remote link with high latency; Prisma's 2s default to start a transaction is too short.
 const TX_OPTS = { maxWait: 15000, timeout: 30000 };
 
-const OPEN_STATUSES   = ['Draft', 'Pending Approval', 'Pending HR Approval'];
-const ACTIVE_STATUSES = [...OPEN_STATUSES, 'Approved', 'Paid', 'GL Failed'];   // block overlapping dates
+const OPEN_STATUSES   = ['Draft', 'Pending Approval'];
+const ACTIVE_STATUSES = [...OPEN_STATUSES, 'Approved', 'Posting', 'Paid', 'GL Failed'];   // block overlapping dates
+
+const CONFLICT_MSG = 'This request was changed by someone else a moment ago. Refresh to see its current status.';
+
+/** Thrown inside a transaction when a conditional UPDATE finds the row already moved on. */
+class Conflict extends Error {}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,10 +66,11 @@ const round2  = (n) => Math.round(Number(n) * 100) / 100;
 const hasPerm = (req, p) => Array.isArray(req.user?.permissions) && req.user.permissions.includes(p);
 const isAdmin = (req) => (req.user?.roles ?? []).some(r => ['admin', 'super-admin'].includes(String(r)));
 const myEmployeeId = (req) => (req.user?.employeeId != null ? String(req.user.employeeId) : null);
+const myUserId     = (req) => String(req.user?.id ?? '');
 
-/** HR tier: final approval, retry and posting. */
+/** Approves when no flow is configured; retries and posts to the GL. */
 const isHrApprover = (req) => isAdmin(req) || hasPerm(req, 'approve_out_of_station');
-/** Setup, and raising a request for any employee. */
+/** Raises, edits, submits and cancels requests; sets rates and the approval flow. */
 const canManage    = (req) => isAdmin(req) || hasPerm(req, 'manage_out_of_station');
 /** The All Requests list and the printed schedule. */
 const canViewAll   = (req) => canManage(req) || isHrApprover(req) || hasPerm(req, 'view_out_of_station');
@@ -64,9 +82,6 @@ function parseDay(value) {
   const d = new Date(`${str}T00:00:00Z`);
   return isNaN(d.getTime()) ? null : d;
 }
-
-/** Calendar days from start to end, both included (12 Oct → 25 Oct = 14). */
-const daysBetween = (start, end) => Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
 
 const fmtDay = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
@@ -86,7 +101,7 @@ async function loadEmployees(employeeIds) {
   const rows = await prisma.$queryRaw`
     SELECT e.id, e.employee_id AS employee_code,
            TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name,
-           e.status, e.paygradeId AS paygrade_id, e.supervisorId AS supervisor_id,
+           e.status, e.paygradeId AS paygrade_id,
            e.bankAccount AS bank_account, pg.name AS paygrade_name,
            COALESCE(b.comp_code, b.title) AS branch_code
       FROM employee e
@@ -95,9 +110,8 @@ async function loadEmployees(employeeIds) {
      WHERE e.id IN (${Prisma.join(ids)})`.catch(() => []);
   return new Map(rows.map(row => [String(row.id), {
     ...row,
-    id:            String(row.id),
-    paygrade_id:   row.paygrade_id   != null ? String(row.paygrade_id)   : null,
-    supervisor_id: row.supervisor_id != null ? String(row.supervisor_id) : null,
+    id:          String(row.id),
+    paygrade_id: row.paygrade_id != null ? String(row.paygrade_id) : null,
   }]));
 }
 
@@ -112,31 +126,9 @@ function requestedIds(body) {
   return [...new Set(list.map(v => String(v ?? '').trim()).filter(v => /^\d+$/.test(v)))];
 }
 
-/** Does this employee have anyone (active) reporting to them? */
-async function hasReports(employeeId) {
-  if (!employeeId) return false;
-  const rows = await prisma.$queryRaw`
-    SELECT id FROM employee WHERE supervisorId = ${toBigInt(employeeId)} AND status = '1' LIMIT 1`.catch(() => []);
-  return rows.length > 0;
-}
-
 /**
- * May this caller raise a request for `emp`? Their supervisor, or HR setup; and themself only when
- * they have people reporting to them. Staff with no reports cannot raise requests at all.
- */
-async function canActFor(req, emp) {
-  const me = myEmployeeId(req);
-  if (!emp) return false;
-  if (me && emp.id === me) return hasReports(me);
-  if (canManage(req)) return true;
-  return !!me && emp.supervisor_id === me;
-}
-const RAISE_FOR_MSG = 'Only staff with people reporting to them can raise out-of-station requests — for their direct reports or themselves';
-
-/**
- * The period and the number of days to pay, or { error }. The days are entered by whoever raises the
- * request and are not tied to the dates: some staff are paid by nights slept away, which counts
- * differently from calendar days.
+ * The period and the number of days to pay, or { error }. The days are entered by HR and are not
+ * tied to the dates: some staff are paid by nights slept away, which counts differently.
  */
 function checkPeriod(startStr, endStr, daysValue) {
   const start = parseDay(startStr), end = parseDay(endStr);
@@ -197,21 +189,21 @@ const overlapMessage = (o) =>
 
 /**
  * Price every selected employee for one period. Each line carries its own `error` when that employee
- * cannot be included (not found, inactive, not the caller's to raise for, no rate, dates clash).
- * `checkOverlap` adds the clash check (on save, and on the quote so the form shows it early).
+ * cannot be included (not found, inactive, the caller themself, no rate, dates clash).
  */
-async function quoteMany(req, ids, period, { checkOverlap = true } = {}) {
+async function quoteMany(req, ids, period) {
+  const me = myEmployeeId(req);
   const emps  = await loadEmployees(ids);
   const rates = await loadRates([...emps.values()].map(e => e.paygrade_id));
-  const clashes = checkOverlap ? await findOverlaps([...emps.keys()], period.start, period.end) : new Map();
+  const clashes = await findOverlaps([...emps.keys()], period.start, period.end);
   const lines = [];
   for (const id of ids) {
     const emp = emps.get(id);
     const base = { employee: id, employee_name: emp?.employee_name ?? `Employee ${id}`, employee_code: emp?.employee_code ?? null, paygrade_name: emp?.paygrade_name ?? null };
     let error = null, price = null;
-    if (!emp)                               error = 'Employee not found';
-    else if (emp.status !== '1')            error = 'Not an active employee';
-    else if (!(await canActFor(req, emp)))  error = 'You cannot raise a request for this employee';
+    if (!emp)                     error = 'Employee not found';
+    else if (emp.status !== '1')  error = 'Not an active employee';
+    else if (me && emp.id === me) error = 'You cannot raise an out-of-station request for yourself — another HR user must raise it';
     else {
       price = priceFor(emp, period, rates);
       if (price.error) error = price.error;
@@ -223,13 +215,20 @@ async function quoteMany(req, ids, period, { checkOverlap = true } = {}) {
 }
 const publicLine = ({ emp, ...line }) => line;
 
-/** OOS-2026-0001, numbered per year. The unique key catches the rare race; the caller retries. */
-async function nextRequestNumber(year) {
+/**
+ * The next sequence number for OOS-<year>-NNNN: one past the highest in use (not the count — deleting
+ * a draft would otherwise hand out a number that still exists). Longest first so 10000 sorts after
+ * 9999. The unique key catches the rare race; the caller retries and gets a fresh maximum.
+ */
+async function nextRequestSeq(db, year) {
   const prefix = `OOS-${year}-`;
-  const [row] = await prisma.$queryRaw`
-    SELECT COUNT(*) AS n FROM outofstation_requests WHERE request_number LIKE ${prefix + '%'}`.catch(() => [{ n: 0 }]);
-  return `${prefix}${String(Number(row?.n ?? 0) + 1).padStart(4, '0')}`;
+  const [row] = await db.$queryRaw`
+    SELECT request_number FROM outofstation_requests WHERE request_number LIKE ${prefix + '%'}
+     ORDER BY LENGTH(request_number) DESC, request_number DESC LIMIT 1`;
+  const last = row ? parseInt(String(row.request_number).slice(prefix.length), 10) : 0;
+  return (Number.isFinite(last) ? last : 0) + 1;
 }
+const requestNumber = (year, seq) => `OOS-${year}-${String(seq).padStart(4, '0')}`;
 
 let logSeq = 0;
 async function writeLog(requestId, userId, action, statusFrom, statusTo) {
@@ -247,9 +246,10 @@ async function writeLog(requestId, userId, action, statusFrom, statusTo) {
 const REQUEST_SELECT = Prisma.sql`
   SELECT r.*,
          TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name,
-         e.employee_id AS employee_code, e.supervisorId AS supervisor_id,
+         e.employee_id AS employee_code, e.status AS employee_status,
          pg.name AS paygrade_name,
-         TRIM(CONCAT_WS(' ', re.firstName, re.lastName)) AS requested_by_name
+         TRIM(CONCAT_WS(' ', re.firstName, re.lastName)) AS requested_by_name,
+         ru.username AS requested_by_username
     FROM outofstation_requests r
     LEFT JOIN employee  e  ON e.id  = r.employee
     LEFT JOIN paygrades pg ON pg.id = r.paygrade_id
@@ -261,36 +261,132 @@ async function getRow(id) {
   return row ? s(row) : null;
 }
 
-/** Whoever raised it, or HR setup — the people who own a request before approval. An employee whose
- *  supervisor raised it only views it. */
-function isOwner(req, row) {
-  return canManage(req) || String(row.requested_by ?? '') === String(req.user?.id ?? '');
+// ── Approval flow ─────────────────────────────────────────────────────────────
+
+/** The configured flow: [{ name, approverType: 'role'|'user', approverId, approverLabel }] ([] when unset). */
+async function readFlow() {
+  const row = await prisma.settings
+    .findFirst({ where: { name: FLOW_KEY, category: 'app_controls' }, select: { value: true } })
+    .catch(() => null);
+  if (!row?.value) return [];
+  try {
+    const parsed = JSON.parse(row.value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(st => st && String(st.name || '').trim() && ['role', 'user'].includes(st.approverType) && String(st.approverId ?? '').trim())
+      .map(st => ({ name: String(st.name).trim(), approverType: st.approverType, approverId: String(st.approverId), approverLabel: st.approverLabel == null ? null : String(st.approverLabel) }));
+  } catch { return []; }
 }
 
-/** In-app notifications. Never throws. */
-function notify(kind, row, req, reason) {
+/** Does the signed-in user satisfy a stage? role → they hold that role; user → they are that user. */
+function actorMatchesStage(req, stage) {
+  const type  = stage.approver_type ?? stage.approverType;
+  const id    = String(stage.approver_id ?? stage.approverId ?? '');
+  const label = String(stage.approver_label ?? stage.approverLabel ?? '');
+  if (type === 'user') return myUserId(req) === id;
+  const roles = (req.user?.roles || []).map(String);
+  return type === 'role' && (roles.includes(id) || (!!label && roles.includes(label)));
+}
+
+/** Stage rows per request id, in order. Map of request id → stages. */
+async function loadStages(requestIds) {
+  const ids = requestIds.map(toBigInt).filter(Boolean);
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw`
+    SELECT st.id, st.request_id, st.stage_order, st.stage_name, st.approver_type, st.approver_id, st.approver_label,
+           st.status, st.acted_by, st.acted_at, st.comment,
+           COALESCE(NULLIF(TRIM(CONCAT_WS(' ', ae.firstName, ae.lastName)), ''), au.username) AS acted_by_name
+      FROM outofstation_stages st
+      LEFT JOIN users au ON au.id = st.acted_by
+      LEFT JOIN employee ae ON ae.id = au.employeeId
+     WHERE st.request_id IN (${Prisma.join(ids)})
+     ORDER BY st.request_id, st.stage_order`.catch(() => []);
+  const map = new Map();
+  for (const r of s(rows)) {
+    const key = String(r.request_id);
+    map.set(key, [...(map.get(key) || []), r]);
+  }
+  return map;
+}
+
+/**
+ * May this user act on the request now, and on which stage? Returns { stage } (null when there is no
+ * flow on the request) or { error, code }. Checks maker-checker too.
+ */
+function approvalAuthority(req, row, stages) {
+  if (row.status !== 'Pending Approval') return { code: 400, error: `This request is ${row.status} and is not awaiting approval` };
+  const me = myEmployeeId(req);
+  if (me && String(row.employee) === me) return { code: 403, error: 'You cannot approve your own out-of-station request' };
+  if ([row.requested_by, row.submitted_by].some(u => u != null && String(u) === myUserId(req)))
+    return { code: 403, error: 'You raised this request, so someone else must approve it' };
+  const pending = stages.filter(st => st.status === 'Pending');
+  if (pending.length) {
+    const stage = pending[0];
+    if (!actorMatchesStage(req, stage))
+      return { code: 403, error: `Only ${stage.approver_label || (stage.approver_type === 'user' ? 'the assigned approver' : 'the assigned role')} can act on the "${stage.stage_name}" stage` };
+    if (stages.some(st => st.status === 'Approved' && String(st.acted_by ?? '') === myUserId(req)))
+      return { code: 403, error: 'You already approved an earlier stage of this request, so someone else must approve this one' };
+    return { stage, last: pending.length === 1 };
+  }
+  if (stages.length) return { code: 400, error: 'This request has no stage awaiting approval' };
+  if (!isHrApprover(req)) return { code: 403, error: 'Only users with the Approve Out of Station permission can approve this request' };
+  return { stage: null, last: true };
+}
+
+/** Notify whoever must act next: a stage's approver(s), or every approver when there is no flow. */
+function notifyApprovers(stage, row, req) {
   try {
-    const who  = row.employee_name || 'An employee';
-    const what = `out-of-station request ${row.request_number} (${row.location}, ${row.days} day${row.days === 1 ? '' : 's'})`;
-    if (kind === 'supervisor_pending' && row.supervisor_id) {
-      notifyEmployee(row.supervisor_id, {
-        message: `${who} has an ${what} awaiting your approval`,
-        action: 'PersonalOutOfStation', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee,
+    const what = `Out-of-station request ${row.request_number} for ${row.employee_name || 'an employee'}`;
+    const payload = { action: 'CentralApproval', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee };
+    if (!stage) {
+      notifyUsersWithPermission('approve_out_of_station', { ...payload, message: `${what} awaits your approval` }, req.user?.id);
+      return;
+    }
+    const type = stage.approver_type ?? stage.approverType;
+    const id   = stage.approver_id ?? stage.approverId;
+    const msg  = `${what} awaits your approval (${stage.stage_name ?? stage.name})`;
+    if (type === 'user') notifyUser(id, { ...payload, message: msg });
+    else notifyUsersWithRole(id, { ...payload, message: msg }, req.user?.id, stage.approver_label ?? stage.approverLabel);
+  } catch { /* never block the request */ }
+}
+
+/** The employee hears when it is approved and paid; whoever raised it hears when it is rejected. */
+function notifyOutcome(kind, row, req, reason) {
+  try {
+    const what = `out-of-station allowance ${row.request_number} (${row.location}, ${row.days} day${Number(row.days) === 1 ? '' : 's'})`;
+    if (kind === 'approved' || kind === 'paid') {
+      notifyEmployee(row.employee, {
+        message: kind === 'paid' ? `Your ${what} has been paid to your account` : `Your ${what} was approved`,
+        action: 'PersonalOutOfStation', type: 'out_of_station', fromUser: req.user?.id,
       });
-    } else if (kind === 'hr_pending') {
-      notifyUsersWithPermission('approve_out_of_station', {
-        message: `${who}: ${what} awaits HR approval`,
-        action: 'ManageOutOfStation', type: 'out_of_station', fromUser: req.user?.id, employee: row.employee,
-      }, req.user?.id);
-    } else if (row.employee) {
-      const msg = kind === 'approved'  ? `Your ${what} was approved`
-                : kind === 'paid'      ? `Your ${what} has been paid to your account`
-                : kind === 'rejected'  ? `Your ${what} was rejected${reason ? ': ' + reason : ''}`
-                : kind === 'cancelled' ? `Your ${what} was cancelled`
-                : `Your ${what} was updated`;
-      notifyEmployee(row.employee, { message: msg, action: 'PersonalOutOfStation', type: 'out_of_station', fromUser: req.user?.id });
+    } else if (kind === 'rejected' && row.requested_by && String(row.requested_by) !== myUserId(req)) {
+      notifyUser(row.requested_by, {
+        message: `Out-of-station request ${row.request_number} for ${row.employee_name || 'an employee'} was rejected${reason ? ': ' + reason : ''}`,
+        action: 'ManageOutOfStation', type: 'out_of_station', fromUser: req.user?.id,
+      });
     }
   } catch { /* never block the request */ }
+}
+
+/** Insert the flow's stages for a request (all Pending). Runs inside the caller's transaction. */
+async function snapshotStages(tx, requestId, flow, idBase) {
+  await tx.$executeRaw`DELETE FROM outofstation_stages WHERE request_id = ${toBigInt(requestId)}`;
+  for (let i = 0; i < flow.length; i++) {
+    const st = flow[i];
+    await tx.$executeRaw`
+      INSERT INTO outofstation_stages (id, request_id, stage_order, stage_name, approver_type, approver_id, approver_label, status, created_at)
+      VALUES (${idBase + BigInt(i)}, ${toBigInt(requestId)}, ${i}, ${st.name.slice(0, 150)}, ${st.approverType},
+              ${String(st.approverId).slice(0, 64)}, ${st.approverLabel ? st.approverLabel.slice(0, 200) : null}, 'Pending', NOW())`;
+  }
+}
+
+/** Can this user see this request? HR viewers, the employee it is for, and the approvers on its stages. */
+async function canSee(req, row) {
+  if (canViewAll(req)) return true;
+  const me = myEmployeeId(req);
+  if (me && String(row.employee) === me && row.status !== 'Draft') return true;
+  const stages = (await loadStages([row.id])).get(String(row.id)) || [];
+  return stages.some(st => actorMatchesStage(req, st));
 }
 
 // ── GL posting ────────────────────────────────────────────────────────────────
@@ -310,19 +406,26 @@ function glFailure(e) {
 
 /**
  * Post an approved request: Dr out-of-station expense, Cr the employee's bank account.
- * Returns { skipped } when postings are off or no GL is configured, { documentRef } on success,
- * { glFail } on failure — the request is left at Paid or GL Failed accordingly.
+ * `fromStatus` is the status the request must still be in (Approved, or GL Failed for a retry).
+ * Returns { skipped } when postings are off or no GL is configured, { busy } when someone else has
+ * already claimed or posted it, { documentRef } on success, { glFail } on failure — the request is
+ * left at Paid or GL Failed accordingly.
  */
-async function postToLedger(id, req) {
-  const row = await getRow(id);
+async function postToLedger(id, req, fromStatus) {
   const settings = await readSettings();
   const cfg = await getApiConfig();
   if (settings.oos_payments_enabled !== 'Yes' || !cfg.gl_url) return { skipped: true };
   let extra = {};
   try { extra = JSON.parse(cfg.gl_extra || '{}'); } catch { /* ignore */ }
 
+  // Claim it: only one caller can move it to Posting, so only one posting is ever sent.
+  const claimed = await prisma.$executeRaw`
+    UPDATE outofstation_requests SET status = 'Posting', updated_at = NOW()
+     WHERE id = ${toBigInt(id)} AND status = ${fromStatus} AND document_ref IS NULL`;
+  if (claimed !== 1) return { busy: true };
+
+  const row = await getRow(id);
   const emp = await loadEmployee(row.employee);
-  const prevStatus = row.status;
   try {
     // The bank account is read now, not from the request: a corrected account number on the
     // employee's record should be used on a retry.
@@ -364,16 +467,16 @@ async function postToLedger(id, req) {
          SET status = 'Paid', document_ref = ${String(result.documentRef ?? referenceNo).slice(0, 100)},
              payment_log = ${JSON.stringify(result.raw ?? {})}, posted_at = NOW(),
              account_no = ${account}, updated_at = NOW()
-       WHERE id = ${toBigInt(id)}`;
-    await writeLog(id, req.user?.id, `Posted to the GL — reference ${result.documentRef ?? referenceNo}`, prevStatus, 'Paid');
-    notify('paid', row, req);
+       WHERE id = ${toBigInt(id)} AND status = 'Posting'`;
+    await writeLog(id, req.user?.id, `Posted to the GL — reference ${result.documentRef ?? referenceNo}`, fromStatus, 'Paid');
+    notifyOutcome('paid', row, req);
     return { documentRef: result.documentRef ?? referenceNo };
   } catch (e) {
     const fail = glFailure(e);
     await prisma.$executeRaw`
       UPDATE outofstation_requests SET status = 'GL Failed', payment_log = ${JSON.stringify(fail.log)}, updated_at = NOW()
-       WHERE id = ${toBigInt(id)}`.catch(() => {});
-    await writeLog(id, req.user?.id, `GL posting failed: ${String(fail.glError || '').slice(0, 400)}`, prevStatus, 'GL Failed');
+       WHERE id = ${toBigInt(id)} AND status = 'Posting'`.catch(() => {});
+    await writeLog(id, req.user?.id, `GL posting failed: ${String(fail.glError || '').slice(0, 400)}`, fromStatus, 'GL Failed');
     console.error(`[out of station] GL posting failed for ${row.request_number}:`, fail.glError);
     return { glFail: fail };
   }
@@ -384,6 +487,7 @@ const glDetail = (fail) => (fail ? { glError: fail.glError, glInvalidAccounts: f
 
 /** Message + payload after a posting attempt. `prefix` names what happened first ("Request approved"). */
 function postingOutcome(res, post, row, prefix = null) {
+  if (post.busy) return respond.conflict(res, `${prefix ? `${prefix}, but it` : 'It'} is already being posted or was posted by someone else. Refresh to see its status.`);
   if (post.documentRef) return respond.ok(res, `${prefix ? `${prefix} and paid` : 'Paid'} — GL reference ${post.documentRef}`, row);
   if (post.glFail) return res.status(200).json({
     status: '200', message: `${prefix ? `${prefix}, but the` : 'The'} GL posting failed: ${post.glFail.glError}`, data: row, ...glDetail(post.glFail),
@@ -395,17 +499,15 @@ function postingOutcome(res, post, row, prefix = null) {
 // SETUP
 // ══════════════════════════════════════════════════════════════════════════════
 
-// GET /out-of-station/settings — expense GL, posting branch, supervisor tier and postings switch.
+// GET /out-of-station/settings — expense GL, posting branch and postings switch.
 exports.getSettings = asyncHandler(async (_req, res) => {
   respond.ok(res, 'Out of station settings', await readSettings());
 });
 
 // PUT /out-of-station/settings — save any of the setting keys.
 exports.saveSettings = asyncHandler(async (req, res) => {
-  for (const key of ['oos_supervisor_approval', 'oos_payments_enabled']) {
-    if (req.body[key] !== undefined && !['Yes', 'No'].includes(String(req.body[key])))
-      return respond.badReq(res, `${key} must be Yes or No`);
-  }
+  if (req.body.oos_payments_enabled !== undefined && !['Yes', 'No'].includes(String(req.body.oos_payments_enabled)))
+    return respond.badReq(res, 'oos_payments_enabled must be Yes or No');
   await prisma.$transaction(async (tx) => {
     for (const key of SETTING_KEYS) {
       if (req.body[key] === undefined) continue;
@@ -414,6 +516,28 @@ exports.saveSettings = asyncHandler(async (req, res) => {
   }, TX_OPTS);
   logActivity({ module: 'Out of Station', action: 'update_settings', details: req.body, ...fromReq(req) });
   respond.ok(res, 'Out of station settings saved', await readSettings());
+});
+
+// GET /out-of-station/approval-flow — the configured stages ([] when none).
+exports.getApprovalFlow = asyncHandler(async (_req, res) => {
+  respond.ok(res, 'Out of station approval flow', await readFlow());
+});
+
+// PUT /out-of-station/approval-flow — { stages: [{ name, approverType, approverId, approverLabel? }] }.
+// Applies to requests submitted from now on; requests already in approval keep the stages they had.
+exports.saveApprovalFlow = asyncHandler(async (req, res) => {
+  const input = Array.isArray(req.body?.stages) ? req.body.stages : [];
+  const clean = [];
+  for (const st of input) {
+    const name = String(st?.name ?? '').trim();
+    if (!name) return respond.badReq(res, 'Every stage needs a name');
+    if (!['role', 'user'].includes(st?.approverType)) return respond.badReq(res, `Stage "${name}" needs an approver type (role or user)`);
+    if (!String(st?.approverId ?? '').trim()) return respond.badReq(res, `Stage "${name}" needs an approver`);
+    clean.push({ name, approverType: st.approverType, approverId: String(st.approverId).trim(), approverLabel: st.approverLabel != null ? String(st.approverLabel) : null });
+  }
+  await upsertSetting(null, FLOW_KEY, 'app_controls', JSON.stringify(clean));
+  logActivity({ module: 'Out of Station', action: 'save_approval_flow', entityName: `${clean.length} stage(s)`, details: { stages: clean }, ...fromReq(req) });
+  respond.ok(res, clean.length ? 'Approval flow saved' : 'Approval flow cleared', clean);
 });
 
 // GET /out-of-station/rates — every pay grade with its daily rate (null when not set).
@@ -458,41 +582,28 @@ exports.saveRates = asyncHandler(async (req, res) => {
 // REQUESTS
 // ══════════════════════════════════════════════════════════════════════════════
 
-// GET /out-of-station/employees[?scope=personal] — who the caller may raise a request for.
-//   personal (Personal Out of Station): their direct reports, and themself when they have any;
-//   otherwise (Manage Out of Station): every active employee for HR setup, else as personal.
-// The caller is listed only when they have people reporting to them. Each row says whether it is the
-// caller (is_self) or one of their direct reports (is_report).
+// GET /out-of-station/employees — every active employee HR may raise a request for (not themself).
 exports.getRequestableEmployees = asyncHandler(async (req, res) => {
-  const me = myEmployeeId(req);
-  const personal = req.query.scope === 'personal' || !canManage(req);
-  const self = await hasReports(me) ? toBigInt(me) : 0n;
-  const where = !personal
-    ? Prisma.sql`e.status = '1' AND (e.id <> ${toBigInt(me) ?? 0n} OR e.id = ${self})`
-    : me ? Prisma.sql`e.status = '1' AND (e.supervisorId = ${toBigInt(me)} OR e.id = ${self})`
-         : null;
-  if (!where) return respond.ok(res, 'Employees', []);
+  if (!canManage(req)) return respond.ok(res, 'Employees', []);
+  const me = toBigInt(myEmployeeId(req)) ?? 0n;
   const rows = await prisma.$queryRaw`
     SELECT e.id, e.employee_id AS employee_code,
            TRIM(CONCAT_WS(' ', e.firstName, e.lastName)) AS employee_name,
-           e.paygradeId AS paygrade_id, pg.name AS paygrade_name, e.supervisorId AS supervisor_id,
+           e.paygradeId AS paygrade_id, pg.name AS paygrade_name,
            e.departmentId AS department_id, d.title AS department_name
       FROM employee e
       LEFT JOIN paygrades pg ON pg.id = e.paygradeId
       LEFT JOIN companystructures d ON d.id = e.departmentId
-     WHERE ${where}
+     WHERE e.status = '1' AND e.id <> ${me}
      ORDER BY e.firstName, e.lastName`.catch(() => []);
-  respond.ok(res, 'Employees', s(rows).map(r => ({
-    ...r,
-    is_self:   String(r.id) === me,
-    is_report: !!me && String(r.supervisor_id ?? '') === me,
-  })));
+  respond.ok(res, 'Employees', s(rows));
 });
 
 // POST /out-of-station/quote — { employees: [id…], date_start, date_end, days, exclude_id? } → a line per
 // employee (rate and amount, or the reason they can't be included) and the total, for the form.
 // `exclude_id` is the draft being edited, so it does not clash with itself.
 exports.quote = asyncHandler(async (req, res) => {
+  if (!canManage(req)) return respond.forbidden(res, 'Only HR can raise out-of-station requests');
   const ids = requestedIds(req.body);
   if (!ids.length) return respond.badReq(res, 'Select at least one employee');
   const period = checkPeriod(req.body.date_start, req.body.date_end, req.body.days);
@@ -513,61 +624,63 @@ exports.quote = asyncHandler(async (req, res) => {
   respond.ok(res, 'Quote', { days: period.days, lines, total: round2(ok.reduce((n, l) => n + l.amount, 0)), count: ok.length });
 });
 
-// GET /out-of-station/requests?scope=mine|team|all&status=&from=&to=
-//   mine — the caller's own requests and those they raised; team — their direct reports';
-//   all  — everyone's (view/approve/manage). from/to keep requests that overlap the range.
+// GET /out-of-station/requests?scope=mine|all&status=&from=&to=
+//   mine — requests for the caller's own employee record (never drafts): Personal Out of Station,
+//          read-only history. Nothing else — not requests they raised for others.
+//   all  — everyone's (view/approve/manage), with the current approval stage.
+// from/to keep requests that overlap the range.
 exports.listRequests = asyncHandler(async (req, res) => {
-  const scope = ['mine', 'team', 'all'].includes(req.query.scope) ? req.query.scope : 'mine';
-  const me = myEmployeeId(req);
+  const scope = req.query.scope === 'all' ? 'all' : 'mine';
   const where = [];
   if (scope === 'all') {
     if (!canViewAll(req)) return respond.forbidden(res, 'You do not have access to all out-of-station requests');
-  } else if (scope === 'team') {
-    if (!me) return respond.ok(res, 'Requests', []);
-    where.push(Prisma.sql`e.supervisorId = ${toBigInt(me)}`);
   } else {
-    where.push(me
-      ? Prisma.sql`(r.employee = ${toBigInt(me)} OR r.requested_by = ${toBigInt(req.user.id)})`
-      : Prisma.sql`r.requested_by = ${toBigInt(req.user.id)}`);
+    const me = myEmployeeId(req);
+    if (!me) return respond.ok(res, 'Requests', []);
+    where.push(Prisma.sql`r.employee = ${toBigInt(me)} AND r.status <> 'Draft'`);
   }
   if (req.query.status) where.push(Prisma.sql`r.status = ${String(req.query.status)}`);
   const from = parseDay(req.query.from), to = parseDay(req.query.to);
   if (from) where.push(Prisma.sql`r.date_end >= ${from}`);
   if (to)   where.push(Prisma.sql`r.date_start <= ${to}`);
   const clause = where.length ? Prisma.sql`WHERE ${Prisma.join(where, ' AND ')}` : Prisma.empty;
-  const rows = await prisma.$queryRaw`${REQUEST_SELECT} ${clause} ORDER BY r.created_at DESC, r.id DESC`;
-  respond.ok(res, 'Requests', s(rows));
+  const rows = s(await prisma.$queryRaw`${REQUEST_SELECT} ${clause} ORDER BY r.created_at DESC, r.id DESC`);
+  const pendingIds = rows.filter(r => r.status === 'Pending Approval').map(r => r.id);
+  const stages = await loadStages(pendingIds);
+  respond.ok(res, 'Requests', rows.map(r => {
+    const current = (stages.get(String(r.id)) || []).find(st => st.status === 'Pending');
+    return { ...r, current_stage_name: current?.stage_name ?? null };
+  }));
 });
 
-// GET /out-of-station/approvals — requests the caller can act on now: their direct reports' at the
-// supervisor tier, and (HR approvers) everyone's at the HR tier. Never the caller's own.
+// GET /out-of-station/approvals — requests the caller can approve right now: those whose current stage
+// is theirs (by role or by name), or — for requests with no flow — every pending one for approvers.
+// Never their own, nor ones they raised, nor ones where they approved an earlier stage.
 exports.listApprovals = asyncHandler(async (req, res) => {
-  const me = myEmployeeId(req);
-  const clauses = [];
-  if (me) clauses.push(Prisma.sql`(r.status = 'Pending Approval' AND e.supervisorId = ${toBigInt(me)})`);
-  if (isHrApprover(req)) clauses.push(Prisma.sql`r.status = 'Pending HR Approval'`);
-  if (!clauses.length) return respond.ok(res, 'Approvals', []);
-  const notMine = me ? Prisma.sql`AND r.employee <> ${toBigInt(me)}` : Prisma.empty;
-  const rows = await prisma.$queryRaw`
-    ${REQUEST_SELECT} WHERE (${Prisma.join(clauses, ' OR ')}) ${notMine}
-    ORDER BY r.submitted_at DESC, r.id DESC`;
-  respond.ok(res, 'Approvals', s(rows));
+  const rows = s(await prisma.$queryRaw`${REQUEST_SELECT} WHERE r.status = 'Pending Approval' ORDER BY r.submitted_at, r.id`);
+  if (!rows.length) return respond.ok(res, 'Approvals', []);
+  const stages = await loadStages(rows.map(r => r.id));
+  const out = [];
+  for (const r of rows) {
+    const list = stages.get(String(r.id)) || [];
+    const auth = approvalAuthority(req, r, list);
+    if (auth.error) continue;
+    out.push({ ...r, stages: list, current_stage_name: auth.stage?.stage_name ?? null, final_stage: auth.last });
+  }
+  respond.ok(res, 'Approvals', out);
 });
 
 // GET /out-of-station/requests/:id
 exports.getRequest = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
-  if (!row) return respond.notFound(res, 'Request not found');
-  const me = myEmployeeId(req);
-  const visible = isOwner(req, row) || (me && String(row.employee) === me) || canViewAll(req) || (me && String(row.supervisor_id ?? '') === me);
-  if (!visible) return respond.forbidden(res, 'You do not have access to this request');
+  if (!row || !(await canSee(req, row))) return respond.notFound(res, 'Request not found');
   respond.ok(res, 'Request', row);
 });
 
-// GET /out-of-station/requests/:id/history — status history, oldest first.
+// GET /out-of-station/requests/:id/history — status history (oldest first) and the approval stages.
 exports.getHistory = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
-  if (!row) return respond.notFound(res, 'Request not found');
+  if (!row || !(await canSee(req, row))) return respond.notFound(res, 'Request not found');
   const rows = await prisma.$queryRaw`
     SELECT l.id, l.action, l.status_from, l.status_to, l.created_at, u.username AS user_name,
            TRIM(CONCAT_WS(' ', ue.firstName, ue.lastName)) AS user_full_name
@@ -579,11 +692,19 @@ exports.getHistory = asyncHandler(async (req, res) => {
   respond.ok(res, 'History', s(rows));
 });
 
+// GET /out-of-station/requests/:id/stages — the request's approval stages and their progress.
+exports.getStages = asyncHandler(async (req, res) => {
+  const row = await getRow(req.params.id);
+  if (!row || !(await canSee(req, row))) return respond.notFound(res, 'Request not found');
+  respond.ok(res, 'Stages', (await loadStages([row.id])).get(String(row.id)) || []);
+});
+
 // POST /out-of-station/requests — { employees: [id…] (or employee), purpose, location, date_start,
-// date_end, days, submit? }. One request per employee, all with the same period and days, each at its
-// own grade's rate. All or nothing: if any selected employee can't be included, nothing is saved and
-// the reasons are listed. Saved as Drafts; `submit: true` sends them for approval straight away.
+// date_end, days, submit? }. HR only. One request per employee, all with the same period and days,
+// each at its own grade's rate. All or nothing: if any selected employee can't be included, nothing is
+// saved and the reasons are listed. Saved as Drafts; `submit: true` sends them for approval at once.
 exports.createRequest = asyncHandler(async (req, res) => {
+  if (!canManage(req)) return respond.forbidden(res, 'Only HR can raise out-of-station requests');
   const purpose  = String(req.body.purpose  ?? '').trim();
   const location = String(req.body.location ?? '').trim();
   if (!purpose)  return respond.badReq(res, 'Purpose is required');
@@ -598,58 +719,83 @@ exports.createRequest = asyncHandler(async (req, res) => {
   const lines = await quoteMany(req, ids, period);
   const bad = lines.filter(l => l.error);
   if (bad.length) {
-    if (lines.length === 1) {
-      const msg = bad[0].error === 'You cannot raise a request for this employee' ? RAISE_FOR_MSG : bad[0].error;
-      return respond.badReq(res, msg);
-    }
+    if (lines.length === 1) return respond.badReq(res, bad[0].error);
     return respond.badReq(res, `Nothing was saved — ${bad.length} of the ${lines.length} selected employees cannot be included: ` +
       bad.map(l => `${l.employee_name}: ${l.error}`).join(' | ') + '. Remove them and try again.');
   }
 
-  const me = myEmployeeId(req);
-  const createdIds = [];
-  for (const line of lines) {
-    const emp = line.emp;
-    const id = newId();
-    for (let attempt = 0; ; attempt++) {
-      const number = await nextRequestNumber(period.start.getUTCFullYear());
-      try {
-        await prisma.$executeRaw`
-          INSERT INTO outofstation_requests
-            (id, request_number, employee, purpose, location, date_start, date_end, days,
-             paygrade_id, daily_rate, amount, account_no, branch, status, approval_level,
-             requested_by, created_at, updated_at)
-          VALUES (${id}, ${number}, ${toBigInt(emp.id)}, ${purpose}, ${location}, ${period.start}, ${period.end}, ${line.days},
-                  ${toBigInt(emp.paygrade_id)}, ${line.daily_rate}, ${line.amount}, ${emp.bank_account ?? null}, ${emp.branch_code ?? null},
-                  'Draft', 0, ${toBigInt(req.user?.id)}, NOW(), NOW())`;
-        break;
-      } catch (e) {
-        // Two requests numbered at the same moment: take the next number.
-        if (attempt < 4 && /unique|duplicate/i.test(String(e.message))) continue;
-        throw e;
-      }
+  // The whole group is saved — and, with submit, put into approval — together or not at all.
+  const submit = !!req.body.submit;
+  const flow = submit ? await readFlow() : [];
+  const year = period.start.getUTCFullYear();
+  const userId = toBigInt(req.user?.id);
+
+  let created;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        let seq = await nextRequestSeq(tx, year);
+        const base = newId();
+        const stageBase = base * 100n;   // stage ids: distinct per request, never reused by another table's id
+        const out = [];
+        for (const line of lines) {
+          const emp = line.emp;
+          const idx = BigInt(out.length);
+          const id = base + idx;   // distinct within the group; a clash with another user's id is retried
+          const number = requestNumber(year, seq++);
+          await tx.$executeRaw`
+            INSERT INTO outofstation_requests
+              (id, request_number, employee, purpose, location, date_start, date_end, days,
+               paygrade_id, daily_rate, amount, account_no, branch, status, approval_level,
+               requested_by, submitted_by, submitted_at, created_at, updated_at)
+            VALUES (${id}, ${number}, ${toBigInt(emp.id)}, ${purpose}, ${location}, ${period.start}, ${period.end}, ${line.days},
+                    ${toBigInt(emp.paygrade_id)}, ${line.daily_rate}, ${line.amount}, ${emp.bank_account ?? null}, ${emp.branch_code ?? null},
+                    ${submit ? 'Pending Approval' : 'Draft'}, 0,
+                    ${userId}, ${submit ? userId : null}, ${submit ? new Date() : null}, NOW(), NOW())`;
+          if (submit) await snapshotStages(tx, id, flow, stageBase + idx * 100n);
+          out.push({ id: String(id), number, emp, line });
+        }
+        return out;
+      }, { maxWait: 15000, timeout: 120000 });
+      break;
+    } catch (e) {
+      // Someone else took a number or id at the same moment: start again from a fresh maximum.
+      if (attempt < 4 && /unique|duplicate/i.test(String(e.message))) continue;
+      throw e;
     }
-    await writeLog(id, req.user?.id, emp.id === me ? 'Request created' : `Request created on behalf of ${emp.employee_name}`, null, 'Draft');
-    logActivity({ module: 'Out of Station', action: 'create', entityId: String(id), entityName: emp.employee_name, ...fromReq(req) });
-    createdIds.push(String(id));
   }
 
-  let msg = null;
-  if (req.body.submit) for (const id of createdIds) msg = await submitRequest(id, req);
-
-  if (createdIds.length === 1) {
-    return respond.created(res, msg ?? 'Out-of-station request saved as a draft', await getRow(createdIds[0]));
+  // History, audit and notifications once the group is safely saved.
+  const firstStage = flow.length ? { stage_name: flow[0].name, approver_type: flow[0].approverType, approver_id: flow[0].approverId, approver_label: flow[0].approverLabel } : null;
+  for (const c of created) {
+    await writeLog(c.id, req.user?.id, `Request raised by HR for ${c.emp.employee_name}`, null, 'Draft');
+    if (submit) {
+      await writeLog(c.id, req.user?.id, firstStage ? `Submitted — awaiting "${firstStage.stage_name}"` : 'Submitted for approval', 'Draft', 'Pending Approval');
+    }
+    logActivity({ module: 'Out of Station', action: 'create', entityId: c.id, entityName: c.emp.employee_name, ...fromReq(req) });
   }
-  const n = createdIds.length;
-  respond.created(res, req.body.submit ? `${n} out-of-station requests submitted for approval` : `${n} out-of-station requests saved as drafts`, { ids: createdIds });
+  if (submit) {
+    // One notification per approver for the whole group, not one per request.
+    const label = created.length === 1
+      ? { request_number: created[0].number, employee_name: created[0].emp.employee_name, employee: created[0].emp.id }
+      : { request_number: `${created[0].number} – ${created[created.length - 1].number}`, employee_name: `${created.length} employees` };
+    notifyApprovers(firstStage, label, req);
+  }
+
+  if (created.length === 1) {
+    return respond.created(res, submit ? 'Request submitted for approval' : 'Out-of-station request saved as a draft', await getRow(created[0].id));
+  }
+  const n = created.length;
+  respond.created(res, submit ? `${n} out-of-station requests submitted for approval` : `${n} out-of-station requests saved as drafts`,
+    { ids: created.map(c => c.id) });
 });
 
-// PUT /out-of-station/requests/:id — edit a Draft. Days, rate and amount are recalculated.
+// PUT /out-of-station/requests/:id — edit a Draft (HR). Days, rate and amount are recalculated.
 exports.updateRequest = asyncHandler(async (req, res) => {
+  if (!canManage(req)) return respond.forbidden(res, 'Only HR can edit out-of-station requests');
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   if (row.status !== 'Draft') return respond.badReq(res, 'Only Draft requests can be edited');
-  if (!isOwner(req, row)) return respond.forbidden(res, 'Only whoever raised this request can edit it');
 
   const purpose  = req.body.purpose  !== undefined ? String(req.body.purpose).trim()  : row.purpose;
   const location = req.body.location !== undefined ? String(req.body.location).trim() : row.location;
@@ -663,139 +809,181 @@ exports.updateRequest = asyncHandler(async (req, res) => {
   const clash = await findOverlap(emp.id, q.start, q.end, row.id);
   if (clash) return respond.badReq(res, overlapMessage(clash));
 
-  await prisma.$executeRaw`
+  const changed = await prisma.$executeRaw`
     UPDATE outofstation_requests
        SET purpose = ${purpose}, location = ${location}, date_start = ${q.start}, date_end = ${q.end},
            days = ${q.days}, paygrade_id = ${toBigInt(emp.paygrade_id)}, daily_rate = ${q.daily_rate}, amount = ${q.amount},
            account_no = ${emp.bank_account ?? null}, branch = ${emp.branch_code ?? null}, updated_at = NOW()
-     WHERE id = ${toBigInt(row.id)}`;
+     WHERE id = ${toBigInt(row.id)} AND status = 'Draft'`;
+  if (changed !== 1) return respond.conflict(res, CONFLICT_MSG);
   respond.ok(res, 'Request updated', await getRow(row.id));
 });
 
-// DELETE /out-of-station/requests/:id — remove a Draft.
+// DELETE /out-of-station/requests/:id — remove a Draft (HR).
 exports.deleteRequest = asyncHandler(async (req, res) => {
+  if (!canManage(req)) return respond.forbidden(res, 'Only HR can delete out-of-station requests');
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   if (row.status !== 'Draft') return respond.badReq(res, 'Only Draft requests can be deleted. Cancel it instead.');
-  if (!isOwner(req, row)) return respond.forbidden(res, 'Only whoever raised this request can delete it');
+  const removed = await prisma.$executeRaw`DELETE FROM outofstation_requests WHERE id = ${toBigInt(row.id)} AND status = 'Draft'`;
+  if (removed !== 1) return respond.conflict(res, CONFLICT_MSG);
   await prisma.$executeRaw`DELETE FROM outofstation_log WHERE request_id = ${toBigInt(row.id)}`;
-  await prisma.$executeRaw`DELETE FROM outofstation_requests WHERE id = ${toBigInt(row.id)}`;
+  await prisma.$executeRaw`DELETE FROM outofstation_stages WHERE request_id = ${toBigInt(row.id)}`;
   logActivity({ module: 'Out of Station', action: 'delete', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
   respond.ok(res, 'Request deleted');
 });
 
-/**
- * Send a Draft for approval and return the message to show. The supervisor tier applies when it is
- * switched on and the employee has a supervisor — and is skipped when that supervisor raised the
- * request, since raising it is their endorsement.
- */
-async function submitRequest(id, req) {
-  const row = await getRow(id);
-  const settings = await readSettings();
-  const raisedBySupervisor = !!row.supervisor_id && myEmployeeId(req) === String(row.supervisor_id);
-  const toSupervisor = settings.oos_supervisor_approval === 'Yes' && !!row.supervisor_id && !raisedBySupervisor;
-  const status = toSupervisor ? 'Pending Approval' : 'Pending HR Approval';
-
-  await prisma.$executeRaw`
-    UPDATE outofstation_requests
-       SET status = ${status}, approval_level = ${toSupervisor ? 0 : 1},
-           submitted_by = ${toBigInt(req.user?.id)}, submitted_at = NOW(), updated_at = NOW()
-     WHERE id = ${toBigInt(id)}`;
-  const why = toSupervisor ? 'Submitted for supervisor approval'
-            : raisedBySupervisor ? 'Submitted by the supervisor — sent to HR approval'
-            : settings.oos_supervisor_approval !== 'Yes' ? 'Submitted — sent to HR approval'
-            : 'Submitted — no supervisor on record, sent to HR approval';
-  await writeLog(id, req.user?.id, why, row.status, status);
-  notify(toSupervisor ? 'supervisor_pending' : 'hr_pending', { ...row, status }, req);
-  return toSupervisor ? 'Request submitted for supervisor approval' : 'Request submitted for HR approval';
-}
-
-// POST /out-of-station/requests/:id/submit
+// POST /out-of-station/requests/:id/submit — send a Draft into approval (HR). The rate, grade, bank
+// account and branch are refreshed first, so a draft saved weeks ago does not go out at an old rate.
 exports.submit = asyncHandler(async (req, res) => {
+  if (!canManage(req)) return respond.forbidden(res, 'Only HR can submit out-of-station requests');
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   if (row.status !== 'Draft') return respond.badReq(res, 'Only Draft requests can be submitted');
-  if (!isOwner(req, row)) return respond.forbidden(res, 'Only whoever raised this request can submit it');
-  const msg = await submitRequest(row.id, req);
-  respond.ok(res, msg, await getRow(row.id));
+
+  const emp = await loadEmployee(row.employee);
+  if (!emp || emp.status !== '1') return respond.badReq(res, `${row.employee_name || 'This employee'} is no longer an active employee. Delete this draft instead.`);
+  const q = await quoteFor(emp, String(row.date_start).slice(0, 10), String(row.date_end).slice(0, 10), row.days);
+  if (q.error) return respond.badReq(res, q.error);
+
+  const flow = await readFlow();
+  try {
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.$executeRaw`
+        UPDATE outofstation_requests
+           SET status = 'Pending Approval', approval_level = 0,
+               paygrade_id = ${toBigInt(emp.paygrade_id)}, daily_rate = ${q.daily_rate}, amount = ${q.amount},
+               account_no = ${emp.bank_account ?? null}, branch = ${emp.branch_code ?? null},
+               submitted_by = ${toBigInt(req.user?.id)}, submitted_at = NOW(), updated_at = NOW()
+         WHERE id = ${toBigInt(row.id)} AND status = 'Draft'`;
+      if (changed !== 1) throw new Conflict();
+      await snapshotStages(tx, row.id, flow, newId() * 100n);
+    }, TX_OPTS);
+  } catch (e) {
+    if (e instanceof Conflict) return respond.conflict(res, CONFLICT_MSG);
+    throw e;
+  }
+
+  const rateNote = Number(row.daily_rate) !== q.daily_rate ? ` (daily rate updated from ${row.daily_rate} to ${q.daily_rate})` : '';
+  const first = flow[0] ? { stage_name: flow[0].name, approver_type: flow[0].approverType, approver_id: flow[0].approverId, approver_label: flow[0].approverLabel } : null;
+  await writeLog(row.id, req.user?.id, (first ? `Submitted — awaiting "${first.stage_name}"` : 'Submitted for approval') + rateNote, 'Draft', 'Pending Approval');
+  const fresh = await getRow(row.id);
+  notifyApprovers(first, fresh, req);
+  logActivity({ module: 'Out of Station', action: 'submit', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
+  respond.ok(res, 'Request submitted for approval' + rateNote, fresh);
 });
 
-// POST /out-of-station/requests/:id/approve — supervisor tier sends it to HR; HR's approval approves
-// and posts it.
+// POST /out-of-station/requests/:id/approve — { comment? }. Approves the current stage; the last stage
+// (or the single approval when there is no flow) approves the request and posts it to the GL.
 exports.approve = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
-  const me = myEmployeeId(req);
-  if (me && String(row.employee) === me) return respond.forbidden(res, 'You cannot approve your own out-of-station request');
+  const stages = (await loadStages([row.id])).get(String(row.id)) || [];
+  const auth = approvalAuthority(req, row, stages);
+  if (auth.error) return res.status(auth.code).json({ status: String(auth.code), message: auth.error });
+  if (auth.last && row.employee_status !== '1')
+    return respond.badReq(res, `${row.employee_name || 'This employee'} is no longer an active employee. Reject the request instead.`);
+  const comment = String(req.body?.comment ?? '').trim().slice(0, 500) || null;
+  const userId = toBigInt(req.user?.id);
 
-  if (row.status === 'Pending Approval') {
-    const isSupervisor = me && String(row.supervisor_id ?? '') === me;
-    if (!isSupervisor && !isHrApprover(req)) return respond.forbidden(res, "Only the employee's supervisor or HR can approve at this stage");
-    await prisma.$executeRaw`
-      UPDATE outofstation_requests SET status = 'Pending HR Approval', approval_level = 1, updated_at = NOW()
-       WHERE id = ${toBigInt(row.id)}`;
-    await writeLog(row.id, req.user?.id, 'Supervisor approved — awaiting HR approval', row.status, 'Pending HR Approval');
-    notify('hr_pending', row, req);
-    logActivity({ module: 'Out of Station', action: 'supervisor_approve', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
-    return respond.ok(res, 'Supervisor approval recorded — awaiting HR approval', await getRow(row.id));
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (auth.stage) {
+        const done = await tx.$executeRaw`
+          UPDATE outofstation_stages SET status = 'Approved', acted_by = ${userId}, acted_at = NOW(), comment = ${comment}
+           WHERE id = ${toBigInt(auth.stage.id)} AND status = 'Pending'`;
+        if (done !== 1) throw new Conflict();
+      }
+      const changed = auth.last
+        ? await tx.$executeRaw`
+            UPDATE outofstation_requests
+               SET status = 'Approved', approval_level = ${stages.length || 1}, approved_by = ${userId}, approved_at = NOW(), updated_at = NOW()
+             WHERE id = ${toBigInt(row.id)} AND status = 'Pending Approval'`
+        : await tx.$executeRaw`
+            UPDATE outofstation_requests SET approval_level = approval_level + 1, updated_at = NOW()
+             WHERE id = ${toBigInt(row.id)} AND status = 'Pending Approval'`;
+      if (changed !== 1) throw new Conflict();
+    }, TX_OPTS);
+  } catch (e) {
+    if (e instanceof Conflict) return respond.conflict(res, CONFLICT_MSG);
+    throw e;
   }
 
-  if (row.status !== 'Pending HR Approval') return respond.badReq(res, `This request is ${row.status} and is not awaiting approval`);
-  if (!isHrApprover(req)) return respond.forbidden(res, 'Only HR can give the final approval');
+  if (!auth.last) {
+    const next = stages.filter(st => st.status === 'Pending')[1];
+    await writeLog(row.id, req.user?.id, `"${auth.stage.stage_name}" approved${comment ? `: ${comment}` : ''} — awaiting "${next.stage_name}"`, row.status, row.status);
+    notifyApprovers(next, row, req);
+    logActivity({ module: 'Out of Station', action: 'approve_stage', entityId: String(row.id), entityName: row.request_number, details: { stage: auth.stage.stage_name }, ...fromReq(req) });
+    return respond.ok(res, `"${auth.stage.stage_name}" approved — awaiting "${next.stage_name}"`, await getRow(row.id));
+  }
 
-  await prisma.$executeRaw`
-    UPDATE outofstation_requests
-       SET status = 'Approved', approval_level = 2, approved_by = ${toBigInt(req.user?.id)}, approved_at = NOW(), updated_at = NOW()
-     WHERE id = ${toBigInt(row.id)}`;
-  await writeLog(row.id, req.user?.id, 'Final approval by HR', row.status, 'Approved');
-  notify('approved', row, req);
+  await writeLog(row.id, req.user?.id, auth.stage ? `"${auth.stage.stage_name}" approved${comment ? `: ${comment}` : ''} — final approval` : 'Approved', row.status, 'Approved');
+  notifyOutcome('approved', row, req);
   logActivity({ module: 'Out of Station', action: 'approve', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
-
-  const post = await postToLedger(row.id, req);
+  const post = await postToLedger(row.id, req, 'Approved');
   postingOutcome(res, post, await getRow(row.id), 'Request approved');
 });
 
-// POST /out-of-station/requests/:id/reject — { reason } at either approval tier.
+// POST /out-of-station/requests/:id/reject — { reason }. Whoever may approve the current stage may reject.
 exports.reject = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
   const reason = String(req.body?.reason ?? '').trim();
   if (!reason) return respond.badReq(res, 'A reason is required to reject a request');
-  const me = myEmployeeId(req);
-  if (row.status === 'Pending Approval') {
-    const isSupervisor = me && String(row.supervisor_id ?? '') === me;
-    if (!isSupervisor && !isHrApprover(req)) return respond.forbidden(res, "Only the employee's supervisor or HR can reject at this stage");
-  } else if (row.status === 'Pending HR Approval') {
-    if (!isHrApprover(req)) return respond.forbidden(res, 'Only HR can reject at this stage');
-  } else {
-    return respond.badReq(res, `This request is ${row.status} and is not awaiting approval`);
+  const stages = (await loadStages([row.id])).get(String(row.id)) || [];
+  const auth = approvalAuthority(req, row, stages);
+  if (auth.error) return res.status(auth.code).json({ status: String(auth.code), message: auth.error.replace('approve it', 'reject it').replace('approve this one', 'reject it') });
+  const userId = toBigInt(req.user?.id);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (auth.stage) {
+        const done = await tx.$executeRaw`
+          UPDATE outofstation_stages SET status = 'Rejected', acted_by = ${userId}, acted_at = NOW(), comment = ${reason.slice(0, 500)}
+           WHERE id = ${toBigInt(auth.stage.id)} AND status = 'Pending'`;
+        if (done !== 1) throw new Conflict();
+        await tx.$executeRaw`UPDATE outofstation_stages SET status = 'Skipped' WHERE request_id = ${toBigInt(row.id)} AND status = 'Pending'`;
+      }
+      const changed = await tx.$executeRaw`
+        UPDATE outofstation_requests
+           SET status = 'Rejected', rejection_reason = ${reason.slice(0, 500)}, approved_by = ${userId}, updated_at = NOW()
+         WHERE id = ${toBigInt(row.id)} AND status = 'Pending Approval'`;
+      if (changed !== 1) throw new Conflict();
+    }, TX_OPTS);
+  } catch (e) {
+    if (e instanceof Conflict) return respond.conflict(res, CONFLICT_MSG);
+    throw e;
   }
-  await prisma.$executeRaw`
-    UPDATE outofstation_requests
-       SET status = 'Rejected', rejection_reason = ${reason.slice(0, 500)}, approved_by = ${toBigInt(req.user?.id)}, updated_at = NOW()
-     WHERE id = ${toBigInt(row.id)}`;
-  await writeLog(row.id, req.user?.id, `Rejected: ${reason}`, row.status, 'Rejected');
-  notify('rejected', row, req, reason);
+
+  await writeLog(row.id, req.user?.id, `Rejected${auth.stage ? ` at "${auth.stage.stage_name}"` : ''}: ${reason}`, row.status, 'Rejected');
+  notifyOutcome('rejected', row, req, reason);
   logActivity({ module: 'Out of Station', action: 'reject', entityId: String(row.id), entityName: row.request_number, details: { reason }, ...fromReq(req) });
   respond.ok(res, 'Request rejected', await getRow(row.id));
 });
 
-// POST /out-of-station/requests/:id/cancel — { reason? }. The owner can cancel while it is open;
-// HR can also cancel an approved request that has not been paid.
+// POST /out-of-station/requests/:id/cancel — { reason? }. HR can cancel while it is pending, or once
+// approved as long as it has not been paid.
 exports.cancel = asyncHandler(async (req, res) => {
   const row = await getRow(req.params.id);
   if (!row) return respond.notFound(res, 'Request not found');
-  const reason = String(req.body?.reason ?? '').trim();
-  const ownerMayCancel = OPEN_STATUSES.includes(row.status) && isOwner(req, row);
-  const hrMayCancel    = ['Approved', 'GL Failed', ...OPEN_STATUSES].includes(row.status) && (isHrApprover(req) || canManage(req));
-  if (row.status === 'Paid') return respond.badReq(res, 'A paid request cannot be cancelled');
-  if (!ownerMayCancel && !hrMayCancel) return respond.forbidden(res, `You cannot cancel a request that is ${row.status}`);
+  if (!canManage(req) && !isHrApprover(req)) return respond.forbidden(res, 'Only HR can cancel out-of-station requests');
+  if (row.status === 'Paid') return respond.badReq(res, 'A paid request cannot be cancelled — reverse it in the core banking system');
+  if (!['Pending Approval', 'Approved', 'GL Failed'].includes(row.status)) return respond.badReq(res, `A ${row.status} request cannot be cancelled`);
   if (row.document_ref) return respond.badReq(res, 'This request already has a GL reference and cannot be cancelled');
-  await prisma.$executeRaw`
-    UPDATE outofstation_requests SET status = 'Cancelled', rejection_reason = ${reason ? reason.slice(0, 500) : null}, updated_at = NOW()
-     WHERE id = ${toBigInt(row.id)}`;
+  const reason = String(req.body?.reason ?? '').trim();
+  try {
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.$executeRaw`
+        UPDATE outofstation_requests SET status = 'Cancelled', rejection_reason = ${reason ? reason.slice(0, 500) : null}, updated_at = NOW()
+         WHERE id = ${toBigInt(row.id)} AND status = ${row.status} AND document_ref IS NULL`;
+      if (changed !== 1) throw new Conflict();
+      await tx.$executeRaw`UPDATE outofstation_stages SET status = 'Skipped' WHERE request_id = ${toBigInt(row.id)} AND status = 'Pending'`;
+    }, TX_OPTS);
+  } catch (e) {
+    if (e instanceof Conflict) return respond.conflict(res, CONFLICT_MSG);
+    throw e;
+  }
   await writeLog(row.id, req.user?.id, reason ? `Cancelled: ${reason}` : 'Cancelled', row.status, 'Cancelled');
-  notify('cancelled', row, req);
   logActivity({ module: 'Out of Station', action: 'cancel', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
   respond.ok(res, 'Request cancelled', await getRow(row.id));
 });
@@ -810,7 +998,9 @@ async function repost(req, res, fromStatus, label) {
   if (row.status !== fromStatus) return respond.badReq(res, `Only ${fromStatus} requests can be ${label}`);
   // A reference means the bank accepted it once — posting again would pay twice.
   if (row.document_ref) return respond.badReq(res, `This request already has GL reference ${row.document_ref}; posting again would pay it twice`);
-  const post = await postToLedger(row.id, req);
+  if (row.employee_status !== '1')
+    return respond.badReq(res, `${row.employee_name || 'This employee'} is no longer an active employee, so the allowance was not posted. Cancel the request instead.`);
+  const post = await postToLedger(row.id, req, fromStatus);
   if (post.skipped) return respond.badReq(res, 'Postings are switched off or no GL connection is configured, so nothing was sent');
   logActivity({ module: 'Out of Station', action: fromStatus === 'GL Failed' ? 'retry_gl' : 'post_gl', entityId: String(row.id), entityName: row.request_number, ...fromReq(req) });
   postingOutcome(res, post, await getRow(row.id));

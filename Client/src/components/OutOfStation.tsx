@@ -26,28 +26,34 @@ import { fmtDate as formatDmy, fmtDateTime } from '@/lib/dateFormat';
 import { useRealtimeRefresh } from '@/lib/realtime';
 
 // Out of Station allowance: the number of days entered on the request (not tied to the dates — some
-// staff are paid by nights away) × the daily rate for the employee's pay grade. One form can raise a request for several
-// employees at once (filter by department, then pick). Raised by staff who have people reporting to them — for a subordinate or
-// for themselves; staff with no reports cannot raise one. Approved like leave
-// (supervisor, then HR), and paid to the employee's account through the GL on HR's approval.
+// staff are paid by nights away) × the daily rate for the employee's pay grade.
 //
-// Two menu entries, like Leave:
-//   Personal Out of Station — the caller's own requests (raised by them, if they have reports, or by
-//                             their supervisor) and their subordinates' (raise on their behalf; give
-//                             the supervisor approval).
-//   Manage Out of Station   — HR: daily rates, posting settings, the HR approval list, every request
-//                             with the printable schedule.
+// HR raises every request — one form can raise for several employees at once (filter by department,
+// then pick). Approval follows the configured approval flow (Settings → Controls → Approvals), like
+// payroll; the final approval pays the allowance to the employee's account through the GL.
+//
+// Two menu entries:
+//   Personal Out of Station — the caller's own requests, read-only, for their history.
+//   Manage Out of Station   — HR: daily rates, every request (raise, submit, cancel, post) with the
+//                             printable schedule, and the approval list.
 
 type Request = {
   id: string; request_number: string; employee: string; employee_name: string; employee_code?: string;
-  supervisor_id?: string | null; purpose: string; location: string; date_start: string; date_end: string;
+  purpose: string; location: string; date_start: string; date_end: string;
   days: number; daily_rate: number; amount: number; paygrade_name?: string; account_no?: string; branch?: string;
   status: string; rejection_reason?: string | null; document_ref?: string | null; payment_log?: string | null;
-  requested_by?: string | null; requested_by_name?: string | null; submitted_at?: string | null;
-  approved_at?: string | null; posted_at?: string | null; updated_at?: string | null; created_at?: string;
+  requested_by?: string | null; requested_by_name?: string | null; requested_by_username?: string | null;
+  submitted_at?: string | null; approved_at?: string | null; posted_at?: string | null; updated_at?: string | null; created_at?: string;
+  employee_status?: string | null;
+  /** The approval stage it is waiting at, when the request has an approval flow. */
+  current_stage_name?: string | null;
+};
+type Stage = {
+  id: string; stage_order: number; stage_name: string; approver_type: 'role' | 'user'; approver_label?: string | null;
+  status: string; acted_by_name?: string | null; acted_at?: string | null; comment?: string | null;
 };
 type Employee = {
-  id: string; employee_name: string; employee_code?: string; paygrade_name?: string; is_self?: boolean; is_report?: boolean;
+  id: string; employee_name: string; employee_code?: string; paygrade_name?: string;
   department_id?: string | null; department_name?: string | null;
 };
 type QuoteLine = { employee: string; employee_name: string; employee_code?: string | null; paygrade_name?: string | null; daily_rate?: number; amount?: number; error?: string };
@@ -59,8 +65,8 @@ type GlBlock = { accounts: InvalidAccount[] | null; imbalance: GlImbalance | nul
 const STATUS_PILL: Record<string, string> = {
   Draft:                 'bg-slate-100 border border-slate-200 text-slate-500',
   'Pending Approval':    'bg-amber-500/10 text-amber-700 border border-amber-200/50',
-  'Pending HR Approval': 'bg-purple-500/10 text-purple-700 border border-purple-200/50',
-  Approved:              'pill-success',
+  Approved:             'pill-success',
+  Posting:               'bg-sky-500/10 text-sky-700 border border-sky-200/50',
   Paid:                  'pill-success',
   'GL Failed':           'bg-red-500/10 text-red-700 border border-red-200/50',
   Rejected:              'pill-danger',
@@ -70,7 +76,7 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`pill ${STATUS_PILL[status] ?? ''}`}>{status}</span>;
 }
 
-const OPEN = ['Draft', 'Pending Approval', 'Pending HR Approval'];
+const OPEN = ['Draft', 'Pending Approval'];
 const fmtDate = (v?: string | null) => formatDmy(v);
 const day = (v?: string | null) => (v ? String(v).slice(0, 10) : '');
 const amt = (n: any) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -276,11 +282,17 @@ function RequestDetail({ request, footerActions, canRetry, retrying, onRetry, on
   request: Request | null; footerActions?: React.ReactNode; canRetry: boolean; retrying: boolean; onRetry: () => void; onClose: () => void;
 }) {
   const [history, setHistory] = useState<any[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
   useEffect(() => {
     if (!request) return;
     api.get(`/out-of-station/requests/${request.id}/history`).then(r => setHistory(r.data?.data ?? [])).catch(() => setHistory([]));
-  }, [request?.id, request?.status]);
+    api.get(`/out-of-station/requests/${request.id}/stages`).then(r => setStages(r.data?.data ?? [])).catch(() => setStages([]));
+  }, [request?.id, request?.status, request?.updated_at]);
   const r = request;
+  const STAGE_PILL: Record<string, string> = {
+    Pending: 'bg-amber-500/10 text-amber-700 border border-amber-200/50', Approved: 'pill-success',
+    Rejected: 'pill-danger', Skipped: 'bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--text-muted)]',
+  };
   return (
     <DetailSlideOver open={!!r} title="Out of Station Details" subtitle={r ? `${r.request_number} · ${r.employee_name}` : undefined} onClose={onClose} footerActions={footerActions}>
       {r && (
@@ -350,11 +362,30 @@ function RequestDetail({ request, footerActions, canRetry, retrying, onRetry, on
           <DetailSection title="Request">
             <DetailGrid>
               <DetailField label="Reference" value={r.request_number} />
-              <DetailField label="Raised by" value={r.requested_by_name || r.employee_name} />
+              <DetailField label="Raised by" value={r.requested_by_name || r.requested_by_username || 'HR'} />
               <DetailField label="Submitted" value={r.submitted_at ? fmtDateTime(r.submitted_at, '') : '—'} />
               <DetailField label="Paid" value={r.posted_at ? fmtDateTime(r.posted_at, '') : '—'} />
             </DetailGrid>
           </DetailSection>
+
+          {stages.length > 0 && (
+            <DetailSection title="Approval Stages">
+              <div className="rounded-[12px] border border-[var(--border)] divide-y divide-[var(--border)]">
+                {stages.map((st, i) => (
+                  <div key={st.id} className="flex items-start justify-between gap-4 px-4 py-2.5 text-[12px]">
+                    <div className="min-w-0">
+                      <p className="font-medium text-[var(--text-primary)]">{i + 1}. {st.stage_name}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        {st.acted_by_name ? `${st.acted_by_name} · ${fmtDateTime(st.acted_at, '')}` : (st.approver_label || (st.approver_type === 'user' ? 'Assigned user' : 'Assigned role'))}
+                      </p>
+                      {st.comment && <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap">{st.comment}</p>}
+                    </div>
+                    <span className={`pill shrink-0 ${STAGE_PILL[st.status] ?? ''}`}>{st.status}</span>
+                  </div>
+                ))}
+              </div>
+            </DetailSection>
+          )}
 
           {history.length > 0 && (
             <DetailSection title="History">
@@ -414,7 +445,12 @@ function RequestTable({ rows, loading, empty, showEmployee, actions }: {
                 <td className="td">{fmtDate(row.date_end)}</td>
                 <td className="td text-center">{row.days}</td>
                 <td className="td text-right"><span className="font-semibold tabular-nums text-[var(--success)] text-[13px]">{money(row.amount)}</span></td>
-                <td className="td"><StatusPill status={row.status} /></td>
+                <td className="td">
+                  <StatusPill status={row.status} />
+                  {row.status === 'Pending Approval' && row.current_stage_name && (
+                    <p className="mt-1 text-[11px] text-[var(--text-muted)]">At: {row.current_stage_name}</p>
+                  )}
+                </td>
                 <td className="td text-right"><div className="flex justify-end"><RowActions actions={actions(row)} /></div></td>
               </motion.tr>
             ))}
@@ -491,58 +527,38 @@ function useUser() {
 // ══════════════════════════════════════════════════════════════════════════════
 // PERSONAL OUT OF STATION
 // ══════════════════════════════════════════════════════════════════════════════
-const PERSONAL_TABS = ['All my Requests', 'Approved Requests', 'Pending Requests', 'Subordinate Requests'] as const;
+const PERSONAL_TABS = ['All my Requests', 'Paid', 'In Progress'] as const;
 
+/** Read-only history of the caller's own requests. HR raises them; the employee can only view. */
 export function PersonalOutOfStation() {
-  const me = useUser();
   const [activeTab, setActiveTab] = useState<string>('All my Requests');
   const [searchQuery, setSearchQuery] = useState('');
   const [rows, setRows] = useState<Request[]>([]);
   const [loading, setLoading] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [form, setForm] = useState<{ initial: Request | null; forTeam: boolean } | null>(null);
   const [viewRow, setViewRow] = useState<Request | null>(null);
 
-  useEffect(() => {
-    api.get('/out-of-station/employees', { params: { scope: 'personal' } }).then(r => setEmployees(r.data?.data ?? [])).catch(() => setEmployees([]));
-  }, []);
-  // The server lists the caller only when they have people reporting to them.
-  const self = employees.filter(e => e.is_self);
-  const reports = employees.filter(e => e.is_report);
-  const TABS = PERSONAL_TABS.filter(t => t !== 'Subordinate Requests' || reports.length > 0);
-
+  // The server returns only requests for the caller's own employee record, never drafts.
   const load = useCallback(() => {
     setLoading(true);
-    const scope = activeTab === 'Subordinate Requests' ? 'team' : 'mine';
-    api.get('/out-of-station/requests', { params: { scope } })
-      .then(r => {
-        let list: Request[] = r.data?.data ?? [];
-        if (activeTab === 'All my Requests' || activeTab === 'Approved Requests' || activeTab === 'Pending Requests') {
-          list = list.filter(x => String(x.employee) === me.employeeId || !me.employeeId);
-        }
-        if (activeTab === 'Approved Requests') list = list.filter(x => ['Approved', 'Paid'].includes(x.status));
-        if (activeTab === 'Pending Requests')  list = list.filter(x => OPEN.includes(x.status));
-        setRows(list);
-      })
+    api.get('/out-of-station/requests', { params: { scope: 'mine' } })
+      .then(r => setRows(r.data?.data ?? []))
       .catch(() => toast.error('Failed to load requests'))
       .finally(() => setLoading(false));
-  }, [activeTab, me.employeeId]);
+  }, []);
   useEffect(() => { load(); }, [load]);
   useRealtimeRefresh('outofstation', load);
 
-  const act = useRequestActions(() => { load(); setViewRow(null); });
-  const filtered = rows.filter(r => JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase()));
-  const isSubTab = activeTab === 'Subordinate Requests';
-  // Owner of a draft/open request: whoever raised it. An employee whose supervisor raised it only views it.
-  const owns = (r: Request) => String(r.requested_by ?? '') === me.userId;
-  // Supervisor approval: a report's request waiting at the supervisor stage.
-  const decides = (r: Request) => isSubTab && r.status === 'Pending Approval' && String(r.employee) !== me.employeeId;
+  const byTab = rows.filter(x =>
+    activeTab === 'Paid' ? x.status === 'Paid'
+    : activeTab === 'In Progress' ? ['Pending Approval', 'Approved', 'Posting', 'GL Failed'].includes(x.status)
+    : true);
+  const filtered = byTab.filter(r => JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="p-4 sm:p-6 md:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full">
-      <PageHeader title="Out of Station" subtitle="Request the out-of-station allowance for your subordinates or yourself, and approve your subordinates' requests." />
+      <PageHeader title="Out of Station" subtitle="Your out-of-station allowance history. Requests are raised and approved by HR." />
 
-      <TabBar tabs={[...TABS]} activeTab={activeTab} onChange={setActiveTab} />
+      <TabBar tabs={[...PERSONAL_TABS]} activeTab={activeTab} onChange={setActiveTab} />
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden min-h-[500px] flex flex-col">
         <TableToolbar
@@ -550,50 +566,15 @@ export function PersonalOutOfStation() {
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search requests..."
           searchWidth="sm:w-[280px]"
-          actions={isSubTab ? (
-            <button className="primary-btn shrink-0" onClick={() => setForm({ initial: null, forTeam: true })}>Request for Subordinate</button>
-          ) : activeTab !== 'Approved Requests' && self.length > 0 ? (
-            <button className="primary-btn shrink-0" onClick={() => setForm({ initial: null, forTeam: false })}>Apply Out of Station</button>
-          ) : undefined}
         />
         <RequestTable
-          rows={filtered} loading={loading} showEmployee={isSubTab}
-          empty={isSubTab ? 'No requests for your subordinates yet.' : self.length > 0 ? 'No out-of-station requests found.' : 'No out-of-station requests found. Your supervisor raises them on your behalf.'}
-          actions={r => [
-            { label: 'View', icon: Eye, onClick: () => setViewRow(r) },
-            { label: 'Approve', icon: Check, onClick: () => act.approve(r), hidden: !decides(r) },
-            { label: 'Reject', icon: XCircle, danger: true, onClick: () => act.openReject(r), hidden: !decides(r) },
-            { label: 'Submit for Approval', icon: SendHorizonal, onClick: () => act.submit(r), hidden: r.status !== 'Draft' || !owns(r) },
-            { label: 'Edit', icon: FileEdit, onClick: () => setForm({ initial: r, forTeam: isSubTab }), hidden: r.status !== 'Draft' || !owns(r) },
-            { label: 'Delete', icon: Trash2, danger: true, onClick: () => act.remove(r), hidden: r.status !== 'Draft' || !owns(r) },
-            { label: 'Cancel Request', icon: XCircle, danger: true, onClick: () => act.cancel(r), hidden: !OPEN.includes(r.status) || r.status === 'Draft' || !owns(r) },
-          ]}
+          rows={filtered} loading={loading} showEmployee={false}
+          empty="No out-of-station requests on record for you."
+          actions={r => [{ label: 'View', icon: Eye, onClick: () => setViewRow(r) }]}
         />
       </div>
 
-      {form && (
-        <RequestForm
-          initial={form.initial}
-          employees={form.initial ? employees : (form.forTeam ? reports : self)}
-          title={form.initial ? `Edit ${form.initial.request_number}` : form.forTeam ? 'Request for Subordinate' : 'Apply for Out of Station'}
-          subtitle="Paid as days × the daily rate for the employee's grade."
-          onClose={() => setForm(null)} onSaved={load} />
-      )}
-
-      <RequestDetail
-        request={viewRow} canRetry={false} retrying={false} onRetry={() => {}} onClose={() => setViewRow(null)}
-        footerActions={viewRow && decides(viewRow) ? (
-          <>
-            <button className="secondary-btn shadow-sm text-[var(--danger)] border-[var(--danger)]/40 hover:bg-[var(--danger)]/5" onClick={() => act.openReject(viewRow)}>
-              <X size={14} className="mr-1.5 inline" />Reject
-            </button>
-            <button className="primary-btn shadow-sm bg-[var(--success)] hover:opacity-90" onClick={() => act.approve(viewRow)}>
-              <Check size={14} className="mr-1.5 inline" />Approve
-            </button>
-          </>
-        ) : undefined}
-      />
-      {act.modals}
+      <RequestDetail request={viewRow} canRetry={false} retrying={false} onRetry={() => {}} onClose={() => setViewRow(null)} />
     </div>
   );
 }
@@ -601,20 +582,22 @@ export function PersonalOutOfStation() {
 // ══════════════════════════════════════════════════════════════════════════════
 // MANAGE OUT OF STATION
 // ══════════════════════════════════════════════════════════════════════════════
-const MANAGE_STATUSES = ['All', 'Pending Approval', 'Pending HR Approval', 'Approved', 'Paid', 'GL Failed', 'Rejected', 'Cancelled'];
+const MANAGE_STATUSES = ['All', 'Draft', 'Pending Approval', 'Approved', 'Posting', 'Paid', 'GL Failed', 'Rejected', 'Cancelled'];
 
 export function ManageOutOfStation() {
   const me = useUser();
+  // The Approval List shows only what the caller can approve now (their stage, by role or by name),
+  // so it is offered to anyone who can open this page; approvers without it use Central Approval.
   const MAIN_TABS = [
     ...(me.canManage ? ['Daily Rates'] : []),
     ...(me.canViewAll ? ['All Requests'] : []),
-    ...(me.isHr ? ['Approval List'] : []),
+    'Approval List',
   ];
   const [activeTab, setActiveTab] = useState<string>(MAIN_TABS[0] ?? '');
 
   return (
     <div className="p-4 sm:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full relative">
-      <PageHeader title="Out of Station Setup" subtitle="Set daily rates, approve requests and download the allowance schedule. Posting and approval controls are in Settings → Controls." />
+      <PageHeader title="Out of Station Setup" subtitle="Raise requests, set daily rates, approve requests and download the allowance schedule. The approval flow and posting controls are in Settings → Controls." />
       {MAIN_TABS.length === 0 ? (
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] p-10 text-center text-sm text-[var(--text-muted)]">You don't have access to manage out-of-station requests.</div>
       ) : <>
@@ -643,8 +626,8 @@ function ManageRequestsTab({ approvals, me }: { approvals: boolean; me: ReturnTy
   const load = useCallback(() => {
     setLoading(true);
     const req = approvals
-      // HR's list is the HR stage only; the supervisor stage is handled under Personal → Subordinate Requests.
-      ? api.get('/out-of-station/approvals').then(r => (r.data?.data ?? []).filter((x: Request) => x.status === 'Pending HR Approval'))
+      // The server returns only requests the caller can approve right now.
+      ? api.get('/out-of-station/approvals').then(r => r.data?.data ?? [])
       : api.get('/out-of-station/requests', { params: { scope: 'all', ...(from ? { from } : {}), ...(to ? { to } : {}) } }).then(r => r.data?.data ?? []);
     req.then(setRows).catch((e: any) => toast.error(e.response?.data?.message || 'Failed to load requests')).finally(() => setLoading(false));
   }, [approvals, from, to]);
@@ -657,7 +640,11 @@ function ManageRequestsTab({ approvals, me }: { approvals: boolean; me: ReturnTy
   const act = useRequestActions(() => { load(); setViewRow(null); });
   const filtered = rows.filter(r => (status === 'All' || r.status === status) && JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase()));
   const hrActions = me.isHr || me.canManage;
-  const decides = (r: Request) => approvals && r.status === 'Pending HR Approval' && String(r.employee) !== me.employeeId;
+  // The Approval List already holds only what this user may approve (the server applies the stages
+  // and the rule that whoever raised a request never approves it).
+  const decides = (r: Request) => approvals && r.status === 'Pending Approval';
+  const approveLabel = (r: Request) => (r.current_stage_name ? `Approve — ${r.current_stage_name}` : 'Approve');
+  const isDraft = (r: Request) => r.status === 'Draft' && me.canManage;
 
   // The schedule as the Bank prints it: name, days, rate, net, account and branch, with a total.
   const scheduleRows = filtered.filter(r => ['Approved', 'Paid', 'GL Failed'].includes(r.status));
@@ -708,19 +695,24 @@ function ManageRequestsTab({ approvals, me }: { approvals: boolean; me: ReturnTy
       )}
       <RequestTable
         rows={filtered} loading={loading} showEmployee
-        empty={approvals ? 'No requests waiting for HR approval.' : 'No requests found.'}
+        empty={approvals ? 'No requests waiting for your approval.' : 'No requests found.'}
         actions={r => [
           { label: 'View', icon: Eye, onClick: () => setViewRow(r) },
-          { label: 'Approve', icon: Check, onClick: () => act.approve(r), hidden: !decides(r) },
+          { label: approveLabel(r), icon: Check, onClick: () => act.approve(r), hidden: !decides(r) },
           { label: 'Reject', icon: XCircle, danger: true, onClick: () => act.openReject(r), hidden: !decides(r) },
-          { label: 'Retry GL Posting', icon: RefreshCw, danger: true, onClick: () => act.retry(r), hidden: r.status !== 'GL Failed' || !hrActions },
-          { label: 'Post to GL', icon: CheckCircle2, onClick: () => act.postGl(r), hidden: r.status !== 'Approved' || !hrActions },
-          { label: 'Cancel Request', icon: XCircle, danger: true, onClick: () => act.cancel(r), hidden: approvals || !['Approved', 'GL Failed', ...OPEN].includes(r.status) || !hrActions },
+          { label: 'Submit for Approval', icon: SendHorizonal, onClick: () => act.submit(r), hidden: approvals || !isDraft(r) },
+          { label: 'Edit', icon: FileEdit, onClick: () => setForm(r), hidden: approvals || !isDraft(r) },
+          { label: 'Delete', icon: Trash2, danger: true, onClick: () => act.remove(r), hidden: approvals || !isDraft(r) },
+          { label: 'Retry GL Posting', icon: RefreshCw, danger: true, onClick: () => act.retry(r), hidden: approvals || r.status !== 'GL Failed' || !hrActions },
+          { label: 'Post to GL', icon: CheckCircle2, onClick: () => act.postGl(r), hidden: approvals || r.status !== 'Approved' || !hrActions },
+          { label: 'Cancel Request', icon: XCircle, danger: true, onClick: () => act.cancel(r), hidden: approvals || !['Pending Approval', 'Approved', 'GL Failed'].includes(r.status) || !hrActions },
         ]}
       />
 
       {form !== undefined && (
-        <RequestForm initial={form} employees={employees} title="New Out of Station Request" subtitle="Raise a request on behalf of any employee."
+        <RequestForm initial={form} employees={form ? [{ id: String(form.employee), employee_name: form.employee_name, employee_code: form.employee_code }] : employees}
+          title={form ? `Edit ${form.request_number} — ${form.employee_name}` : 'New Out of Station Request'}
+          subtitle={form ? 'Paid as days × the daily rate for the employee\'s grade.' : 'Raise a request for one or more employees. Paid as days × the daily rate for each employee\'s grade.'}
           onClose={() => setForm(undefined)} onSaved={load} />
       )}
       <RequestDetail
@@ -731,7 +723,7 @@ function ManageRequestsTab({ approvals, me }: { approvals: boolean; me: ReturnTy
               <X size={14} className="mr-1.5 inline" />Reject
             </button>
             <button className="primary-btn shadow-sm bg-[var(--success)] hover:opacity-90" onClick={() => act.approve(viewRow)}>
-              <Check size={14} className="mr-1.5 inline" />Approve
+              <Check size={14} className="mr-1.5 inline" />{approveLabel(viewRow)}
             </button>
           </>
         ) : undefined}
