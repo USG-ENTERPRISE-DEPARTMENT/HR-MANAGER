@@ -3812,16 +3812,18 @@ export function Payroll() {
     }
 
     // ── List view ──
+    const runQ = runSearch.trim().toLowerCase();
     const filteredRuns = runRows.filter(r =>
-      r.name.toLowerCase().includes(runSearch.toLowerCase()) ||
-      (r.freq_name ?? '').toLowerCase().includes(runSearch.toLowerCase())
+      r.name.toLowerCase().includes(runQ) ||
+      (r.freq_name ?? '').toLowerCase().includes(runQ) ||
+      (r.document_ref ?? '').toLowerCase().includes(runQ)
     );
     const pagedRuns: PayrollRun[] = filteredRuns.slice((runPage - 1) * runPageSize, runPage * runPageSize);
 
     return (
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden">
-          <TableToolbar searchQuery={runSearch} onSearchChange={setRunSearch} searchPlaceholder="Search runs..."
+          <TableToolbar searchQuery={runSearch} onSearchChange={setRunSearch} searchPlaceholder="Search runs or GL reference..."
             actions={
               <>
                 {can('process_payroll') && <button className="primary-btn" onClick={openNewRun}>
