@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ConfirmAlert } from './ConfirmAlert';
 import { EmployeeFormFull } from './EmployeeFormFull';
 import { EmployeeImport } from './EmployeeImport';
+import { SyncAllEmployeesButton } from './SyncAllEmployees';
 import { EmployeeDetailsSlideOver } from './EmployeeDetailsSlideOver';
 import { RelationalTab } from './EmployeeTabs';
 import { DisciplinaryTab } from './DisciplinaryTab';
@@ -363,6 +364,9 @@ export function Employees() {
                       <Plus className="w-[14px] h-[14px]" />
                     </button>
                   </>
+                )}
+                {activeTab === 'Employees' && can('edit_employees') && (
+                  <SyncAllEmployeesButton onFinished={fetchEmployees} />
                 )}
                 <button
                   onClick={() => setShowFilters(!showFilters)}

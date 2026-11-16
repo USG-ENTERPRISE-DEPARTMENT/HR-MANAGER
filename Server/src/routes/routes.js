@@ -35,6 +35,8 @@ const {
   getAllPaygrades,
   getAllNotches,
   syncEmployee,
+  syncAllEmployees,
+  getSyncAllStatus,
   getEmployeePositionImpact,
   getEmployeeActivity,
 } = require('../controllers/employeeController.js');
@@ -257,6 +259,9 @@ router.get   ('/employees/notches',        getAllNotches);
 router.get   ('/employees/approvals',      getEmployeeApprovals);
 router.get   ('/employees/approval-flow',  permissionGuard('manage_settings'), getEmployeeApprovalFlow);
 router.put   ('/employees/approval-flow',  permissionGuard('manage_settings'), saveEmployeeApprovalFlow);
+// Push every approved employee to core banking in the background; GET reports progress.
+router.post  ('/employees/sync-all',       permissionGuard('edit_employees'), syncAllEmployees);
+router.get   ('/employees/sync-all',       permissionGuard('edit_employees'), getSyncAllStatus);
 router.get   ('/employees',                getAllEmployees);
 router.post  ('/employees',                permissionGuard('create_employees'),       createEmployee);
 router.get   ('/employees/:id',            getEmployeeById);

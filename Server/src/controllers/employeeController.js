@@ -1816,6 +1816,100 @@ const syncEmployee = asyncHandler(async (req, res) => {
   respond.ok(res, 'Employee synced successfully');
 });
 
+// ── Sync every employee to core banking at once ──────────────────────────────
+// Core banking takes one employee per call, so a full sync of hundreds of staff takes minutes — far
+// longer than an HTTP request should stay open. POST starts a background job and returns at once; the
+// page polls GET for progress. Only one run at a time. State is in memory: it is a one-off operator
+// action, and a restart simply means the button can be pressed again (each push is an idempotent update).
+const BULK_SYNC_CONCURRENCY = 4;    // parallel calls to core banking — gentle on the bank's API
+const BULK_SYNC_BATCH       = 50;   // employees loaded and enriched per database round-trip
+const BULK_SYNC_MAX_FAILURES_LISTED = 500;
+let _bulkSync = { running: false };
+
+const bulkSyncView = () => {
+  const { failures = [], ...rest } = _bulkSync;
+  return { ...rest, failures };
+};
+
+async function runBulkSync(ids) {
+  for (let i = 0; i < ids.length; i += BULK_SYNC_BATCH) {
+    const chunk = ids.slice(i, i + BULK_SYNC_BATCH);
+    let enriched = [];
+    try {
+      const rows = await prisma.employee.findMany({ where: { id: { in: chunk } } });
+      enriched = await enrichEmployees(rows);
+    } catch (err) {
+      // A whole batch could not be loaded: count it as failed and carry on with the next one.
+      _bulkSync.failed += chunk.length;
+      _bulkSync.done   += chunk.length;
+      if (_bulkSync.failures.length < BULK_SYNC_MAX_FAILURES_LISTED)
+        _bulkSync.failures.push({ id: null, employee_id: null, name: `${chunk.length} employees`, message: `Could not load records: ${err.message}` });
+      continue;
+    }
+    _bulkSync.done += chunk.length - enriched.length;   // deleted since the run started — nothing to send
+
+    let next = 0;
+    const worker = async () => {
+      while (next < enriched.length) {
+        const e = enriched[next++];
+        const r = await pushEmployeeToExternalSystem(e).catch(err => ({ success: false, message: err.message }));
+        _bulkSync.done += 1;
+        if (r?.success) { _bulkSync.succeeded += 1; continue; }
+        _bulkSync.failed += 1;
+        if (_bulkSync.failures.length < BULK_SYNC_MAX_FAILURES_LISTED) {
+          _bulkSync.failures.push({
+            id: String(e.id), employee_id: e.employee_id || null,
+            name: `${e.firstName || ''} ${e.lastName || ''}`.trim() || 'Employee',
+            message: String(r?.message || 'Sync failed').slice(0, 300),
+          });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(BULK_SYNC_CONCURRENCY, enriched.length) }, worker));
+  }
+}
+
+// POST /employees/sync-all — { includeExited?: boolean }. Starts pushing every approved employee to core
+// banking. Exited staff (terminated / resigned) are left out unless asked for, so a full sync never
+// recreates long-gone staff in core banking.
+const syncAllEmployees = asyncHandler(async (req, res) => {
+  if (_bulkSync.running) return respond.conflict(res, 'A sync of all employees is already running');
+  const apiCfg = await getApiConfig().catch(() => ({}));
+  if (!apiCfg?.employee_sync_url)
+    return respond.badReq(res, 'Employee sync to core banking is not configured (Settings → API Integration)');
+
+  const includeExited = req.body?.includeExited === true;
+  const where = {
+    approvalStatus: APPROVAL.APPROVED,
+    ...(includeExited ? {} : { lifecycleStatus: { notIn: [LIFECYCLE.TERMINATED, LIFECYCLE.RESIGNED] } }),
+  };
+  const rows = await prisma.employee.findMany({ where, select: { id: true }, orderBy: { id: 'asc' } });
+  if (!rows.length) return respond.badReq(res, 'There are no approved employees to sync');
+
+  _bulkSync = {
+    running: true, total: rows.length, done: 0, succeeded: 0, failed: 0, failures: [], includeExited,
+    startedAt: new Date().toISOString(), finishedAt: null, startedBy: req.user?.username || null, error: null,
+  };
+  logActivity({ module: 'Employees', action: 'sync_all_start', details: { total: rows.length, includeExited }, ...fromReq(req) });
+
+  runBulkSync(rows.map(r => r.id))
+    .catch(err => { _bulkSync.error = err.message; console.error('[EmployeeSync] sync-all stopped:', err.message); })
+    .finally(() => {
+      _bulkSync.running = false;
+      _bulkSync.finishedAt = new Date().toISOString();
+      console.log(`[EmployeeSync] sync-all finished: ${_bulkSync.succeeded} synced, ${_bulkSync.failed} failed of ${_bulkSync.total}`);
+      logActivity({ module: 'Employees', action: 'sync_all_finish',
+        details: { total: _bulkSync.total, succeeded: _bulkSync.succeeded, failed: _bulkSync.failed, error: _bulkSync.error }, ...fromReq(req) });
+    });
+
+  respond.ok(res, `Syncing ${rows.length} employees to core banking`, bulkSyncView());
+});
+
+// GET /employees/sync-all — progress of the current (or last) run.
+const getSyncAllStatus = asyncHandler(async (_req, res) => {
+  respond.ok(res, 'Sync status', bulkSyncView());
+});
+
 // ── Employee directory for the core banking system (API key only) ────────────
 // GET /me/employees?status=ACTIVE&page=1&limit=100
 //
@@ -2051,6 +2145,8 @@ module.exports = {
   getAllPaygrades,
   getAllNotches,
   syncEmployee,
+  syncAllEmployees,
+  getSyncAllStatus,
   syncEmployeeToExternalSystem,
   retryFailedSyncs,
   runLeaveStatusSync,
