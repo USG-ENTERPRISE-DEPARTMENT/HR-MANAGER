@@ -729,7 +729,9 @@ async function postToGL({
   };
 
   if (cfg.core_api_enabled) {
-    return postViaCoreApi({ payload, referenceNo, url });
+    // PerformBulkPaymentHR also takes `amount`: the batch total, always the sum of the credit lines
+    // (crTotal from the balance gate above, rounded to 2 dp — equal to the debits, since it balanced).
+    return postViaCoreApi({ payload: { ...payload, amount: crTotal }, referenceNo, url });
   }
 
   // Log the request before sending: a timeout or a crash mid-flight must still leave a record of
@@ -774,8 +776,9 @@ async function postToGL({
 /**
  * Send a checked, balanced journal through the new core API's /bulkPayment (PerformBulkPaymentHR).
  *
- * The body is exactly the payload the old .90 posting API received — same fields, same order, same
- * types. Only the transport differs: POST, encrypted, with the core API's token and key/secret.
+ * The body is the payload the old .90 posting API received — same fields, same order, same types —
+ * plus `amount`, the sum of the credit lines. Only the transport differs: POST, encrypted, with the
+ * core API's token and key/secret.
  * Same contract as the old path: returns { documentRef, raw } or throws with glResponse attached.
  */
 async function postViaCoreApi({ payload, referenceNo, url }) {
