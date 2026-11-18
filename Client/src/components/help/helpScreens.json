@@ -1,17 +1,538 @@
 {
-  "_comment": "Screenshot manifest for the Help Center + PDF manual. Keyed by help module id. `view` is the App.tsx activeView the capture script opens (scripts/capture-help-screens.mjs); the image is saved to public/help/screens/<module id>.png. A module whose image is missing simply shows no screenshot.",
-  "employees":      { "view": "Employees",          "caption": "The Employees directory" },
-  "leave":          { "view": "LeaveManagement",    "caption": "Leave Management" },
-  "company":        { "view": "Company",            "caption": "Company structure" },
-  "payroll":        { "view": "Payroll",            "caption": "Payroll runs" },
-  "medical":        { "view": "AdminMedical",       "caption": "Medical administration" },
-  "users":          { "view": "Users",              "caption": "Users and roles" },
-  "recruitment":    { "view": "Recruitment",        "caption": "Recruitment" },
-  "performance":    { "view": "ManagePerformance",  "caption": "Performance management" },
-  "reports":        { "view": "AdminReports",       "caption": "Reports" },
-  "documents":      { "view": "Documents",          "caption": "Company documents" },
-  "training":       { "view": "AdminTraining",      "caption": "Training administration" },
-  "attendance":     { "view": "AdminAttendance",    "caption": "Attendance" },
-  "out-of-station": { "view": "ManageOutOfStation", "caption": "Out of Station requests" },
-  "end-of-service": { "view": "ManageEndOfService", "caption": "End of Service" }
+  "_comment": "Screenshots for the Help Center + PDF manual, captured by scripts/capture-help-screens.mjs into public/help/screens/<id>.png. `modules`: one overview per help module (key = module id). `actions`: one shot per action, shown inside `article` right after its first steps block. `steps` are clicked in order: plain text matches a visible button/tab whose label starts with it (case-insensitive); 'row:<item>' opens the first table row's Actions menu and picks <item>. Steps must only OPEN forms/tabs/panels — never Save, Submit, Approve, Delete, Sync, Notify or Clock In. `sensitive: true` also blurs form-field values (for Edit/View shots of real records). Missing image files are simply not shown.",
+  "modules": {
+    "employees": {
+      "view": "Employees",
+      "caption": "The Employees directory"
+    },
+    "leave": {
+      "view": "LeaveManagement",
+      "caption": "Leave Management"
+    },
+    "company": {
+      "view": "Company",
+      "caption": "Company structure"
+    },
+    "payroll": {
+      "view": "Payroll",
+      "caption": "Payroll runs"
+    },
+    "medical": {
+      "view": "AdminMedical",
+      "caption": "Medical administration"
+    },
+    "users": {
+      "view": "Users",
+      "caption": "Users and roles"
+    },
+    "recruitment": {
+      "view": "Recruitment",
+      "caption": "Recruitment"
+    },
+    "performance": {
+      "view": "ManagePerformance",
+      "caption": "Performance management"
+    },
+    "reports": {
+      "view": "AdminReports",
+      "caption": "Reports"
+    },
+    "documents": {
+      "view": "Documents",
+      "caption": "Company documents"
+    },
+    "training": {
+      "view": "AdminTraining",
+      "caption": "Training administration"
+    },
+    "attendance": {
+      "view": "AdminAttendance",
+      "caption": "Attendance"
+    },
+    "out-of-station": {
+      "view": "ManageOutOfStation",
+      "caption": "Out of Station requests"
+    },
+    "end-of-service": {
+      "view": "ManageEndOfService",
+      "caption": "End of Service"
+    }
+  },
+  "actions": [
+    {
+      "id": "add-employee",
+      "article": "add-employee",
+      "view": "Employees",
+      "steps": [
+        "Add New"
+      ],
+      "caption": "The new employee form (Employees → Add New)"
+    },
+    {
+      "id": "edit-employee",
+      "article": "edit-employee",
+      "view": "Employees",
+      "steps": [
+        "row:Edit"
+      ],
+      "caption": "Editing an employee (Actions → Edit)",
+      "sensitive": true
+    },
+    {
+      "id": "employee-profile",
+      "article": "employee-profile",
+      "view": "Employees",
+      "steps": [
+        "row:View"
+      ],
+      "caption": "The employee profile slide-over",
+      "sensitive": true
+    },
+    {
+      "id": "employee-relations",
+      "article": "employee-relations",
+      "view": "Employees",
+      "steps": [
+        "Skills",
+        "Add"
+      ],
+      "caption": "Adding a skill record (Employees → Skills)"
+    },
+    {
+      "id": "deactivated-employees",
+      "article": "deactivated-employees",
+      "view": "Employees",
+      "steps": [
+        "Deactivated"
+      ],
+      "caption": "The Deactivated menu on the Employees screen"
+    },
+    {
+      "id": "self-onboarding",
+      "article": "self-onboarding",
+      "view": "SelfOnboarding",
+      "steps": [],
+      "caption": "Self-Onboarding form builder"
+    },
+    {
+      "id": "self-onboarding-link",
+      "article": "self-onboarding",
+      "view": "SelfOnboarding",
+      "steps": [
+        "Share Link"
+      ],
+      "caption": "Share Link tab — copy the link or print the QR code"
+    },
+    {
+      "id": "employee-transfers",
+      "article": "employee-transfers",
+      "view": "EmployeeTransfers",
+      "steps": [
+        "New Transfer"
+      ],
+      "caption": "Creating a transfer (Employee Transfer → New Transfer)"
+    },
+    {
+      "id": "central-approval",
+      "article": "central-approval",
+      "view": "CentralApproval",
+      "steps": [],
+      "caption": "Central Approval"
+    },
+    {
+      "id": "leave-types",
+      "article": "leave-types",
+      "view": "LeaveSetup",
+      "steps": [
+        "Add Leave Type"
+      ],
+      "caption": "Adding a leave type (Manage Leave → Leave Types)"
+    },
+    {
+      "id": "leave-periods",
+      "article": "leave-periods",
+      "view": "LeaveSetup",
+      "steps": [
+        "Leave Period",
+        "Add"
+      ],
+      "caption": "Adding a leave period"
+    },
+    {
+      "id": "holidays",
+      "article": "holidays",
+      "view": "LeaveSetup",
+      "steps": [
+        "Holidays",
+        "Add"
+      ],
+      "caption": "Adding a public holiday"
+    },
+    {
+      "id": "leave-rules",
+      "article": "leave-rules",
+      "view": "LeaveSetup",
+      "steps": [
+        "Leave Rules",
+        "Add"
+      ],
+      "caption": "Adding a leave rule"
+    },
+    {
+      "id": "apply-leave",
+      "article": "apply-leave",
+      "view": "LeaveManagement",
+      "steps": [
+        "Apply Leave"
+      ],
+      "caption": "The Apply Leave form"
+    },
+    {
+      "id": "leave-entitlement",
+      "article": "leave-entitlement",
+      "view": "LeaveManagement",
+      "steps": [
+        "Leave Entitlement"
+      ],
+      "caption": "Leave Entitlement tab"
+    },
+    {
+      "id": "approve-leave",
+      "article": "approve-leave",
+      "view": "LeaveManagement",
+      "steps": [
+        "Subordinate Leave"
+      ],
+      "caption": "Subordinate Leave — requests waiting for you"
+    },
+    {
+      "id": "leave-calendar",
+      "article": "leave-calendar",
+      "view": "LeaveCalendar",
+      "steps": [],
+      "caption": "The Leave Calendar"
+    },
+    {
+      "id": "departments",
+      "article": "departments",
+      "view": "Company",
+      "steps": [
+        "Add New"
+      ],
+      "caption": "Adding a company structure"
+    },
+    {
+      "id": "organogram",
+      "article": "organogram",
+      "view": "Company",
+      "steps": [
+        "Organogram"
+      ],
+      "caption": "The company organogram"
+    },
+    {
+      "id": "salary-components",
+      "article": "salary-components",
+      "view": "Salary",
+      "steps": [
+        "Components",
+        "Add New"
+      ],
+      "caption": "Adding a salary component (Salary → Components)"
+    },
+    {
+      "id": "component-assignment",
+      "article": "component-assignment",
+      "view": "Salary",
+      "steps": [
+        "Component Assignment"
+      ],
+      "caption": "Component Assignment"
+    },
+    {
+      "id": "notch-setup",
+      "article": "notch-setup",
+      "view": "Salary",
+      "steps": [
+        "Paygrades & Notches"
+      ],
+      "caption": "Paygrades & Notches",
+      "sensitive": true
+    },
+    {
+      "id": "run-payroll",
+      "article": "run-payroll",
+      "view": "Payroll",
+      "steps": [
+        "New Run"
+      ],
+      "caption": "Starting a new payroll run"
+    },
+    {
+      "id": "submit-medical",
+      "article": "submit-medical",
+      "view": "PersonalMedical",
+      "steps": [
+        "Add"
+      ],
+      "caption": "Submitting a medical request (Personal Medical → Add)"
+    },
+    {
+      "id": "medical-plans",
+      "article": "medical-plans",
+      "view": "AdminMedical",
+      "steps": [
+        "Medical Limits Setup"
+      ],
+      "caption": "Medical limits per pay grade"
+    },
+    {
+      "id": "admin-medical",
+      "article": "admin-medical",
+      "view": "AdminMedical",
+      "steps": [
+        "Add Request"
+      ],
+      "caption": "Recording a staff medical request (Manage Medical → Add Request)"
+    },
+    {
+      "id": "medical-enquiry",
+      "article": "medical-year-reset",
+      "view": "AdminMedical",
+      "steps": [
+        "Staff Medical Enquiry"
+      ],
+      "caption": "Staff Medical Enquiry — where the new medical year is started"
+    },
+    {
+      "id": "create-user",
+      "article": "create-user",
+      "view": "Users",
+      "steps": [
+        "Add"
+      ],
+      "caption": "Creating a user account (Users → Add User)"
+    },
+    {
+      "id": "roles-permissions",
+      "article": "roles-permissions",
+      "view": "Users",
+      "steps": [
+        "Roles",
+        "Add"
+      ],
+      "caption": "Adding a role"
+    },
+    {
+      "id": "edit-user",
+      "article": "edit-user",
+      "view": "Users",
+      "steps": [
+        "row:Edit"
+      ],
+      "caption": "Editing a user (Actions → Edit)",
+      "sensitive": true
+    },
+    {
+      "id": "job-postings",
+      "article": "job-postings",
+      "view": "Recruitment",
+      "steps": [
+        "Add Job"
+      ],
+      "caption": "Creating a job posting (Recruitment → Jobs → Add Job)"
+    },
+    {
+      "id": "candidates",
+      "article": "candidates",
+      "view": "Recruitment",
+      "steps": [
+        "Candidates",
+        "Add"
+      ],
+      "caption": "Adding a candidate"
+    },
+    {
+      "id": "applications-tab",
+      "article": "applications-tab",
+      "view": "Recruitment",
+      "steps": [
+        "Applications"
+      ],
+      "caption": "The Applications tab"
+    },
+    {
+      "id": "scheduling-interviews",
+      "article": "scheduling-interviews",
+      "view": "Recruitment",
+      "steps": [
+        "Interviews",
+        "Schedule"
+      ],
+      "caption": "Scheduling an interview"
+    },
+    {
+      "id": "performance-cycles",
+      "article": "performance-cycles",
+      "view": "ManagePerformance",
+      "steps": [
+        "New Cycle"
+      ],
+      "caption": "Creating a performance cycle"
+    },
+    {
+      "id": "creating-goals",
+      "article": "creating-goals",
+      "view": "ManagePerformance",
+      "steps": [
+        "Goals",
+        "Add"
+      ],
+      "caption": "Adding a goal (Manage Performance → Goals)"
+    },
+    {
+      "id": "competency-ratings",
+      "article": "competency-ratings",
+      "view": "ManagePerformance",
+      "steps": [
+        "Competencies",
+        "Add"
+      ],
+      "caption": "Adding a competency"
+    },
+    {
+      "id": "my-payslips",
+      "article": "my-payslips",
+      "view": "UserReports",
+      "steps": [],
+      "caption": "My Reports"
+    },
+    {
+      "id": "company-documents",
+      "article": "company-documents",
+      "view": "Documents",
+      "steps": [
+        "Add New"
+      ],
+      "caption": "Adding a company document"
+    },
+    {
+      "id": "employee-documents",
+      "article": "employee-documents",
+      "view": "Documents",
+      "steps": [
+        "Employee Document",
+        "Add New"
+      ],
+      "caption": "Adding an employee document"
+    },
+    {
+      "id": "training-catalog",
+      "article": "training-catalog",
+      "view": "AdminTraining",
+      "steps": [
+        "Create Training",
+        "Add"
+      ],
+      "caption": "Adding a course to the training catalog"
+    },
+    {
+      "id": "training-nominating",
+      "article": "training-nominating",
+      "view": "PersonalTraining",
+      "steps": [
+        "Add Training"
+      ],
+      "caption": "Nominating yourself for training (Personal Training → Add Training)"
+    },
+    {
+      "id": "training-approvals",
+      "article": "training-approvals",
+      "view": "AdminTraining",
+      "steps": [
+        "Training Approval List"
+      ],
+      "caption": "Training Approval List"
+    },
+    {
+      "id": "clocking-in-out",
+      "article": "clocking-in-out",
+      "view": "MyAttendance",
+      "steps": [],
+      "caption": "My Attendance — Clock In/Out"
+    },
+    {
+      "id": "attendance-timesheets",
+      "article": "attendance-timesheets",
+      "view": "AdminAttendance",
+      "steps": [
+        "Timesheets"
+      ],
+      "caption": "Monthly timesheets (Manage Attendance → Timesheets)"
+    },
+    {
+      "id": "attendance-daily-log",
+      "article": "attendance-daily-log",
+      "view": "AdminAttendance",
+      "steps": [
+        "Manual Entry"
+      ],
+      "caption": "Recording a manual attendance entry"
+    },
+    {
+      "id": "oos-raise-request",
+      "article": "oos-raise-request",
+      "view": "ManageOutOfStation",
+      "steps": [
+        "All Requests",
+        "New Request"
+      ],
+      "caption": "Raising an Out of Station request"
+    },
+    {
+      "id": "oos-approvals",
+      "article": "oos-approvals",
+      "view": "ManageOutOfStation",
+      "steps": [
+        "Approval List"
+      ],
+      "caption": "Out of Station Approval List"
+    },
+    {
+      "id": "oos-setup",
+      "article": "oos-setup",
+      "view": "ManageOutOfStation",
+      "steps": [
+        "Add Rate"
+      ],
+      "caption": "Adding a daily rate for a pay grade"
+    },
+    {
+      "id": "eos-create-settlement",
+      "article": "eos-create-settlement",
+      "view": "ManageEndOfService",
+      "steps": [
+        "New Settlement"
+      ],
+      "caption": "Creating an End of Service settlement"
+    },
+    {
+      "id": "eos-approvals",
+      "article": "eos-approvals",
+      "view": "ManageEndOfService",
+      "steps": [
+        "Approval List"
+      ],
+      "caption": "End of Service Approval List"
+    },
+    {
+      "id": "eos-setup",
+      "article": "eos-setup",
+      "view": "ManageEndOfService",
+      "steps": [
+        "Service Band"
+      ],
+      "caption": "Service Bands setup"
+    }
+  ]
 }

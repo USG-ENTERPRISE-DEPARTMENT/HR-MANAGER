@@ -27,12 +27,36 @@ type ContentBlock =
 /** Absolute URL for a public-folder asset, respecting Vite's base path. */
 const publicUrl = (src: string) => `${import.meta.env.BASE_URL}${src.replace(/^\//, '')}`;
 
+type ScreensManifest = {
+  modules?: Record<string, { view?: string; caption?: string }>;
+  actions?: { id: string; article: string; caption?: string }[];
+};
+const SCREENS = helpScreens as ScreensManifest;
+
 /** Module overview screenshots (see help/helpScreens.json); missing files are simply not shown. */
 const MODULE_SCREENS: Record<string, { src: string; caption: string }> = Object.fromEntries(
-  Object.entries(helpScreens as Record<string, { view?: string; caption?: string }>)
-    .filter(([id, v]) => !id.startsWith('_') && v?.view)
+  Object.entries(SCREENS.modules ?? {})
+    .filter(([, v]) => v?.view)
     .map(([id, v]) => [id, { src: `help/screens/${id}.png`, caption: v.caption || '' }]),
 );
+
+/** Per-action screenshots keyed by article id, in manifest order. */
+const ACTION_SHOTS: Record<string, { src: string; caption: string }[]> = {};
+for (const a of SCREENS.actions ?? []) {
+  (ACTION_SHOTS[a.article] ??= []).push({ src: `help/screens/${a.id}.png`, caption: a.caption || '' });
+}
+
+/**
+ * Insert an article's action screenshots right after its first steps block (where the reader is
+ * doing the action), or at the end when it has none. Shared by the on-screen view, search and PDF.
+ */
+function withActionShots(content: ContentBlock[], articleId: string): ContentBlock[] {
+  const shots = ACTION_SHOTS[articleId];
+  if (!shots?.length) return content;
+  const images: ContentBlock[] = shots.map(s => ({ type: 'image', src: s.src, caption: s.caption }));
+  const at = content.findIndex(b => b.type === 'steps');
+  return at < 0 ? [...content, ...images] : [...content.slice(0, at + 1), ...images, ...content.slice(at + 1)];
+}
 
 /** A screenshot that hides itself (caption included) when the image file isn't there yet. */
 function Screenshot({ src, caption }: { src: string; caption?: string }) {
@@ -78,7 +102,7 @@ const tint = (c: string) => `color-mix(in srgb, ${c} 14%, transparent)`;
 
 // ─── Content ─────────────────────────────────────────────────────────────────
 
-const MODULES: HelpModule[] = [
+const BASE_MODULES: HelpModule[] = [
   // ── EMPLOYEES ──────────────────────────────────────────────────────────────
   {
     id: 'employees',
@@ -3037,6 +3061,12 @@ const MODULES: HelpModule[] = [
     ],
   },
 ];
+
+// Articles with their action screenshots inserted — the single list the screen, search and PDF use.
+const MODULES: HelpModule[] = BASE_MODULES.map(m => ({
+  ...m,
+  articles: m.articles.map(a => ({ ...a, content: withActionShots(a.content, a.id) })),
+}));
 
 // ─── Search logic ─────────────────────────────────────────────────────────────
 

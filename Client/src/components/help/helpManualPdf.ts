@@ -103,6 +103,21 @@ async function loadImage(url: string): Promise<LoadedImage | null> {
       img.src = data;
     });
     if (!w || !h) return null;
+    // Screenshots are PNGs (~150-250 KB each), which made the full manual 12+ MB. Re-encoding to JPEG
+    // through a canvas cuts that several-fold with no visible loss at print size. Falls back to the
+    // original data where no canvas is available (e.g. a non-browser test run).
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = data; });
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const g = canvas.getContext('2d');
+      if (g) {
+        g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); // JPEG has no alpha
+        g.drawImage(img, 0, 0);
+        return { data: canvas.toDataURL('image/jpeg', 0.8), format: 'JPEG', w, h };
+      }
+    } catch { /* keep the original encoding */ }
     return { data, format: /png/i.test(blob.type) ? 'PNG' : 'JPEG', w, h };
   } catch {
     return null;
