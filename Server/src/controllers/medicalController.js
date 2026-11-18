@@ -12,7 +12,7 @@ const { getApiConfig } = require('../controllers/apiIntegrationController');
 const { toBigInt, s } = require('../helpers/controllerHelpers');
 const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
 const { pushMedical } = require('../helpers/mobilePush');
-const { sendSms } = require('../helpers/smsNotify');
+const { sendSmsBulk } = require('../helpers/smsNotify');
 const { logActivity, fromReq } = require('./auditController');
 const { upsertSetting: upsertSettingShared } = require('../helpers/settingsHelper');
 
@@ -1204,19 +1204,30 @@ async function smsMedicalBalance(entries) {
       byEmp.set(k, (byEmp.get(k) || 0) + (parseFloat(e.amount ?? 0) || 0));
     }
     const fmt = (n) => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const messages = [];
     for (const [empId, amount] of byEmp) {
       try {
         const b = await computeMedicalBalance(empId);
         if (!b || b.limit === null || b.limit >= UNLIMITED_MEDICAL_LIMIT || !b.emp.phone) continue;
-        const name = `${b.emp.first_name ?? ''} ${b.emp.last_name ?? ''}`.trim() || 'Staff';
-        const cur  = b.currency ? `${b.currency} ` : '';
-        const body = `Dear ${name}, your medical request of ${cur}${fmt(amount)} has been approved. `
-                   + `Your remaining medical balance is ${cur}${fmt(Math.max(0, b.balance))}.`;
-        sendSms(b.emp.phone, body); // detached — never throws
+        const name    = `${b.emp.first_name ?? ''} ${b.emp.last_name ?? ''}`.trim() || 'Staff';
+        const first   = (b.emp.first_name || '').trim() || 'Staff';
+        const curCode = b.currency || '';
+        const cur     = curCode ? `${curCode} ` : '';
+        const balance = fmt(Math.max(0, b.balance));
+        messages.push({
+          to: b.emp.phone,
+          // Used verbatim unless SMS_USE_TEMPLATE=true; then the CNS template words it from params.
+          // Kept to one SMS (≤160 chars) for typical names and amounts.
+          body: `Dear ${first}, your medical request of ${cur}${fmt(amount)} has been approved. `
+              + `Remaining medical balance: ${cur}${balance} of ${cur}${fmt(b.limit)}. - HR`,
+          params: { FULLNAME: name, AMOUNT: fmt(amount), BALANCE: balance, CURRENCY: curCode, LIMIT: fmt(b.limit) },
+          metadata: { module: 'medical', employee_id: String(b.emp.employee_id ?? empId) },
+        });
       } catch (err) {
         console.error(`[sms] medical balance for employee ${empId} failed:`, err.message);
       }
     }
+    if (messages.length) sendSmsBulk(messages); // detached — never throws
   } catch (err) {
     console.error('[sms] medical balance failed:', err.message);
   }
