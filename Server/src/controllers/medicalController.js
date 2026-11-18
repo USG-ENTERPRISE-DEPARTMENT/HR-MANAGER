@@ -1143,7 +1143,8 @@ async function computeMedicalBalance(empIdStr) {
 
   const [emp] = await prisma.$queryRaw`
     SELECT e.id, e.firstName AS first_name, e.lastName AS last_name, e.employee_id,
-           COALESCE(NULLIF(TRIM(e.mobilePhone), ''), e.phone) AS phone,
+           -- both numbers, mobile first: normalizePhone takes the first usable one (mobile is often a "076" placeholder)
+           CONCAT_WS(', ', NULLIF(TRIM(e.mobilePhone), ''), NULLIF(TRIM(e.phone), '')) AS phone,
            pg.id AS pg_id, pg.name AS pg_name
     FROM employee e
     LEFT JOIN paygrades pg ON pg.id = e.paygradeId
@@ -1208,7 +1209,11 @@ async function smsMedicalBalance(entries) {
     for (const [empId, amount] of byEmp) {
       try {
         const b = await computeMedicalBalance(empId);
-        if (!b || b.limit === null || b.limit >= UNLIMITED_MEDICAL_LIMIT || !b.emp.phone) continue;
+        const skip = !b ? 'employee not found'
+          : b.limit === null ? `no medical limit for pay grade "${b.emp.pg_name ?? '—'}"`
+          : b.limit >= UNLIMITED_MEDICAL_LIMIT ? 'unlimited medical'
+          : !b.emp.phone ? 'no phone number on record' : null;
+        if (skip) { console.log(`[sms] medical balance not sent to ${b?.emp?.employee_id ?? empId}: ${skip}`); continue; }
         const name    = `${b.emp.first_name ?? ''} ${b.emp.last_name ?? ''}`.trim() || 'Staff';
         const first   = (b.emp.first_name || '').trim() || 'Staff';
         const curCode = b.currency || '';

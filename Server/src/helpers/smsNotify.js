@@ -30,9 +30,22 @@ const BULK_PATH  = '/api/v1/notification/send/bulk/sms';
  *   "23276558974"/"0023276…"  → +23276558974
  *   "079369910, 077836209"    → first number only (39 records hold two numbers split by , / ;)
  *   "0243069666"              → passed as-is (10-digit foreign-style; CNS reads it as its default country)
- *   "076", "8855928"          → ''  (placeholders / truncated)
+ *   "076", "8855928"          → ''  (placeholders / truncated — recipientFor still sends these raw, see below)
  * SMS_COUNTRY_CODE (+232) and SMS_NATIONAL_DIGITS (8) describe the local numbering plan.
  */
+/**
+ * The recipient we actually send: the normalized number when there is one, otherwise the stored value
+ * as-is (first entry, digits only) so CNS rejects it and keeps it on record — incomplete numbers are
+ * deliberately NOT filtered here. '' only when nothing at all is stored.
+ */
+function recipientFor(raw) {
+  const n = normalizePhone(raw);
+  if (n) return { to: n, incomplete: false };
+  const part = String(raw ?? '').split(/[,/;|]|\bor\b/i).map(s => s.trim()).find(Boolean) || '';
+  const to = part.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '') || part;
+  return { to, incomplete: !!to };
+}
+
 function normalizePhone(raw) {
   // Several numbers in one field → the first usable one.
   for (const part of String(raw ?? '').split(/[,/;|]|\bor\b/i)) {
@@ -76,13 +89,30 @@ function config() {
   };
 }
 
+/** Log (each time) why nothing can be sent — a silent skip on a server with no CNS settings is undiagnosable. */
+function notReady(cfg) {
+  if (cfg.ready && cfg.activityCode) return false;
+  const missing = [!cfg.base && 'CNS_BASE_URL', !cfg.key && 'CNS_APP_KEY', !cfg.activityCode && 'SMS_ACTIVITY_CODE'].filter(Boolean);
+  console.warn(`[sms] not sent — ${missing.join(', ')} not set in this server's .env (restart after adding)`);
+  return true;
+}
+
+function logSkips(messages) {
+  for (const m of messages || []) {
+    const r = recipientFor(m.to);
+    const who = m.metadata?.employee_id || '';
+    if (!r.to) console.warn(`[sms] skipped ${who} — no phone number on record`);
+    else if (r.incomplete) console.warn(`[sms] ${who} has an incomplete number ${JSON.stringify(m.to)} — sending anyway, CNS will reject and record it`);
+  }
+}
+
 /**
  * Build one CNS SmsSendRequest. `msg` = { to, body?, params?: {PLACEHOLDER: value}, metadata?, activityCode? }.
  * Returns null when the message can't be sent (no number, placeholder number, no content).
  */
 function buildRequest(msg, cfg) {
-  const to = normalizePhone(msg.to);
-  if (to.replace(/\D/g, '').length < 8) return null; // skip placeholders like "076"
+  const { to } = recipientFor(msg.to);
+  if (!to) return null; // nothing stored at all — CNS requires a recipient
   const activity_code = (msg.activityCode || cfg.activityCode || '').trim();
   if (!activity_code) return null;
   const params = Object.entries(msg.params || {})
@@ -125,6 +155,7 @@ async function post(cfg, path, payload, label) {
       console.error(`[sms] ${label}: ${bad.length}/${items.length} rejected by CNS — ${bad.map(d => d.error || d.status).join('; ')}`);
       return bad.length < items.length;
     }
+    console.log(`[sms] ${label}: accepted by CNS`);
     return true;
   } catch (err) {
     console.error(`[sms] ${label} failed:`, err.message);
@@ -138,9 +169,10 @@ async function post(cfg, path, payload, label) {
  */
 async function sendSms(recipient, bodyOrMsg) {
   const cfg = config();
-  if (!cfg.ready) return false;
+  if (notReady(cfg)) return false;
   const msg = typeof bodyOrMsg === 'string' ? { body: bodyOrMsg } : (bodyOrMsg || {});
   const req = buildRequest({ ...msg, to: recipient }, cfg);
+  logSkips([{ ...msg, to: recipient }]);
   if (!req) return false;
   return post(cfg, SEND_PATH, req, `to ${req.sms_recipient}`);
 }
@@ -151,11 +183,12 @@ async function sendSms(recipient, bodyOrMsg) {
  */
 async function sendSmsBulk(messages) {
   const cfg = config();
-  if (!cfg.ready) return false;
+  if (notReady(cfg)) return false;
+  logSkips(messages);
   const reqs = (messages || []).map(m => buildRequest(m, cfg)).filter(Boolean);
   if (!reqs.length) return false;
   if (reqs.length === 1) return post(cfg, SEND_PATH, reqs[0], `to ${reqs[0].sms_recipient}`);
   return post(cfg, BULK_PATH, reqs, `bulk of ${reqs.length}`);
 }
 
-module.exports = { sendSms, sendSmsBulk, normalizePhone, buildRequest };
+module.exports = { sendSms, sendSmsBulk, normalizePhone, recipientFor, buildRequest };
