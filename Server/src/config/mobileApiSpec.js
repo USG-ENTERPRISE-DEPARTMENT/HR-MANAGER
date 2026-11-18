@@ -887,6 +887,24 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
       'A freshly posted run is `Bank Pending` (journal accepted, awaiting the core banking approval',
       'flow); it becomes `Completed` once confirmed via the confirmation callback, or `Rejected` via',
       'the rejection callback. All three are reachable here and keep their reference.',
+      '',
+      '### Other modules',
+      '',
+      'When no payroll run holds the reference, every other module that posts to the GL is searched:',
+      'leave allowance, out of station, end of service, staff medical, dependent medical and hospital',
+      'claims. Also reachable at `/gl/by-reference/{reference}`. Check `module` to tell the shapes',
+      'apart — `payroll` returns the run shape documented below; the others return a common envelope:',
+      '',
+      '```',
+      '{ module, moduleLabel, id, number, status, reference, document_ref, postedAt, description,',
+      '  currency, amount, employeeCount,',
+      '  employees: [{ employeeId, employeeCode, name, bankAccount, amount, creditedAccount? ... }],',
+      '  details: { ...module-specific } }',
+      '```',
+      '',
+      '`module` is one of `leave`, `out_of_station`, `end_of_service`, `staff_medical`,',
+      '`dependent_medical`, `hospital_claim`. Only what is stored on the record is reported — GL',
+      'accounts read from settings at posting time are not re-derived.',
     ].join('\n'),
     security: [{ ApiKeyAuth: [] }],
     parameters: [{
@@ -903,6 +921,8 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
               type: 'object',
               properties: {
                 id:            id('126'),
+                module:        { type: 'string', enum: ['payroll', 'leave', 'out_of_station', 'end_of_service', 'staff_medical', 'dependent_medical', 'hospital_claim'], example: 'payroll', description: 'Which module posted this reference. Anything other than `payroll` uses the common envelope described above.' },
+                moduleLabel:   { type: 'string', example: 'Payroll' },
                 name:          { type: 'string', example: 'PAYROLL FOR AUG 2026 - SNR MGT' },
                 status:        { type: 'string', enum: ['Bank Pending', 'Completed', 'Rejected'], example: 'Bank Pending', description: '`Bank Pending` = posted, awaiting core banking approval. `Completed` = confirmed paid. `Rejected` = the bank refused it.' },
                 document_ref:  { type: 'string', example: 'PR1263886414' },
@@ -996,9 +1016,18 @@ spec.paths['/payroll/runs/by-reference/{reference}'] = {
       },
       400: errorEnvelope('400', 'Reference number is required'),
       401: errorEnvelope('401', 'Missing or invalid API key'),
-      404: errorEnvelope('404', 'No payroll run found for that reference number'),
+      404: errorEnvelope('404', 'No GL posting found for that reference number'),
       429: errorEnvelope('429', 'Rate limited — 120 requests per minute per IP'),
     },
+  },
+};
+
+// Module-neutral alias — same handler, same response.
+spec.paths['/gl/by-reference/{reference}'] = {
+  get: {
+    ...spec.paths['/payroll/runs/by-reference/{reference}'].get,
+    tags: ['Core Banking'],
+    summary: 'Get any GL posting by its reference number',
   },
 };
 

@@ -75,6 +75,9 @@ router.post('/payroll/runs/confirmation', apiKeyOnly, payrollRun.confirmPayrollF
 // payroll_api_access_log by the controller (with the employee columns null for key-only callers),
 // and the rate limit above still applies.
 router.get('/payroll/runs/by-reference/:reference', apiKeyOnly, payrollRun.getPayrollByReference);
+// Same handler under a module-neutral path: the lookup resolves any GL reference (payroll, leave
+// allowance, out of station, end of service, medical, hospital claims), and `module` says which.
+router.get('/gl/by-reference/:reference', apiKeyOnly, payrollRun.getPayrollByReference);
 
 // ── Employee directory (API key only) ────────────────────────────────────────
 // Same key-only caller as the payroll endpoints above. Returns every employee, optionally filtered

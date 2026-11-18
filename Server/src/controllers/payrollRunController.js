@@ -5,6 +5,7 @@ const { Parser } = require('expr-eval');
 const { logActivity, fromReq } = require('./auditController');
 const { notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
 const { postToGL }    = require('../helpers/glHelper');
+const { findGLReference } = require('../helpers/glReferenceLookup');
 const { getApiConfig } = require('./apiIntegrationController');
 const _parser = new Parser({ operators: { logical: false, comparison: false, conditional: false } });
 
@@ -1019,6 +1020,10 @@ async function logPayrollApiAccess(req, { reference, runId, outcome, employeeCou
 // Only runs that actually posted to the GL have a document_ref, so Draft / GL Failed runs (and runs
 // finalized while payroll GL posting was switched off) are not reachable here by design.
 //
+// When no payroll run holds the reference, the other GL-posting modules are searched
+// (helpers/glReferenceLookup.js) and their record is returned in a common envelope. Every response
+// carries `module` ('payroll', 'leave', 'out_of_station', ...) so the caller can tell the shapes apart.
+//
 // The employee rows mirror buildAndPostGL: the same posting_column='Yes' filter and the same derived
 // net pay (earnings - deductions), so this reports what was posted rather than a second calculation.
 const getPayrollByReference = asyncHandler(async (req, res) => {
@@ -1030,9 +1035,19 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
 
   const [run] = await query`${RUNS_SELECT} WHERE pr.document_ref = ${reference} LIMIT 1`;
   if (!run) {
+    // Not a payroll run — every other module that posts to the GL (leave allowance, out of station,
+    // end of service, staff/dependent medical, hospital claims) stores its reference too.
+    const other = await findGLReference(reference);
+    if (other) {
+      // outcome carries the module (the log has no module column); payroll_run stays null.
+      await logPayrollApiAccess(req, {
+        reference, runId: null, outcome: `ok:${other.module}`.slice(0, 20), employeeCount: other.employeeCount,
+      });
+      return respond.ok(res, `${other.moduleLabel} posting retrieved`, other);
+    }
     // Logged too: repeated misses from one caller is what probing for valid references looks like.
     await logPayrollApiAccess(req, { reference, runId: null, outcome: 'not_found', employeeCount: null });
-    return respond.notFound(res, 'No payroll run found for that reference number');
+    return respond.notFound(res, 'No GL posting found for that reference number');
   }
 
   // Currency/branch fallbacks come from the same GL config the posting used.
@@ -1182,6 +1197,8 @@ const getPayrollByReference = asyncHandler(async (req, res) => {
 
   respond.ok(res, 'Payroll run retrieved', {
     ...run,
+    module: 'payroll',
+    moduleLabel: 'Payroll',
     reference,
     employeeCount: employees.length,
     totals,
