@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { inputClass } from './ui/FormField';
 import { HairlineDecor } from './ui/HairlineDecor';
 import api from '../../lib/api';
+import helpScreens from './help/helpScreens.json';
 
 // ─── Data types ──────────────────────────────────────────────────────────────
 
@@ -19,7 +20,39 @@ type ContentBlock =
   | { type: 'tip';     body: string }
   | { type: 'warning'; body: string }
   | { type: 'steps';   heading?: string; steps: { label: string; detail?: string }[] }
-  | { type: 'table';   headers: string[]; rows: string[][] };
+  | { type: 'table';   headers: string[]; rows: string[][] }
+  /** Screenshot or diagram. `src` is relative to the public folder, e.g. 'help/screens/payroll-run.png'. */
+  | { type: 'image';   src: string; caption?: string };
+
+/** Absolute URL for a public-folder asset, respecting Vite's base path. */
+const publicUrl = (src: string) => `${import.meta.env.BASE_URL}${src.replace(/^\//, '')}`;
+
+/** Module overview screenshots (see help/helpScreens.json); missing files are simply not shown. */
+const MODULE_SCREENS: Record<string, { src: string; caption: string }> = Object.fromEntries(
+  Object.entries(helpScreens as Record<string, { view?: string; caption?: string }>)
+    .filter(([id, v]) => !id.startsWith('_') && v?.view)
+    .map(([id, v]) => [id, { src: `help/screens/${id}.png`, caption: v.caption || '' }]),
+);
+
+/** A screenshot that hides itself (caption included) when the image file isn't there yet. */
+function Screenshot({ src, caption }: { src: string; caption?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <figure className="m-0">
+      <a href={publicUrl(src)} target="_blank" rel="noreferrer" title="Open full size">
+        <img
+          src={publicUrl(src)}
+          alt={caption || 'Screenshot'}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="w-full rounded-xl border border-[var(--border)] shadow-sm"
+        />
+      </a>
+      {caption && <figcaption className="text-[12px] text-[var(--text-muted)] mt-2 text-center">{caption}</figcaption>}
+    </figure>
+  );
+}
 
 type Article = {
   id: string;
@@ -3020,6 +3053,7 @@ function searchArticles(query: string): { module: HelpModule; article: Article }
           if (c.type === 'text' || c.type === 'tip' || c.type === 'warning') return [c.body];
           if (c.type === 'steps') return [c.heading ?? '', ...c.steps.flatMap(s => [s.label, s.detail ?? ''])];
           if (c.type === 'table') return [...c.headers, ...c.rows.flat()];
+          if (c.type === 'image') return [c.caption ?? ''];
           return [];
         }),
       ].join(' ').toLowerCase();
@@ -3099,6 +3133,8 @@ function ArticleContent({ content, accent }: { content: ContentBlock[]; accent: 
           </div>
         );
 
+        if (block.type === 'image') return <Screenshot key={i} src={block.src} caption={block.caption} />;
+
         return null;
       })}
     </div>
@@ -3138,7 +3174,13 @@ export function Help() {
     const toastId = toast.loading(moduleId ? 'Building module guide…' : 'Building the user manual…');
     try {
       const { buildHelpManualPdf } = await import('./help/helpManualPdf');
-      const { blob, filename, pages } = await buildHelpManualPdf(MODULES, { companyName, moduleId });
+      const withScreens = MODULES.map(m => ({
+        ...m,
+        screenshot: MODULE_SCREENS[m.id] ? { ...MODULE_SCREENS[m.id], src: publicUrl(MODULE_SCREENS[m.id].src) } : undefined,
+      }));
+      const { blob, filename, pages } = await buildHelpManualPdf(withScreens, {
+        companyName, moduleId, resolveImage: publicUrl,
+      });
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -3399,6 +3441,12 @@ export function Help() {
                     <span className="hidden sm:inline">{downloading === 'module' ? 'Building…' : 'Download this module'}</span>
                   </button>
                 </div>
+
+                {MODULE_SCREENS[activeModule.id] && (
+                  <div className="mb-6">
+                    <Screenshot src={MODULE_SCREENS[activeModule.id].src} caption={MODULE_SCREENS[activeModule.id].caption} />
+                  </div>
+                )}
 
                 {/* Article list */}
                 <div className="space-y-2">

@@ -12,6 +12,7 @@ const { getApiConfig } = require('../controllers/apiIntegrationController');
 const { toBigInt, s } = require('../helpers/controllerHelpers');
 const { notifyEmployee, notifyUser, notifyUsersWithPermission, notifyUsersWithRole } = require('../helpers/notificationHelper');
 const { pushMedical } = require('../helpers/mobilePush');
+const { sendSms } = require('../helpers/smsNotify');
 const { logActivity, fromReq } = require('./auditController');
 const { upsertSetting: upsertSettingShared } = require('../helpers/settingsHelper');
 
@@ -1132,19 +1133,23 @@ exports.getMedicalEnquiry = asyncHandler(async (req, res) => {
 
 // GET /medical/enquiry/:id — detailed utilisation breakdown for a single employee including all approved
 // staff and dependent medical records and approved hospital claim line items.
-exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
-  const empIdStr = String(req.params.id);
+// Limit, utilisation and balance for one employee in the current medical year. Shared by the
+// enquiry screen and the approval SMS so both always show the same balance. Returns null when the
+// employee doesn't exist.
+async function computeMedicalBalance(empIdStr) {
   const empIdBig = toBigInt(empIdStr);
-  if (!empIdBig) return respond.badReq(res, 'Invalid employee ID');
+  if (!empIdBig) return null;
+  empIdStr = String(empIdStr);
 
   const [emp] = await prisma.$queryRaw`
     SELECT e.id, e.firstName AS first_name, e.lastName AS last_name, e.employee_id,
+           COALESCE(NULLIF(TRIM(e.mobilePhone), ''), e.phone) AS phone,
            pg.id AS pg_id, pg.name AS pg_name
     FROM employee e
     LEFT JOIN paygrades pg ON pg.id = e.paygradeId
     WHERE e.id = ${empIdBig}
     LIMIT 1`.catch(() => []);
-  if (!emp) return respond.notFound(res, 'Employee not found');
+  if (!emp) return null;
 
   const pgId   = emp.pg_id ? String(emp.pg_id) : null;
   const limits = pgId
@@ -1178,6 +1183,51 @@ exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
 
   const utilized = staffUsed + depUsed;
   const balance  = limit !== null ? limit - utilized : null;
+  return { emp, frag, limit, currency, staffUsed, depUsed, utilized, balance };
+}
+
+// Unlimited staff carry a 9999999999999 medical limit — anything this large is treated as unlimited.
+const UNLIMITED_MEDICAL_LIMIT = 1e12;
+
+/**
+ * SMS each employee their remaining medical balance after an approval. `entries` is
+ * [{ id: employeeId, amount }]; duplicate ids are summed. Unlimited employees (or those with no
+ * limit / no phone) are skipped. Balances are computed now (awaited) so they reflect this approval
+ * before any GL step can change the record's status; the HTTP send itself is detached. Never throws.
+ */
+async function smsMedicalBalance(entries) {
+  try {
+    const byEmp = new Map();
+    for (const e of entries || []) {
+      if (e?.id == null || e.id === '') continue;
+      const k = String(e.id);
+      byEmp.set(k, (byEmp.get(k) || 0) + (parseFloat(e.amount ?? 0) || 0));
+    }
+    const fmt = (n) => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    for (const [empId, amount] of byEmp) {
+      try {
+        const b = await computeMedicalBalance(empId);
+        if (!b || b.limit === null || b.limit >= UNLIMITED_MEDICAL_LIMIT || !b.emp.phone) continue;
+        const name = `${b.emp.first_name ?? ''} ${b.emp.last_name ?? ''}`.trim() || 'Staff';
+        const cur  = b.currency ? `${b.currency} ` : '';
+        const body = `Dear ${name}, your medical request of ${cur}${fmt(amount)} has been approved. `
+                   + `Your remaining medical balance is ${cur}${fmt(Math.max(0, b.balance))}.`;
+        sendSms(b.emp.phone, body); // detached — never throws
+      } catch (err) {
+        console.error(`[sms] medical balance for employee ${empId} failed:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[sms] medical balance failed:', err.message);
+  }
+}
+
+exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
+  const empIdStr = String(req.params.id);
+  if (!toBigInt(empIdStr)) return respond.badReq(res, 'Invalid employee ID');
+  const bal = await computeMedicalBalance(empIdStr);
+  if (!bal) return respond.notFound(res, 'Employee not found');
+  const { emp, frag, limit, currency, staffUsed, depUsed, utilized, balance } = bal;
 
   const toDateStr = v => v instanceof Date ? v.toISOString().slice(0, 10) : (v ? String(v).slice(0, 10) : null);
 
@@ -1589,6 +1639,12 @@ exports.approveHospitalClaim = asyncHandler(async (req, res) => {
   if (claim?.posted_by && String(claim.posted_by) !== String(req.user?.id ?? '')) {
     notifyUser(claim.posted_by, { message: 'Your hospital medical claim was approved', action: 'AdminMedical', type: 'medical', fromUser: req.user?.id });
   }
+  // SMS each employee on the claim their remaining balance (before GL, which may flip status to 'GL Failed').
+  if (claim) {
+    let smsItems = [];
+    try { smsItems = JSON.parse(claim.items ?? '[]'); } catch {}
+    await smsMedicalBalance((Array.isArray(smsItems) ? smsItems : []).map(i => ({ id: i.employee_id, amount: i.amount })));
+  }
 
   // GL posting (non-blocking — approval already committed above). Skipped in record-only mode.
   if (claim && (await medicalPaymentsEnabled()) && (await glConfig()).url) {
@@ -1752,6 +1808,7 @@ exports.approveStaffMedical = asyncHandler(async (req, res) => {
   if (!stage.handled && !assertCanApproveMedical(req, res)) return;
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE staffmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null}, updatedAt=NOW() WHERE id=${id}`;
+  await smsMedicalBalance([{ id: rec.employee, amount: rec.cost }]);
   let glPayload = null;
   let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
@@ -1816,6 +1873,7 @@ exports.finalizeStaffMedical = asyncHandler(async (req, res) => {
   if (rec.status !== 'Draft') return respond.badReq(res, 'Only Draft records can be finalized');
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE staffmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null}, updatedAt=NOW() WHERE id=${id}`;
+  await smsMedicalBalance([{ id: rec.employee, amount: rec.cost }]);
   let glPayload = null;
   let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
@@ -1885,6 +1943,7 @@ exports.approveDependentMedical = asyncHandler(async (req, res) => {
   if (!stage.handled && !assertCanApproveMedical(req, res)) return; // no flow → enforce blanket permission
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE dependentmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null} WHERE id=${id}`;
+  await smsMedicalBalance([{ id: rec.employee, amount: rec.cost }]);
   let glPayload = null;
   let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {
@@ -1947,6 +2006,7 @@ exports.finalizeDependentMedical = asyncHandler(async (req, res) => {
   if (rec.status !== 'Draft') return respond.badReq(res, 'Only Draft records can be finalized');
   const userId = req.user?.id ? Number(req.user.id) : null;
   await prisma.$executeRaw`UPDATE dependentmedical SET status='Approved', approved_by=${userId != null ? String(userId) : null} WHERE id=${id}`;
+  await smsMedicalBalance([{ id: rec.employee, amount: rec.cost }]);
   let glPayload = null;
   let glFail = null;   // set when GL posting is refused, so the response can carry the reason
   if ((await medicalPaymentsEnabled()) && (await glConfig()).url) {

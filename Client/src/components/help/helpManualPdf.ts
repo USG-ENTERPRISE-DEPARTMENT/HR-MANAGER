@@ -19,10 +19,18 @@ type ContentBlock =
   | { type: 'tip';     body: string }
   | { type: 'warning'; body: string }
   | { type: 'steps';   heading?: string; steps: { label: string; detail?: string }[] }
-  | { type: 'table';   headers: string[]; rows: string[][] };
+  | { type: 'table';   headers: string[]; rows: string[][] }
+  | { type: 'image';   src: string; caption?: string };
 
 type ManualArticle = { id: string; title: string; summary: string; content: ContentBlock[] };
-type ManualModule  = { id: string; title: string; description: string; color: string; articles: ManualArticle[] };
+type ManualModule  = {
+  id: string; title: string; description: string; color: string; articles: ManualArticle[];
+  /** Overview screenshot printed under the module banner. `src` must be a fetchable URL. */
+  screenshot?: { src: string; caption?: string };
+};
+
+/** A decoded image ready for jsPDF. */
+type LoadedImage = { data: string; format: 'PNG' | 'JPEG'; w: number; h: number };
 
 // ── Page geometry (A4 portrait, in points) ───────────────────────────────────
 const PAGE_W  = 595.28;
@@ -68,9 +76,38 @@ type Ctx = {
   doc: jsPDF;
   y: number;
   page: number;
-  /** Table of contents entries collected during the render pass. */
-  toc: { title: string; level: number; page: number }[];
+  /** Preloaded images keyed by their source URL; a missing key means the image couldn't be loaded. */
+  images: Map<string, LoadedImage>;
 };
+
+/**
+ * Fetch and decode an image to a data URL with its natural size. Resolves null on any failure, so a
+ * screenshot that hasn't been captured yet is simply left out of the manual instead of failing it.
+ */
+async function loadImage(url: string): Promise<LoadedImage | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!/^image\/(png|jpe?g)$/i.test(blob.type)) return null; // e.g. the SPA's index.html fallback
+    const data = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+    const { w, h } = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = reject;
+      img.src = data;
+    });
+    if (!w || !h) return null;
+    return { data, format: /png/i.test(blob.type) ? 'PNG' : 'JPEG', w, h };
+  } catch {
+    return null;
+  }
+}
 
 /** Start a new page and reset the cursor. */
 function newPage(ctx: Ctx) {
@@ -245,6 +282,81 @@ function writeTable(ctx: Ctx, block: Extract<ContentBlock, { type: 'table' }>) {
   ctx.y += 10;
 }
 
+/** Screenshot scaled to the body width (capped in height), with a hairline frame and caption. */
+function writeImage(ctx: Ctx, src: string, caption?: string) {
+  const img = ctx.images.get(src);
+  if (!img) return;
+  const maxH = 340;
+  let w = BODY_W;
+  let h = (img.h / img.w) * w;
+  if (h > maxH) { h = maxH; w = (img.w / img.h) * h; }
+  const capH = caption ? 16 : 0;
+
+  ensure(ctx, h + capH + 10);
+  const x = MARGIN + (BODY_W - w) / 2;
+  ctx.doc.addImage(img.data, img.format, x, ctx.y, w, h, undefined, 'FAST');
+  ctx.doc.setDrawColor(...rgb(RULE)).setLineWidth(0.6).rect(x, ctx.y, w, h, 'S');
+  ctx.y += h + 4;
+
+  if (caption) {
+    ctx.doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(...rgb(INK_MUTED));
+    ctx.doc.text(ascii(caption), MARGIN + BODY_W / 2, ctx.y + 8, { align: 'center', maxWidth: BODY_W });
+    ctx.y += capH;
+  }
+  ctx.y += 8;
+}
+
+// ── Contents layout ──────────────────────────────────────────────────────────
+// The contents is laid out BEFORE the body so its page count is known up front and the right number
+// of pages can be reserved. Inserting contents pages afterwards (as this used to) shifted every body
+// page by one, which put the printed contents numbers off by one and would break every link.
+
+type TocEntry = { title: string; level: 0 | 1; page: number };
+type TocSlot  = { pageOffset: number; y: number };
+
+const TOC_TOP_FIRST = MARGIN + 38;   // below the "Contents" heading
+const TOC_BOTTOM    = PAGE_H - FOOTER_SAFE - 16;
+
+function layoutToc(entries: { level: 0 | 1 }[]): { slots: TocSlot[]; pages: number } {
+  const slots: TocSlot[] = [];
+  let pageOffset = 0;
+  let ty = TOC_TOP_FIRST;
+  for (const e of entries) {
+    if (ty > TOC_BOTTOM) { pageOffset += 1; ty = MARGIN; }
+    if (e.level === 0) ty += 8;
+    slots.push({ pageOffset, y: ty });
+    ty += e.level === 0 ? 15 : 13;
+  }
+  return { slots, pages: pageOffset + 1 };
+}
+
+/** One contents row: title, leader dots, page number, and a clickable area spanning the row. */
+function drawTocRow(doc: jsPDF, entry: TocEntry, y: number, indent: number) {
+  const isModule = entry.level === 0;
+  doc.setFont('helvetica', isModule ? 'bold' : 'normal')
+    .setFontSize(isModule ? 10 : 9)
+    .setTextColor(...rgb(isModule ? INK : INK_SOFT));
+
+  const label = ascii(entry.title);
+  const pageLabel = String(entry.page - 1);   // display number, matching the footer
+  const maxLabelW = BODY_W - indent - 34;
+  const shown = (doc.splitTextToSize(label, maxLabelW) as string[])[0];
+
+  doc.text(shown, MARGIN + indent, y);
+  doc.text(pageLabel, MARGIN + BODY_W, y, { align: 'right' });
+
+  const labelW = doc.getTextWidth(shown);
+  const dotsFrom = MARGIN + indent + labelW + 5;
+  const dotsTo   = MARGIN + BODY_W - doc.getTextWidth(pageLabel) - 5;
+  if (dotsTo > dotsFrom) {
+    doc.setTextColor(...rgb('#d1d5db'));
+    const dots = '.'.repeat(Math.max(0, Math.floor((dotsTo - dotsFrom) / doc.getTextWidth('.'))));
+    doc.text(dots, dotsFrom, y);
+  }
+
+  doc.link(MARGIN + indent, y - 9, BODY_W - indent, 12, { pageNumber: entry.page });
+}
+
 /** Cover page. */
 function drawCover(doc: jsPDF, title: string, subtitle: string, generatedOn: string) {
   doc.setFillColor(17, 24, 39).rect(0, 0, PAGE_W, 232, 'F');
@@ -260,18 +372,62 @@ function drawCover(doc: jsPDF, title: string, subtitle: string, generatedOn: str
   doc.text('This manual is generated from the in-app Help Center and reflects it exactly.', MARGIN, 302, { maxWidth: BODY_W });
 }
 
-/** Running footer with page numbers, applied after all content is laid out. */
-function drawFooters(doc: jsPDF, title: string) {
+/** "Go to contents" button on the cover, linking to the first contents page. */
+function drawCoverContentsLink(doc: jsPDF, tocPage: number) {
+  doc.setPage(1);
+  const w = 120, h = 26, x = MARGIN, y = 330;
+  doc.setFillColor(17, 24, 39).roundedRect(x, y, w, h, 4, 4, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(255, 255, 255);
+  doc.text('Go to contents  >', x + w / 2, y + 16.5, { align: 'center' });
+  doc.link(x, y, w, h, { pageNumber: tocPage });
+  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...rgb(INK_MUTED));
+  doc.text('Contents entries, module indexes and the "Contents" link in every footer are clickable.', MARGIN, y + h + 18, { maxWidth: BODY_W });
+}
+
+/**
+ * Running footer with page numbers, applied after all content is laid out. Body pages also get a
+ * clickable "Contents" link and, when the page belongs to a module, a link back to that module's start.
+ */
+function drawFooters(doc: jsPDF, title: string, tocPage: number, tocPages: number, moduleStarts: { page: number; title: string }[]) {
   const total = doc.getNumberOfPages();
-  // Page 1 is the cover and page 2 the contents; numbering starts at the first content page so the
-  // printed numbers line up with the table of contents.
+  const y = PAGE_H - 30;
+  // Page 1 is the cover; numbering starts at page 2 so the printed numbers line up with the contents.
   for (let p = 2; p <= total; p++) {
     doc.setPage(p);
     doc.setDrawColor(...rgb(RULE)).setLineWidth(0.5)
       .line(MARGIN, PAGE_H - 42, PAGE_W - MARGIN, PAGE_H - 42);
     doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...rgb(INK_MUTED));
-    doc.text(ascii(title), MARGIN, PAGE_H - 30);
-    doc.text(`Page ${p - 1} of ${total - 1}`, PAGE_W - MARGIN, PAGE_H - 30, { align: 'right' });
+
+    const pageLabel = `Page ${p - 1} of ${total - 1}`;
+    doc.text(pageLabel, PAGE_W - MARGIN, y, { align: 'right' });
+
+    const isToc = p >= tocPage && p < tocPage + tocPages;
+    if (isToc) { doc.text(ascii(title), MARGIN, y); continue; }
+
+    // Right-hand links, laid out leftwards from the page number: "Contents" then the module link.
+    let rx = PAGE_W - MARGIN - doc.getTextWidth(pageLabel) - 14;
+    const link = (label: string, target: number) => {
+      doc.setFont('helvetica', 'bold').setTextColor(...rgb(TIP_INK));
+      const w = doc.getTextWidth(label);
+      doc.text(label, rx, y, { align: 'right' });
+      doc.link(rx - w, y - 8, w, 11, { pageNumber: target });
+      rx -= w + 14;
+      doc.setFont('helvetica', 'normal').setTextColor(...rgb(INK_MUTED));
+    };
+    link('Contents', tocPage);
+
+    // The module this page sits in = the last module starting on or before it.
+    const mod = [...moduleStarts].reverse().find(m => m.page <= p);
+    if (mod && mod.page !== p) {
+      const maxW = rx - MARGIN - 8;
+      let label = ascii(`< ${mod.title}`);
+      while (label.length > 4 && doc.getTextWidth(label) > maxW * 0.5) label = label.slice(0, -2);
+      link(label, mod.page);
+    }
+
+    const titleMax = rx - MARGIN - 6;
+    const shownTitle = (doc.splitTextToSize(ascii(title), Math.max(40, titleMax)) as string[])[0];
+    doc.text(shownTitle, MARGIN, y);
   }
 }
 
@@ -280,6 +436,8 @@ export type BuildManualOptions = {
   companyName?: string;
   /** Restrict the export to one module; omit for the whole manual. */
   moduleId?: string;
+  /** Turns an `image` block's public-folder `src` into a fetchable URL. Defaults to leaving it as is. */
+  resolveImage?: (src: string) => string;
 };
 
 /**
@@ -302,25 +460,50 @@ export async function buildHelpManualPdf(
   const subtitle = opts.moduleId ? `${scope[0].title} module` : 'Complete guide to every module';
   const generatedOn = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 
+  // ── Images ──
+  // Preload every screenshot up front: jsPDF needs the decoded data synchronously during layout.
+  const resolve = opts.resolveImage ?? ((s: string) => s);
+  const srcs = new Set<string>();
+  for (const m of scope) {
+    if (m.screenshot?.src) srcs.add(m.screenshot.src);
+    for (const a of m.articles) for (const b of a.content) if (b.type === 'image') srcs.add(resolve(b.src));
+  }
+  const images = new Map<string, LoadedImage>();
+  await Promise.all([...srcs].map(async s => { const img = await loadImage(s); if (img) images.set(s, img); }));
+
   const doc = new JsPDF({ unit: 'pt', format: 'a4', compress: true });
   doc.setProperties({ title, subject: 'HR System User Manual', creator: 'HR Manager' });
 
   // ── Cover ──
   drawCover(doc, title, subtitle, generatedOn);
 
-  // ── Contents placeholder ──
-  // Real page numbers are only known after laying out the body, so the contents page is reserved
-  // here and filled in at the end.
-  doc.addPage();
-  const tocPageIndex = doc.getNumberOfPages();
+  // ── Contents: reserve exactly the pages it needs (page numbers are filled in after the body) ──
+  const tocEntries: TocEntry[] = [];
+  for (const m of scope) {
+    tocEntries.push({ title: m.title, level: 0, page: 0 });
+    for (const a of m.articles) tocEntries.push({ title: a.title, level: 1, page: 0 });
+  }
+  const tocLayout = layoutToc(tocEntries);
+  const tocPage = 2;
+  for (let i = 0; i < tocLayout.pages; i++) doc.addPage();
 
-  const ctx: Ctx = { doc, y: MARGIN, page: tocPageIndex, toc: [] };
+  // PDF bookmarks (the viewer's sidebar outline): Contents, then each module with its articles.
+  doc.outline.add(null, 'Contents', { pageNumber: tocPage });
+
+  const ctx: Ctx = { doc, y: MARGIN, page: doc.getNumberOfPages(), images };
+  const moduleStarts: { page: number; title: string }[] = [];
+  // "In this module" index boxes, filled in once article pages are known.
+  const moduleIndexes: { page: number; y: number; entries: TocEntry[] }[] = [];
+  let ei = 0;
 
   // ── Body ──
-  scope.forEach((mod, mi) => {
+  scope.forEach(mod => {
     // Each module opens a page, so a module always starts at a predictable place in print.
     newPage(ctx);
-    if (mi >= 0) ctx.toc.push({ title: mod.title, level: 0, page: ctx.page });
+    const modEntry = tocEntries[ei++];
+    modEntry.page = ctx.page;
+    moduleStarts.push({ page: ctx.page, title: mod.title });
+    const modNode = doc.outline.add(null, ascii(mod.title), { pageNumber: ctx.page });
 
     // Module banner
     doc.setFillColor(...rgb(mod.color)).rect(MARGIN, ctx.y, BODY_W, 46, 'F');
@@ -331,10 +514,22 @@ export async function buildHelpManualPdf(
     writeText(ctx, mod.description, { size: 9.5, color: INK_SOFT });
     ctx.y += 10;
 
+    // Reserve the module's clickable article index (kept only if it fits on this first page).
+    const articleEntries = tocEntries.slice(ei, ei + mod.articles.length);
+    const indexH = 18 + articleEntries.length * 13;
+    if (articleEntries.length && ctx.y + indexH <= PAGE_H - FOOTER_SAFE) {
+      moduleIndexes.push({ page: ctx.page, y: ctx.y, entries: articleEntries });
+      ctx.y += indexH + 10;
+    }
+
+    if (mod.screenshot) writeImage(ctx, mod.screenshot.src, mod.screenshot.caption);
+
     mod.articles.forEach(article => {
       // Keep an article heading with at least a little of its body rather than stranding it.
       ensure(ctx, 76);
-      ctx.toc.push({ title: article.title, level: 1, page: ctx.page });
+      const entry = tocEntries[ei++];
+      entry.page = ctx.page;
+      doc.outline.add(modNode, ascii(article.title), { pageNumber: ctx.page });
 
       doc.setDrawColor(...rgb(mod.color)).setLineWidth(2)
         .line(MARGIN, ctx.y + 2, MARGIN, ctx.y + 15);
@@ -351,6 +546,7 @@ export async function buildHelpManualPdf(
           case 'warning': writeCallout(ctx, block.body, 'warning'); break;
           case 'steps':   writeSteps(ctx, block, mod.color); break;
           case 'table':   writeTable(ctx, block); break;
+          case 'image':   writeImage(ctx, resolve(block.src), block.caption); break;
         }
       });
 
@@ -358,52 +554,27 @@ export async function buildHelpManualPdf(
     });
   });
 
-  // ── Fill in the contents page ──
-  doc.setPage(tocPageIndex);
-  let ty = MARGIN;
-  doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...rgb(INK));
-  doc.text('Contents', MARGIN, ty + 16);
-  ty += 38;
-
-  for (const entry of ctx.toc) {
-    // The contents itself can overflow with 97 articles; continue it onto inserted pages, keeping
-    // those pages adjacent to the contents rather than appended at the end of the document.
-    if (ty > PAGE_H - FOOTER_SAFE - 16) {
-      doc.insertPage(doc.getCurrentPageInfo().pageNumber + 1);
-      doc.setPage(doc.getCurrentPageInfo().pageNumber);
-      ty = MARGIN;
-    }
-
-    const isModule = entry.level === 0;
-    doc.setFont('helvetica', isModule ? 'bold' : 'normal')
-      .setFontSize(isModule ? 10 : 9)
-      .setTextColor(...rgb(isModule ? INK : INK_SOFT));
-
-    if (isModule) ty += 8;
-
-    const indent = isModule ? 0 : 14;
-    const label = ascii(entry.title);
-    const pageLabel = String(entry.page - 1);   // display number, matching the footer
-    const maxLabelW = BODY_W - indent - 34;
-    const shown = (doc.splitTextToSize(label, maxLabelW) as string[])[0];
-
-    doc.text(shown, MARGIN + indent, ty);
-    doc.text(pageLabel, MARGIN + BODY_W, ty, { align: 'right' });
-
-    // Leader dots between the title and its page number.
-    const labelW = doc.getTextWidth(shown);
-    const dotsFrom = MARGIN + indent + labelW + 5;
-    const dotsTo   = MARGIN + BODY_W - doc.getTextWidth(pageLabel) - 5;
-    if (dotsTo > dotsFrom) {
-      doc.setTextColor(...rgb('#d1d5db'));
-      const dots = '.'.repeat(Math.max(0, Math.floor((dotsTo - dotsFrom) / doc.getTextWidth('.'))));
-      doc.text(dots, dotsFrom, ty);
-    }
-
-    ty += isModule ? 15 : 13;
+  // ── Module indexes ──
+  for (const ix of moduleIndexes) {
+    doc.setPage(ix.page);
+    doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...rgb(INK_MUTED));
+    doc.text('IN THIS MODULE', MARGIN, ix.y + 8);
+    let y = ix.y + 22;
+    for (const e of ix.entries) { drawTocRow(doc, e, y, 0); y += 13; }
   }
 
-  drawFooters(doc, title);
+  // ── Contents ──
+  doc.setPage(tocPage);
+  doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(...rgb(INK));
+  doc.text('Contents', MARGIN, MARGIN + 16);
+  tocEntries.forEach((entry, i) => {
+    const slot = tocLayout.slots[i];
+    doc.setPage(tocPage + slot.pageOffset);
+    drawTocRow(doc, entry, slot.y, entry.level === 0 ? 0 : 14);
+  });
+
+  drawCoverContentsLink(doc, tocPage);
+  drawFooters(doc, title, tocPage, tocLayout.pages, moduleStarts);
 
   const slug = opts.moduleId ? `-${scope[0].id}` : '';
   const stamp = new Date().toISOString().slice(0, 10);

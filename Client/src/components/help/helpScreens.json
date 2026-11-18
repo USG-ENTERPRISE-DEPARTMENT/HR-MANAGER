@@ -1,0 +1,17 @@
+{
+  "_comment": "Screenshot manifest for the Help Center + PDF manual. Keyed by help module id. `view` is the App.tsx activeView the capture script opens (scripts/capture-help-screens.mjs); the image is saved to public/help/screens/<module id>.png. A module whose image is missing simply shows no screenshot.",
+  "employees":      { "view": "Employees",          "caption": "The Employees directory" },
+  "leave":          { "view": "LeaveManagement",    "caption": "Leave Management" },
+  "company":        { "view": "Company",            "caption": "Company structure" },
+  "payroll":        { "view": "Payroll",            "caption": "Payroll runs" },
+  "medical":        { "view": "AdminMedical",       "caption": "Medical administration" },
+  "users":          { "view": "Users",              "caption": "Users and roles" },
+  "recruitment":    { "view": "Recruitment",        "caption": "Recruitment" },
+  "performance":    { "view": "ManagePerformance",  "caption": "Performance management" },
+  "reports":        { "view": "AdminReports",       "caption": "Reports" },
+  "documents":      { "view": "Documents",          "caption": "Company documents" },
+  "training":       { "view": "AdminTraining",      "caption": "Training administration" },
+  "attendance":     { "view": "AdminAttendance",    "caption": "Attendance" },
+  "out-of-station": { "view": "ManageOutOfStation", "caption": "Out of Station requests" },
+  "end-of-service": { "view": "ManageEndOfService", "caption": "End of Service" }
+}
