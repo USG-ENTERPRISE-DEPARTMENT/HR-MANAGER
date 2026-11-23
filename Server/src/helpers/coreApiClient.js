@@ -18,7 +18,10 @@ const { encrypt, decrypt } = require('./encryption');
 //   CORE_API_ENC_KEY       the AES key used by encryption.js
 //   CORE_API_ENVELOPE      how an encrypted body is sent: payload (default) → {"payload":"<b64>"},
 //                          raw → the base64 text itself
-//   CORE_API_TIMEOUT       ms, default 30000
+//   CORE_API_TIMEOUT       ms, default 120000 — every call except posting
+//   CORE_API_POST_TIMEOUT  ms, default 300000 — /bulkPayment only. The gateway can take well over 30s
+//                          to answer a posting; giving up early leaves the outcome unknown (was it
+//                          booked?), which is far worse than waiting, so posting gets the longest wait.
 //   CORE_API_USER_AGENT    how HR Manager identifies itself, default HRManager/1.0. The gateway refuses
 //                          requests that look like API testing tools (axios's default User-Agent does)
 //
@@ -71,7 +74,8 @@ function config() {
     apiSecret: process.env.CORE_API_SECRET  || '',
     encKey:   process.env.CORE_API_ENC_KEY  || '',
     envelope: (process.env.CORE_API_ENVELOPE || 'payload').toLowerCase(),
-    timeout:  Number(process.env.CORE_API_TIMEOUT) || 30000,
+    timeout:  Number(process.env.CORE_API_TIMEOUT) || 120000,
+    postTimeout: Number(process.env.CORE_API_POST_TIMEOUT) || 300000,
     userAgent: process.env.CORE_API_USER_AGENT || 'HRManager/1.0',
   };
 }
@@ -224,7 +228,8 @@ async function login() {
 
 /** Authenticated, encrypted call. Re-authenticates once on 401. */
 async function call(method, endpoint, data) {
-  const cfg = config();
+  const base = config();
+  const cfg = endpoint === '/bulkPayment' ? { ...base, timeout: base.postTimeout } : base;
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = await authenticate({ force: attempt > 0 });
     const headers = {

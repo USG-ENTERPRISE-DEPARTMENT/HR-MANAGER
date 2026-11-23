@@ -452,12 +452,13 @@ async function postToLedger(id, req, fromStatus) {
       branch,
       debitAccounts: [{
         debitAmount: amount, debitAccount: expenseGl, debitCurrency: currency,
-        debitNarration: narration, debitProdRef: `BS_OOS_${row.request_number}`, debitBranch: branch,
+        // Core's PROD_REF holds 20 characters: OOS-2026-0002 → BS_OOS20260002 (14), room to grow.
+        debitNarration: narration, debitProdRef: `BS_OOS${String(row.request_number).replace(/\D/g, '')}`, debitBranch: branch,
         ...(employeeCode ? { employeeCode } : {}),
       }],
       creditAccounts: [{
         creditAmount: amount, creditAccount: account, creditCurrency: currency,
-        creditNarration: narration, creditProdRef: `NS_OOS_${row.request_number}`, creditBranch: branch,
+        creditNarration: narration, creditProdRef: `NS_OOS${String(row.request_number).replace(/\D/g, '')}`, creditBranch: branch,
         ...(employeeCode ? { employeeCode } : {}),
       }],
     });

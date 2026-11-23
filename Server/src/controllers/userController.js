@@ -36,14 +36,16 @@ async function isNamedInFlow(settingName, userId, roleNames) {
 
 /** A stage approver in any configured workflow can reach Central Approval. */
 async function isStageApproverAnyModule(userId, roleNames) {
-  const [payroll, medical, leave, transfer] = await Promise.all([
-    isNamedInFlow('payroll_approval_flow', userId, roleNames),
-    isNamedInFlow('medical_approval_flow', userId, roleNames),
-    isNamedInFlow('leave_approval_flow',   userId, roleNames),
-    isNamedInFlow('employee_approval_flow', userId, roleNames),
-    isNamedInFlow('employee_transfer_approval_flow', userId, roleNames),
-  ]);
-  return payroll || medical || leave || transfer;
+  const flags = await Promise.all([
+    'payroll_approval_flow',
+    'medical_approval_flow',
+    'leave_approval_flow',
+    'employee_approval_flow',
+    'employee_transfer_approval_flow',
+    'out_of_station_approval_flow',
+    'eos_approval_flow',
+  ].map(flow => isNamedInFlow(flow, userId, roleNames)));
+  return flags.some(Boolean);
 }
 
 

@@ -303,7 +303,27 @@ Parse amounts with `(json['amount'] as num).toDouble()` — whole numbers arrive
 
 ---
 
-## 11. Checklist
+## 11. Test references
+
+Live postings on the test server you can call today:
+
+| `module` | Reference | What you get |
+|----------|-----------|--------------|
+| `payroll` | `PR2472538796` | 62 employees, 14 columns, `Completed` |
+| `leave` | `J51793772000264` | Allowance with a tax deduction (Payment + Deduction columns) |
+| `staff_medical` | `MS118953641490` | One medical claim column |
+| `hospital_claim` | `MC2083905856` | `netPay.name` = `Hospital Payment`, hospital's account in `netPay.glAccount` |
+| — | `NOPE-0000` | `404` — use it to test the not-found state |
+
+`out_of_station`, `end_of_service` and `dependent_medical` have not been posted on the test server
+yet, so there is no live reference. They have been verified server-side with the same structure;
+build against the examples in sections 5–7 and ask HR to post one when you are ready to test end to
+end. Note that `end_of_service` is the module most likely to have several Payment **and** Deduction
+columns on a single employee, so make sure the employee card handles that.
+
+---
+
+## 12. Checklist
 
 - [ ] Branch on `module`, never on the reference prefix.
 - [ ] Use `moduleLabel` for the title/badge; fall back gracefully on unknown modules.

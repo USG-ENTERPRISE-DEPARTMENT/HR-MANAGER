@@ -602,13 +602,15 @@ async function postToLedger(id, req) {
     const currency = await getSystemCurrency(extra.currency);
     const employeeCode = emp?.employee_code || undefined;
     const ref = String(row.settlement_number);
+    // Core banking's PROD_REF holds 20 characters: EOS-2026-0001 line 1 → BS_EOS20260001_1 (16).
+    const refDigits = ref.replace(/\D/g, '');
     const debit  = (n, accountNo, amount, narration) => ({
       debitAmount: amount, debitAccount: accountNo, debitCurrency: currency, debitNarration: narration,
-      debitProdRef: `BS_EOS_${ref}_${n}`, debitBranch: branch, ...(employeeCode ? { employeeCode } : {}),
+      debitProdRef: `BS_EOS${refDigits}_${n}`, debitBranch: branch, ...(employeeCode ? { employeeCode } : {}),
     });
     const credit = (n, accountNo, amount, narration) => ({
       creditAmount: amount, creditAccount: accountNo, creditCurrency: currency, creditNarration: narration,
-      creditProdRef: `NS_EOS_${ref}_${n}`, creditBranch: branch, ...(employeeCode ? { employeeCode } : {}),
+      creditProdRef: `NS_EOS${refDigits}_${n}`, creditBranch: branch, ...(employeeCode ? { employeeCode } : {}),
     });
 
     const debitAccounts = [], creditAccounts = [];

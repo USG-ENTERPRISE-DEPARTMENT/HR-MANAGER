@@ -582,6 +582,23 @@ async function postToGL({
     throw err;
   }
 
+  // ── Product-reference length gate (all callers) ──────────────────────────────
+  // Core banking stores each line's prodRef in TB_GATEWAY.PROD_REF, VARCHAR2(20). A longer one fails
+  // the whole journal inside the bank's insert (ORA-12899, returned as GL error 999) — after the
+  // request has travelled all the way there. Refuse it here with a message that names the lines.
+  const PROD_REF_MAX = Number(process.env.GL_PROD_REF_MAX) || 20;
+  const longRefs = [
+    ...(debitAccounts  || []).map(d => ({ side: 'debit',  ref: String(d?.debitProdRef  ?? '') })),
+    ...(creditAccounts || []).map(c => ({ side: 'credit', ref: String(c?.creditProdRef ?? '') })),
+  ].filter(x => x.ref.length > PROD_REF_MAX);
+  if (longRefs.length) {
+    glLog(`BLOCKED ${referenceNo} — prodRef over ${PROD_REF_MAX} chars`, longRefs);
+    throw new Error(
+      `GL posting blocked — ${longRefs.length} line reference(s) exceed core banking's ${PROD_REF_MAX}-character limit `
+      + `(${longRefs.slice(0, 3).map(x => `${x.ref} = ${x.ref.length}`).join(', ')}). Nothing was sent to the GL.`,
+    );
+  }
+
   // ── Balance gate (last line of defence, all callers) ─────────────────────────
   // The GL accepts whatever it is sent without verifying that debits equal credits, so an unbalanced
   // batch posts silently and then has to be unwound by hand at the bank. Refuse to send one. Callers

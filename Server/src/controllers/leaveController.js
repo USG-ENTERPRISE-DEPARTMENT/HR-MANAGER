@@ -425,13 +425,16 @@ async function postLeaveGL(leaveId) {
     ? await prisma.users.findUnique({ where: { id: toBigInt(leave.approved_by) }, select: { username: true } }).catch(() => null)
     : null;
 
+  // Core banking's PROD_REF holds 20 characters and leave ids are 13 digits, so the line codes carry
+  // the id's last 11 digits: BS_LV<11>_EXP / NS_LV<11>_TAX are exactly 20, NS_LV<11>_CR is 19.
+  const lvId = String(leave.id).slice(-11);
   const creditAccounts = [{
     creditAmount: net, creditAccount: custAccount, creditCurrency: currency,
-    creditNarration: narration, creditProdRef: `NS_LV_${leave.id}_CR`, creditBranch: branch, ...owner,
+    creditNarration: narration, creditProdRef: `NS_LV${lvId}_CR`, creditBranch: branch, ...owner,
   }];
   if (tax > 0) creditAccounts.push({
     creditAmount: tax, creditAccount: taxGl, creditCurrency: currency,
-    creditNarration: `${narration} - Tax`, creditProdRef: `NS_LV_${leave.id}_TAX`, creditBranch: branch, ...owner,
+    creditNarration: `${narration} - Tax`, creditProdRef: `NS_LV${lvId}_TAX`, creditBranch: branch, ...owner,
   });
 
   const result = await postToGL({
@@ -441,7 +444,7 @@ async function postLeaveGL(leaveId) {
     branch,
     debitAccounts: [{
       debitAmount: round2(net + tax), debitAccount: debitGl, debitCurrency: currency,
-      debitNarration: narration, debitProdRef: `BS_LV_${leave.id}_EXP`, debitBranch: branch, ...owner,
+      debitNarration: narration, debitProdRef: `BS_LV${lvId}_EXP`, debitBranch: branch, ...owner,
     }],
     creditAccounts,
   });

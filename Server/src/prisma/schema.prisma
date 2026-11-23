@@ -2462,16 +2462,16 @@ model dependentmedical {
   employee              String                  @db.VarChar(20)
   from_date             DateTime                @db.Date
   to_date               DateTime?               @db.Date
-  dependant_name        String                  @db.VarChar(20)
+  dependant_name        String                  @db.VarChar(150)
   relation_to_dependent String?                 @db.VarChar(200)
   dob                   DateTime?               @db.Date
   admission_type        String                  @db.VarChar(50)
-  type_of_illness       String                  @db.VarChar(50)
-  medication_given      String                  @db.VarChar(50)
+  type_of_illness       String                  @db.VarChar(255)
+  medication_given      String                  @db.VarChar(500)
   cost                  Decimal                 @db.Decimal(50, 2)
   mode_of_payment       String?                 @db.VarChar(50)
-  hospital              String                  @db.VarChar(50)
-  physician             String?                 @db.VarChar(50)
+  hospital              String                  @db.VarChar(150)
+  physician             String?                 @db.VarChar(150)
   status                dependentmedical_status @default(Draft)
   posted_by             String?                 @db.VarChar(20)
   approved_date         DateTime?               @db.Date

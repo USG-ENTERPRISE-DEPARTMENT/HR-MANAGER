@@ -8,8 +8,14 @@ const app  = require("./src/app");
 
 const PORT = process.env.PORT;
 
+// A GL posting waits up to CORE_API_POST_TIMEOUT (5 min) for core banking, after up to two account/
+// branch checks. Node's default 5-minute request limit would cut the browser off mid-posting while the
+// posting carried on, so the user would see an error for a payment that then went through.
+const REQUEST_TIMEOUT_MS = Number(process.env.HTTP_REQUEST_TIMEOUT) || 15 * 60 * 1000;
+const withTimeout = (server) => { server.requestTimeout = REQUEST_TIMEOUT_MS; return server; };
+
 // ── HTTP (always on) ─────────────────────────────────────────────────────────
-http.createServer(app).listen(PORT, () => {
+withTimeout(http.createServer(app)).listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
@@ -35,8 +41,7 @@ if (HTTPS_KEY && HTTPS_CERT) {
     try {
       const https = require("https");
       const httpsPort = HTTPS_PORT || 3443;
-      https
-        .createServer({ key: fs.readFileSync(HTTPS_KEY), cert: fs.readFileSync(HTTPS_CERT) }, app)
+      withTimeout(https.createServer({ key: fs.readFileSync(HTTPS_KEY), cert: fs.readFileSync(HTTPS_CERT) }, app))
         .listen(httpsPort, () => {
           console.log(`🔒 HTTPS running on port ${httpsPort}`);
         });

@@ -61,10 +61,29 @@ function withActionShots(content: ContentBlock[], articleId: string): ContentBlo
 /** A screenshot that hides itself (caption included) when the image file isn't there yet. */
 function Screenshot({ src, caption }: { src: string; caption?: string }) {
   const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   if (failed) return null;
   return (
     <figure className="m-0">
-      <a href={publicUrl(src)} target="_blank" rel="noreferrer" title="Open full size">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="View full size"
+        className="block w-full p-0 border-0 bg-transparent cursor-zoom-in"
+      >
         <img
           src={publicUrl(src)}
           alt={caption || 'Screenshot'}
@@ -72,8 +91,40 @@ function Screenshot({ src, caption }: { src: string; caption?: string }) {
           onError={() => setFailed(true)}
           className="w-full rounded-xl border border-[var(--border)] shadow-sm"
         />
-      </a>
+      </button>
       {caption && <figcaption className="text-[12px] text-[var(--text-muted)] mt-2 text-center">{caption}</figcaption>}
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={caption || 'Screenshot'}
+            className="fixed inset-0 z-[1000] bg-black/80 flex flex-col items-center justify-center p-4 sm:p-8 cursor-zoom-out"
+          >
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+              title="Close (Esc)"
+              aria-label="Close image"
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            <img
+              src={publicUrl(src)}
+              alt={caption || 'Screenshot'}
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl cursor-default"
+            />
+            {caption && <p className="text-[13px] text-white/80 mt-3 text-center max-w-3xl">{caption}</p>}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </figure>
   );
 }
@@ -2983,8 +3034,8 @@ const BASE_MODULES: HelpModule[] = [
         summary: 'What each status means, what final approval does, and how to print the letter.',
         icon: CheckCircle2,
         content: [
-          { type: 'text', body: 'A submitted settlement passes through the approval stages set in Settings → Controls → Approvals, in order. Each approver is notified and finds it under End of Service → Approval List. If no stages are set, one approval by a user with the Approve End of Service permission is enough.' },
-          { type: 'warning', body: 'Whoever raised a settlement cannot approve it. End of Service approvals are handled in the Approval List tab, not in Central Approval.' },
+          { type: 'text', body: 'A submitted settlement passes through the approval stages set in Settings → Controls → Approvals, in order. Each approver is notified and finds it in Central Approval or under End of Service → Approval List. Both show only the settlements waiting at your stage. If no stages are set, one approval by a user with the Approve End of Service permission is enough.' },
+          { type: 'warning', body: 'Whoever raised a settlement cannot approve it, wherever they open it from.' },
           {
             type: 'table',
             headers: ['Status', 'Meaning'],

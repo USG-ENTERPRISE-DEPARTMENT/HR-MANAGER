@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, X, Eye, Users, Banknote, RefreshCw, Check, XCircle, Stethoscope, FileText, Download, CalendarClock, Clock, ArrowRightLeft, MapPin } from 'lucide-react';
+import { CheckCircle, X, Eye, Users, Banknote, RefreshCw, Check, XCircle, Stethoscope, FileText, Download, CalendarClock, Clock, ArrowRightLeft, MapPin, DoorOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { TableToolbar } from './ui/TableToolbar';
@@ -16,7 +16,7 @@ import { TransferChangeComparison } from './ui/TransferChangeComparison';
 import { fmtDate as formatDmy } from '@/lib/dateFormat';
 import { useRealtimeRefresh } from '@/lib/realtime';
 
-type ApprovalModule = 'Employee' | 'Employee Transfer' | 'Payroll' | 'Medical' | 'Leave' | 'Out of Station';
+type ApprovalModule = 'Employee' | 'Employee Transfer' | 'Payroll' | 'Medical' | 'Leave' | 'Out of Station' | 'End of Service';
 
 // Safely extract a display string from a value that may be a plain string,
 // a code-list-value object {label}, or a structure object {name}.
@@ -69,6 +69,7 @@ function ModulePill({ module }: { module: ApprovalModule }) {
   if (module === 'Leave')    return <span className="pill text-[11px] bg-purple-500/10 text-purple-700 border border-purple-200/50"><CalendarClock size={10} className="inline mr-1" />Leave</span>;
   if (module === 'Out of Station') return <span className="pill text-[11px] bg-lime-500/10 text-lime-800 border border-lime-200/50"><MapPin size={10} className="inline mr-1" />Out of Station</span>;
   if (module === 'Employee Transfer') return <span className="pill text-[11px] bg-blue-500/10 text-blue-700 border border-blue-200/50"><ArrowRightLeft size={10} className="inline mr-1" />Transfer</span>;
+  if (module === 'End of Service') return <span className="pill text-[11px] bg-violet-500/10 text-violet-700 border border-violet-200/50"><DoorOpen size={10} className="inline mr-1" />End of Service</span>;
   return <span className="pill pill-success text-[11px]"><Stethoscope size={10} className="inline mr-1" />Medical</span>;
 }
 
@@ -589,6 +590,109 @@ function OutOfStationApprovalDetail({ item, onApprove, onReject, onClose, busy }
   );
 }
 
+// ── End of Service detail panel ───────────────────────────────────────────────
+function EndOfServiceApprovalDetail({ item, onApprove, onReject, onClose, busy }: {
+  item: ApprovalItem; onApprove: (comment: string) => void; onReject: (reason: string) => void; onClose: () => void; busy: boolean;
+}) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason]       = useState('');
+  const [comment, setComment]     = useState('');
+  // The queue row has the totals; the breakdown lines and stages come from the full settlement, which
+  // the server lets the current stage's approver read even without End of Service view access.
+  const [full, setFull] = useState<any>(null);
+  useEffect(() => {
+    let live = true;
+    api.get(`/end-of-service/settlements/${item.id}`)
+      .then(res => { if (live) setFull(res.data?.data ?? null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [item.id]);
+
+  const r = full ?? item.raw;
+  const money = (n: any) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const stages: any[] = Array.isArray(full?.stages) ? full.stages : [];
+  const pendingStages = stages.filter(s => s.status === 'Pending');
+  const finalStage = pendingStages.length <= 1;
+  const stageLabel = item.raw.current_stage
+    ? `${item.raw.current_stage}${full ? (finalStage ? ' (final)' : '') : ''}`
+    : 'Single approval';
+  const lines: any[] = Array.isArray(full?.lines) ? full.lines : [];
+  const additions  = lines.filter(l => l.line_type === 'addition');
+  const deductions = lines.filter(l => l.line_type === 'deduction');
+  const service = `${r.service_years ?? 0} yr ${r.service_months ?? 0} mo${r.counted_years != null ? ` (${r.counted_years} counted)` : ''}`;
+  const rows = [
+    ['Employee',       r.employee_name || '—'],
+    ['Employee ID',    r.employee_code || '—'],
+    ['Settlement',     r.settlement_number || '—'],
+    ['Reason',         r.exit_reason || '—'],
+    ['Effective date', r.effective_date ? formatDmy(r.effective_date, '') : '—'],
+    ['Service',        service],
+    ['Raised by',      r.created_by_name || r.created_by_username || '—'],
+    ['Approval stage', stageLabel],
+  ];
+  const net = Number(r.net_amount) || 0;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 pb-3 border-b border-[var(--border)]">
+        <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center"><DoorOpen size={18} className="text-violet-700" /></div>
+        <div>
+          <p className="font-bold text-[var(--text-primary)]">{r.employee_name}</p>
+          <p className="text-xs text-[var(--text-muted)]">End of service settlement — {r.settlement_number}</p>
+        </div>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
+        {rows.map(([label, value]) => (
+          <div key={label}><dt className="text-[11px] text-[var(--text-muted)] font-medium">{label}</dt><dd className="text-[13px] text-[var(--text-primary)] font-semibold mt-0.5">{value}</dd></div>
+        ))}
+      </dl>
+      <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-3 space-y-1.5 text-[13px]">
+        <div className="flex justify-between"><span className="text-[var(--text-muted)]">End of service benefit{r.eligible === false ? ' (not eligible)' : ''}</span><span className="font-semibold">{money(r.eosb_amount)}</span></div>
+        {additions.map(l => (
+          <div key={l.id} className="flex justify-between"><span className="text-[var(--text-muted)]">+ {l.description}</span><span>{money(l.amount)}</span></div>
+        ))}
+        {!full && <div className="flex justify-between"><span className="text-[var(--text-muted)]">+ Additions</span><span>{money(r.total_additions)}</span></div>}
+        {deductions.map(l => (
+          <div key={l.id} className="flex justify-between"><span className="text-[var(--text-muted)]">− {l.description}</span><span>{money(l.amount)}</span></div>
+        ))}
+        {!full && <div className="flex justify-between"><span className="text-[var(--text-muted)]">− Deductions</span><span>{money(r.total_deductions)}</span></div>}
+        <div className="flex justify-between pt-1.5 border-t border-violet-200/70">
+          <span className="font-bold text-[var(--text-primary)]">{net < 0 ? 'Balance owed by employee' : 'Net settlement'}</span>
+          <span className={`font-bold ${net < 0 ? 'text-red-600' : 'text-violet-800'}`}>{money(Math.abs(net))}</span>
+        </div>
+      </div>
+      <p className="text-[11px] text-[var(--text-muted)]">
+        {!full ? 'Loading the approval stages…'
+          : finalStage
+            ? 'This is the final approval — approving marks the employee as exited and posts the settlement to the GL.'
+            : 'Approving passes it to the next approval stage.'}
+      </p>
+      {r.notes && (
+        <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+          <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Notes</p>
+          <p className="text-[12px] text-[var(--text-primary)] whitespace-pre-wrap">{r.notes}</p>
+        </div>
+      )}
+      {rejecting
+        ? <FormField label="Rejection Reason"><CountedTextarea className={inputClass + ' resize-none'} rows={3} maxChars={500} placeholder="Enter reason for rejection…" value={reason} onChange={e => setReason(e.target.value)} /></FormField>
+        : <FormField label="Approval Comment (Optional)"><CountedTextarea className={inputClass + ' resize-none'} rows={2} maxChars={500} placeholder="Add a note for this approval stage…" value={comment} onChange={e => setComment(e.target.value)} /></FormField>}
+      <div className="flex justify-end gap-3 pt-2 border-t border-[var(--border)]">
+        <button className="secondary-btn" onClick={onClose} disabled={busy}>Cancel</button>
+        {rejecting ? (
+          <>
+            <button className="secondary-btn" onClick={() => setRejecting(false)} disabled={busy}>Back</button>
+            <button className="primary-btn !bg-red-600 hover:!bg-red-700" onClick={() => onReject(reason)} disabled={busy || !reason.trim()}><XCircle size={14} /><span>{busy ? 'Rejecting…' : 'Confirm Reject'}</span></button>
+          </>
+        ) : (
+          <>
+            <button className="secondary-btn !border-red-500 !text-red-600 hover:!bg-red-50" onClick={() => setRejecting(true)} disabled={busy}><XCircle size={14} /><span>Reject</span></button>
+            <button className="primary-btn !bg-green-600 hover:!bg-green-700" onClick={() => onApprove(comment)} disabled={busy}><Check size={14} /><span>{busy ? 'Approving…' : 'Approve'}</span></button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Slide-over panel wrapper ──────────────────────────────────────────────────
 function EmployeeTransferDetail({ transfer, onApprove, onReject, onClose, busy }: {
   transfer: any; onApprove: (comment: string) => void; onReject: (reason: string) => void; onClose: () => void; busy: boolean;
@@ -770,6 +874,30 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
     } finally { setBusy(false); }
   }
 
+  async function approveEndOfService(comment: string) {
+    setBusy(true);
+    try {
+      const res = await api.post(`/end-of-service/settlements/${item.id}/approve`, { comment });
+      const msg: string = res.data?.message || 'Settlement approved';
+      // Final approval also posts the settlement; a failed or skipped posting comes back as a warning.
+      if (/failed|switched off/i.test(msg)) toast.warning(msg, { duration: 8000 }); else toast.success(msg);
+      onDone(item.id);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Approval failed');
+    } finally { setBusy(false); }
+  }
+
+  async function rejectEndOfService(reason: string) {
+    setBusy(true);
+    try {
+      await api.post(`/end-of-service/settlements/${item.id}/reject`, { reason });
+      toast.success('Settlement rejected');
+      onDone(item.id);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Rejection failed');
+    } finally { setBusy(false); }
+  }
+
   async function rejectLeave(reason: string) {
     setBusy(true);
     try {
@@ -814,6 +942,8 @@ function SlideOver({ item, onClose, onDone }: { item: ApprovalItem; onClose: () 
             />
           ) : item.module === 'Out of Station' ? (
             <OutOfStationApprovalDetail item={item} onApprove={approveOutOfStation} onReject={rejectOutOfStation} onClose={onClose} busy={busy} />
+          ) : item.module === 'End of Service' ? (
+            <EndOfServiceApprovalDetail item={item} onApprove={approveEndOfService} onReject={rejectEndOfService} onClose={onClose} busy={busy} />
           ) : item.module === 'Employee Transfer' ? (
             <EmployeeTransferDetail transfer={item.raw} onApprove={approveTransfer} onReject={rejectTransfer} onClose={onClose} busy={busy} />
           ) : (
@@ -887,12 +1017,15 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
         canSeeMedical ? api.get('/medical/claims')                   : noop,
       ];
 
-      const [empRes, runRes, staffMedRes, depMedRes, claimRes, leaveRes, transferRes, oosRes] = await Promise.allSettled([
+      const [empRes, runRes, staffMedRes, depMedRes, claimRes, leaveRes, transferRes, oosRes, eosRes] = await Promise.allSettled([
         ...adminFetches,
         api.get('/leave/central-approval'),
         api.get('/employee-transfers/approvals'),
         // Only requests the caller may act on: direct reports at the supervisor tier, everyone's at HR.
         api.get('/out-of-station/approvals'),
+        // Only settlements at the caller's stage (or any, with no stages and Approve End of Service),
+        // never ones they raised.
+        api.get('/end-of-service/approvals'),
       ]);
 
       const pending: ApprovalItem[] = [];
@@ -1039,6 +1172,19 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
         }));
       }
 
+      if (eosRes.status === 'fulfilled') {
+        const settlements: any[] = eosRes.value.data?.data ?? [];
+        settlements.forEach((st: any) => pending.push({
+          id: String(st.id),
+          module: 'End of Service',
+          title: st.employee_name || 'Employee',
+          subtitle: `${st.exit_reason || 'Exit'} · ${st.settlement_number || ''} · net ${(Number(st.net_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+          submittedAt: st.submitted_at || st.created_at || null,
+          status: st.status || 'Pending Approval',
+          raw: st,
+        }));
+      }
+
       pending.sort((a, b) => {
         const aTime = a.submittedAt ? new Date(a.submittedAt).getTime() : Number.NaN;
         const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : Number.NaN;
@@ -1065,6 +1211,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
   useRealtimeRefresh('payroll',   () => fetchAll(true));
   useRealtimeRefresh('transfers', () => fetchAll(true));
   useRealtimeRefresh('outofstation', () => fetchAll(true));
+  useRealtimeRefresh('endofservice', () => fetchAll(true));
 
   function handleDone(id: string) {
     setItems(prev => prev.filter(i => i.id !== id));
