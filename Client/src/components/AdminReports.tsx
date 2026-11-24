@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { exportReportExcel, reportPdf, ReportPreview, fmtAmt, uniqOpts } from './ui/reportTools';
 import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { FormModal } from './ui/FormModal';
 import { AnimatePresence } from 'motion/react';
 import { FormField, inputClass } from './ui/FormField';
@@ -680,6 +681,8 @@ export function AdminReports() {
      r.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <div className="flex-1 w-full relative h-full flex flex-col">
       <div className="max-w-[1300px] w-full mx-auto px-6 py-8 flex-1 flex flex-col">
@@ -709,7 +712,7 @@ export function AdminReports() {
               </thead>
               <tbody>
                 {filtered.length > 0 ? (
-                  filtered.map((row, i) => {
+                  pg.rows.map((row, i) => {
                     const Icon = row.icon;
                     return (
                       <motion.tr key={row.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.06 }}>
@@ -745,7 +748,7 @@ export function AdminReports() {
             </table>
           </div>
 
-          <TablePagination total={reports.length} filtered={filtered.length} />
+          <TablePagination total={reports.length} filtered={filtered.length} {...pg.props} />
         </motion.div>
       </div>
 

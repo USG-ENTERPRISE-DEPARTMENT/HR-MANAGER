@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert, Users, FileText, Settings, PieChart,
   User, CalendarCheck, FolderOpen, Building2, FileSpreadsheet,
@@ -191,6 +191,16 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
   const { canNav } = usePermission(currentUser);
   const { enabled: enabledModules } = useEnabledModules();
 
+  // Open the parent group of the active view so the highlighted sub-item is visible
+  // (e.g. landing on Modules shows Dashboard ▸ Modules, not just a highlighted Dashboard).
+  useEffect(() => {
+    const parent = menuSections
+      .flatMap(sec => sec.items)
+      .find(it => it.subItems?.some(sub => sub.id === activeView));
+    if (parent) {
+      setExpandedItems(prev => (prev.includes(parent.label) ? prev : [...prev, parent.label]));
+    }
+  }, [activeView]);
 
   const toggleSubmenu = (label: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -284,7 +294,7 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    background: 'rgba(0,0,0,0.04)',
+                    background: 'var(--surface-hover)',
                     borderRadius: 7,
                   }}
                 >
@@ -330,6 +340,9 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
                           }
                         }}
                         title={isCollapsed ? item.label : undefined}
+                        className="sidebar-item"
+                        aria-expanded={item.subItems ? isExpanded : undefined}
+                        aria-current={!item.subItems && isActive ? 'page' : undefined}
                         style={{
                           width: '100%',
                           display: 'flex',
@@ -339,7 +352,6 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
                           borderRadius: 8,
                           border: 'none',
                           cursor: 'pointer',
-                          outline: 'none',
                           fontFamily: 'inherit',
                           transition: 'background 0.15s, color 0.15s',
                           background: isActive && (!item.subItems || !isExpanded || isCollapsed)
@@ -350,7 +362,7 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
                         onMouseEnter={e => {
                           const el = e.currentTarget;
                           if (!(isActive && (!item.subItems || !isExpanded || isCollapsed))) {
-                            el.style.background = 'rgba(0,0,0,0.04)';
+                            el.style.background = 'var(--surface-hover)';
                           }
                         }}
                         onMouseLeave={e => {
@@ -446,6 +458,8 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
                               <button
                                 key={si2}
                                 onClick={() => setActiveView(sub.id)}
+                                className="sidebar-item"
+                                aria-current={isSubActive ? 'page' : undefined}
                                 style={{
                                   width: '100%',
                                   display: 'flex',
@@ -461,7 +475,7 @@ export function Sidebar({ currentUser,activeView, setActiveView, isOpen, onClose
                                   position: 'relative',
                                 }}
                                 onMouseEnter={e => {
-                                  if (!isSubActive) e.currentTarget.style.background = 'rgba(0,0,0,0.04)';
+                                  if (!isSubActive) e.currentTarget.style.background = 'var(--surface-hover)';
                                 }}
                                 onMouseLeave={e => {
                                   if (!isSubActive) e.currentTarget.style.background = 'transparent';

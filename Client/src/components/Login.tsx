@@ -18,6 +18,8 @@ export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remember, setRemember] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const exchangingXAuth = useRef(false);
 
   // Staff360 redirects to this SPA with an opaque token. Exchange it immediately with our
@@ -48,7 +50,7 @@ export function Login({ onLogin }: LoginProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.post<LoginResponse>('/login', { email: email.trim(), password });
+      const response = await api.post<LoginResponse>('/login', { email: email.trim(), password, remember });
       const { status, accessToken, data } = response.data;
       if (status !== '200' || !accessToken || !data) {
         setError('Invalid email or password.');
@@ -93,12 +95,12 @@ export function Login({ onLogin }: LoginProps) {
       </div>
 
       {/* Card */}
-      <div className="relative z-10 flex items-center ml-32 min-h-[calc(100vh-96px)] px-6 sm:px-12">
+      <div className="relative z-10 flex items-center lg:ml-32 min-h-[calc(100vh-96px)] px-4 sm:px-12 py-8">
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
-          className="w-full max-w-[440px] bg-slate-900/40 p-8 sm:p-10 rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-white/5 backdrop-blur-lg"
+          className="w-full max-w-[440px] bg-slate-900/40 p-6 sm:p-10 rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-white/5 backdrop-blur-lg"
         >
           <div className="mb-10">
             <p className="text-xs font-bold tracking-[0.2em] text-blue-400 mb-3 uppercase">Welcome back</p>
@@ -110,12 +112,13 @@ export function Login({ onLogin }: LoginProps) {
             <div className="space-y-4">
               {/* Email / Username Input */}
               <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-1.5 ml-0.5 tracking-wide">Email or Username</label>
+                <label htmlFor="login-email" className="block text-sm font-semibold text-slate-300 mb-1.5 ml-0.5 tracking-wide">Email or Username</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors z-10">
                     <User className="h-5 w-5" />
                   </div>
                   <input
+                    id="login-email"
                     type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -129,17 +132,22 @@ export function Login({ onLogin }: LoginProps) {
 
               {/* Password Input */}
               <div>
-                <div className="flex items-center justify-between mb-1.5 ml-0.5">
-                  <label className="block text-sm font-semibold text-slate-300 tracking-wide">Password</label>
-                  <a href="#" className="text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-1.5 ml-0.5">
+                  <label htmlFor="login-password" className="block text-sm font-semibold text-slate-300 tracking-wide">Password</label>
+                  <button
+                    type="button"
+                    onClick={() => setNotice('To reset your password, contact your HR administrator.')}
+                    className="text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                  >
                     Forgot password?
-                  </a>
+                  </button>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors z-10">
                     <Lock className="h-5 w-5" />
                   </div>
                   <input
+                    id="login-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -151,7 +159,7 @@ export function Login({ onLogin }: LoginProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors focus:outline-none focus-visible:text-white"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -168,12 +176,21 @@ export function Login({ onLogin }: LoginProps) {
               </div>
             )}
 
+            {notice && !error && (
+              <div role="status" className="flex items-center gap-2 p-3 rounded-lg bg-blue-950/30 border border-blue-800/50 text-blue-300 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{notice}</span>
+              </div>
+            )}
+
             {/* Remember Me */}
             <div className="flex items-center mt-5">
               <input
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
+                checked={remember}
+                onChange={e => setRemember(e.target.checked)}
                 className="h-4 w-4 rounded border-white/10 bg-slate-950/40 text-blue-600 focus:ring-blue-500/40 cursor-pointer accent-blue-600"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-slate-300 cursor-pointer">
@@ -184,6 +201,7 @@ export function Login({ onLogin }: LoginProps) {
             <button
               type="submit"
               disabled={isLoading}
+              aria-label={isLoading ? 'Signing in' : 'Sign in'}
               className="w-full flex items-center justify-center py-2 border border-transparent rounded-[8px] shadow-[0_4px_14px_rgba(37,99,235,0.4)] text-[15px] font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all disabled:opacity-70 mt-6 relative overflow-hidden group"
             >
               <AnimatePresence mode="wait">
@@ -235,9 +253,13 @@ export function Login({ onLogin }: LoginProps) {
           {/* Footer Text */}
           <p className="mt-10 text-center text-sm text-slate-400">
             Don't have an account?{' '}
-            <a href="#" className="font-semibold text-blue-400 hover:text-blue-300 transition-colors">
+            <button
+              type="button"
+              onClick={() => setNotice('Accounts are created by your HR administrator. Please contact HR to request access.')}
+              className="font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+            >
               Contact Your Administrator
-            </a>
+            </button>
           </p>
         </motion.div>
       </div>

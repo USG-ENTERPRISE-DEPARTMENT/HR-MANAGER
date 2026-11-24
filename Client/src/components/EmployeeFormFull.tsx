@@ -8,6 +8,7 @@ import { Combobox } from './EmployeeTabs';
 import { EMPLOYEE_FORM_FIELDS, EMPLOYEE_FORM_FIELDS_BY_KEY } from '../config/employeeFormFields';
 
 import { DateInput } from './ui/DateInput';
+import { ScanDocumentButton } from './ui/ScanDocumentButton';
 interface Props {
   onClose: () => void;
   onSave: (data: any, id?: string) => void;
@@ -771,6 +772,7 @@ export function EmployeeFormFull({ onClose, onSave, initialData }: Props) {
                         </>
                       )}
                     </label>
+                    <div className="mt-1.5 flex justify-end"><ScanDocumentButton /></div>
                   </div>
                 );
               })}

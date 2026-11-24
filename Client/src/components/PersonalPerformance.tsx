@@ -7,6 +7,7 @@ import {
 import { DocPreviewModal } from './ui/DocPreviewModal';
 import { RowActions } from './ui/RowActions';
 import { CountedTextarea } from './ui/CountedTextarea';
+import { ScanDocumentButton } from './ui/ScanDocumentButton';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { getCurrentUser } from '../../lib/auth';
@@ -208,11 +209,14 @@ function GoalFormModal({ goal, cycles, employeeId, onClose, onSaved, progressOnl
           </button>
         </div>
       ) : (
-        <label className="flex items-center gap-2 border border-dashed border-[var(--border)] rounded-[8px] px-3 py-3 cursor-pointer hover:border-[var(--accent)] transition-colors bg-[var(--bg)]">
-          <Paperclip size={14} className="text-[var(--text-muted)] shrink-0" />
-          <span className="text-[12.5px] text-[var(--text-muted)]">Click to attach a document…</span>
-          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFile} />
-        </label>
+        <div className="flex items-stretch gap-2">
+          <label className="flex-1 flex items-center gap-2 border border-dashed border-[var(--border)] rounded-[8px] px-3 py-3 cursor-pointer hover:border-[var(--accent)] transition-colors bg-[var(--bg)]">
+            <Paperclip size={14} className="text-[var(--text-muted)] shrink-0" />
+            <span className="text-[12.5px] text-[var(--text-muted)]">Click to attach a document…</span>
+            <input ref={fileRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFile} />
+          </label>
+          <ScanDocumentButton />
+        </div>
       )}
     </div>
   );

@@ -4,6 +4,10 @@ const jwt    = require('jsonwebtoken');
 const helper = require('../helpers/dbQueryHelper');
 const asyncHandler = require('./asyncHandler');
 
+// How long after a refresh token is rotated a duplicate presentation of it is treated as a benign
+// race (concurrent tabs, reload mid-refresh) rather than token theft.
+const REFRESH_REUSE_GRACE_MS = 30 * 1000;
+
 
 // ─────────────────────────────────────────────
 // @desc    Check API Key header
@@ -148,7 +152,35 @@ const handleRefreshToken = asyncHandler(async (req, res) => {
 
   // 3. Check if token has been revoked
   if (storedToken.revoked) {
-    // Token reuse detected — revoke ALL tokens for this user as a security measure
+    // Benign race: two tabs (or a reload mid-refresh) present the same cookie within moments of each
+    // other — the first rotates it, the second arrives with the now-revoked one. If a successor for this
+    // user was minted within the grace window, hand that successor back instead of nuking the session.
+    const graceStart = new Date(Date.now() - REFRESH_REUSE_GRACE_MS);
+    const successor = await helper.prisma.refresh_tokens.findFirst({
+      where:   { user_id: storedToken.user_id, revoked: false, created_at: { gte: graceStart } },
+      orderBy: { created_at: 'desc' },
+    });
+    if (successor && new Date() < new Date(successor.expires_at)) {
+      const userRow = await helper.prisma.users.findUnique({
+        where: { id: storedToken.user_id }, select: { id: true, status: true },
+      });
+      if (userRow && userRow.status === '1') {
+        const accessToken = jwt.sign(
+          { id: userRow.id },
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
+        );
+        res.cookie('refreshToken', successor.token, {
+          httpOnly: true,
+          secure:   process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          expires:  new Date(successor.expires_at),
+        });
+        return res.status(200).json({ status: '200', accessToken });
+      }
+    }
+
+    // Token reuse detected outside the grace window — revoke ALL tokens for this user as a security measure
     await helper.prisma.refresh_tokens.updateMany({
       where: { user_id: storedToken.user_id },
       data:  { revoked: true },
@@ -193,14 +225,18 @@ const handleRefreshToken = asyncHandler(async (req, res) => {
   // 8. Rotate — mint the new refresh token, then revoke-old + insert-new ATOMICALLY so a crash or a
   //    double-fire can never leave the family revoked with no valid successor (which reuse-detection would
   //    then escalate to a full logout). Tokens are consumed by `id` only, so sign just `{ id }`.
+  // Keep the session length chosen at login (7 days, or 30 with "Remember me") across rotations.
+  const lifetimeDays = (new Date(storedToken.expires_at) - new Date(storedToken.created_at)) / 86400000;
+  const sessionDays  = lifetimeDays > 8 ? 30 : 7;
+
   const newRefreshToken = jwt.sign(
     { id: user.id },
     process.env.REFRESH_TOKEN_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d' }
+    { expiresIn: `${sessionDays}d` }
   );
 
   const newExpiry = new Date();
-  newExpiry.setDate(newExpiry.getDate() + 7);
+  newExpiry.setDate(newExpiry.getDate() + sessionDays);
 
   await helper.prisma.$transaction([
     helper.prisma.refresh_tokens.update({
@@ -229,7 +265,7 @@ const handleRefreshToken = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge:   7 * 24 * 60 * 60 * 1000,
+    maxAge:   sessionDays * 24 * 60 * 60 * 1000,
   });
 
   res.status(200).json({

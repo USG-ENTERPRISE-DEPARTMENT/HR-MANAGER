@@ -11,6 +11,7 @@ import { RowActions }      from './ui/RowActions';
 import { TabBar }          from './ui/TabBar';
 import { TableToolbar }    from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { TableStateRow }   from './ui/TableStateRow';
 import { FormModal }       from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
@@ -451,6 +452,8 @@ function SubordinateAttendanceTab() {
     r.employee_no?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <TableToolbar
@@ -507,7 +510,7 @@ function SubordinateAttendanceTab() {
             {filtered.length === 0 ? (
               <TableStateRow cols={8} loading={loading}
                 empty={rows.length === 0 ? 'No direct reports or no attendance records for this range' : 'No records match the selected filter'} />
-            ) : filtered.map(row => (
+            ) : pg.rows.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td tabular-nums">{row.date}</td>
                 <td className="td font-medium">{row.employee_name || '—'}</td>
@@ -523,7 +526,7 @@ function SubordinateAttendanceTab() {
         </table>
       </div>
 
-      <TablePagination total={rows.length} filtered={filtered.length} />
+      <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
     </motion.div>
   );
 }
@@ -681,6 +684,8 @@ function DailyLogTab() {
     </div>
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <TableToolbar
@@ -720,7 +725,7 @@ function DailyLogTab() {
           <tbody>
             {filtered.length === 0 ? (
               <TableStateRow cols={9} loading={loading} empty="No attendance records for this range" />
-            ) : filtered.map(row => (
+            ) : pg.rows.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td tabular-nums">{row.date}</td>
                 <td className="td font-medium">{row.employee_name || '—'}</td>
@@ -745,7 +750,7 @@ function DailyLogTab() {
         </table>
       </div>
 
-      <TablePagination total={rows.length} filtered={filtered.length} />
+      <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
 
       {/* Manual entry / edit */}
       {open && (
@@ -1188,6 +1193,8 @@ function NightShiftTab() {
 
   const activeFilterCount = [assignedFrom, assignedTo].filter(Boolean).length;
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] p-5">
@@ -1247,7 +1254,7 @@ function NightShiftTab() {
               {filtered.length === 0 ? (
                 <TableStateRow cols={4} loading={loading}
                   empty={assigned.length === 0 ? 'No employees on the night shift — everyone follows the day schedule' : 'No records match the selected filter'} />
-              ) : filtered.map(a => (
+              ) : pg.rows.map(a => (
                 <tr key={a.employee} className="tr">
                   <td className="td font-medium">{a.name || '—'}</td>
                   <td className="td text-[var(--text-muted)]">{a.employee_no || '—'}</td>
@@ -1265,7 +1272,7 @@ function NightShiftTab() {
           </table>
         </div>
 
-        <TablePagination total={assigned.length} filtered={filtered.length} />
+        <TablePagination total={assigned.length} filtered={filtered.length} {...pg.props} />
       </div>
 
       {addOpen && (

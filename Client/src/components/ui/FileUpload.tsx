@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Upload, Eye, X, FileText } from 'lucide-react';
 import { DocPreviewModal } from './DocUploadField';
+import { ScanDocumentButton } from './ScanDocumentButton';
 
 const isImg = (name: string) => /\.(png|jpg|jpeg|gif|webp)$/i.test(name ?? '');
 
@@ -55,6 +56,9 @@ export function FileUpload({
           onChange={e => e.target.files?.[0] && onChange(e.target.files[0])}
         />
       </label>
+      <div className="flex justify-end">
+        <ScanDocumentButton label="Scan Document" />
+      </div>
 
       {/* Selected / existing file row */}
       {displayName && (

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { FormField, inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import api from '../../lib/api';
@@ -1253,6 +1254,8 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
     i.module.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <div className="flex-1 w-full relative h-full flex flex-col">
       <div className="max-w-[1300px] w-full mx-auto px-6 py-8 flex-1 flex flex-col">
@@ -1310,7 +1313,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((item, i) => (
+                  pg.rows.map((item, i) => (
                     <motion.tr
                       key={`${item.module}-${item.id}`}
                       className="tr"
@@ -1341,7 +1344,7 @@ export function CentralApproval({ onNavigate }: { onNavigate?: (view: string) =>
             </table>
           </div>
 
-          <TablePagination total={items.length} filtered={filtered.length} />
+          <TablePagination total={items.length} filtered={filtered.length} {...pg.props} />
         </motion.div>
       </div>
 

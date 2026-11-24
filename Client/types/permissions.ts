@@ -6,8 +6,9 @@
 // roles = string[], permissions = pre-resolved flat array
 export interface LoginResponseData {
   id:            string;        // CUID from users table
-  firstName:     string;        // from JOIN employee
-  lastName:      string;
+  firstName:     string | null; // from LEFT JOIN employee — null for users with no linked employee
+  lastName:      string | null;
+  username?:     string | null;
   middleName:    string | null;
   employeeId:    string;
   phone:         string;

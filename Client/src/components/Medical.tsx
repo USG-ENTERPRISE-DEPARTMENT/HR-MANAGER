@@ -19,6 +19,7 @@ import { inputClass } from './ui/FormField';
 import { CountedTextarea } from './ui/CountedTextarea';
 import { GlBlockedModal, type InvalidAccount, type GlImbalance } from './ui/GlBlockedModal';
 import { SearchSelect } from './ui/SearchSelect';
+import { ScanDocumentButton } from './ui/ScanDocumentButton';
 import { OcrScanButton, type OcrFields } from './ai/OcrScanButton';
 import { toast } from 'sonner';
 import api from '../../lib/api';
@@ -193,6 +194,7 @@ function DocUploadField({ value, onChange }: { value: string; onChange: (v: stri
           <UploadCloud size={13} className={uploading ? 'animate-pulse text-[var(--accent)]' : ''} />
           {uploading ? 'Uploading…' : value ? 'Replace' : 'Choose File'}
         </label>
+        <ScanDocumentButton />
 
         {value && !uploading && <>
           <span className="text-[12px] text-[var(--text-secondary)] truncate min-w-0 flex-1">{value}</span>

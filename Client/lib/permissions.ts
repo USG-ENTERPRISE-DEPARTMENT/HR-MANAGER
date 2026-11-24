@@ -27,7 +27,9 @@ export function normalizeFromLogin(data: LoginResponseData): AppUser {
 
   return {
     id:                  data.id as unknown as number,  // CUID stored as string; typed number for compat
-    name:                `${data.firstName} ${data.lastName}`,
+    // Users without a linked employee have null names — fall back rather than render "null null".
+    name:                [data.firstName, data.lastName].filter(Boolean).join(' ')
+                           || data.username || data.email || 'User',
     firstname:           data.firstName,
     lastname:            data.lastName,
     email:               data.email,

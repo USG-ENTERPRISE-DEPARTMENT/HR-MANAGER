@@ -10,6 +10,7 @@ import { TabBar }          from './ui/TabBar';
 import { TableToolbar }    from './ui/TableToolbar';
 import { RowActions }      from './ui/RowActions';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { TableStateRow }   from './ui/TableStateRow';
 import { FormModal }       from './ui/FormModal';
 import { FormField, inputClass } from './ui/FormField';
@@ -639,6 +640,8 @@ function CatalogTab() {
     r.category?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <TableToolbar
@@ -659,14 +662,14 @@ function CatalogTab() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filtered.map(row => (
+            {pg.rows.map(row => (
               <CourseCard key={row.id} row={row} onClick={() => setViewRec(row)} showStatus />
             ))}
           </div>
         )}
       </div>
 
-      <TablePagination total={rows.length} filtered={filtered.length} />
+      <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
 
       <DetailSlideOver
         open={!!viewRec}
@@ -905,6 +908,8 @@ function AdminNominationsTab() {
     return true;
   });
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
@@ -939,7 +944,7 @@ function AdminNominationsTab() {
           <tbody>
             {filtered.length === 0 ? (
               <TableStateRow cols={8} loading={loading} empty="No nominations found" />
-            ) : filtered.map(row => (
+            ) : pg.rows.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td font-medium">{row.employee_name || '—'}</td>
                 <td className="td text-[var(--text-muted)]">{row.employee_empid || '—'}</td>
@@ -959,7 +964,7 @@ function AdminNominationsTab() {
         </table>
       </div>
 
-      <TablePagination total={rows.length} filtered={filtered.length} />
+      <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
 
       <NominationDetailSlideOver
         record={viewRec}
@@ -1140,6 +1145,8 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
     r.provider?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <TableToolbar
@@ -1164,7 +1171,7 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
           <tbody>
             {filtered.length === 0 ? (
               <TableStateRow cols={8} loading={loading} empty="No training nominations yet" />
-            ) : filtered.map(row => (
+            ) : pg.rows.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td font-medium">{row.training_name}</td>
                 <td className="td">{row.category || '—'}</td>
@@ -1188,7 +1195,7 @@ function MyTrainingTab({ preFill, onClearPreFill }: { preFill?: any; onClearPreF
         </table>
       </div>
 
-      <TablePagination total={rows.length} filtered={filtered.length} />
+      <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
 
       {/* Add/Edit Modal */}
       {open && (
@@ -1319,6 +1326,8 @@ function BrowseCatalogTab({ onNominate, onNominateSubordinate }: {
     r.provider?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <TableToolbar searchQuery={search} onSearchChange={setSearch} />
@@ -1330,14 +1339,14 @@ function BrowseCatalogTab({ onNominate, onNominateSubordinate }: {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filtered.map(row => (
+            {pg.rows.map(row => (
               <CourseCard key={row.id} row={row} onClick={() => setViewRec(row)} />
             ))}
           </div>
         )}
       </div>
 
-      <TablePagination total={catalog.length} filtered={filtered.length} />
+      <TablePagination total={catalog.length} filtered={filtered.length} {...pg.props} />
 
       {/* Course Detail Slide-Over with Nominate action */}
       <DetailSlideOver
@@ -1589,6 +1598,8 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
     return true;
   });
 
+  const pg = usePaged(filtered);
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--surface)] border border-[var(--border)] rounded-[16px] overflow-hidden flex flex-col flex-1 max-h-min drop-shadow-sm">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--border)]">
@@ -1627,7 +1638,7 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
             {filtered.length === 0 ? (
               <TableStateRow cols={8} loading={loading}
                 empty={rows.length === 0 ? 'No direct reports or no training nominations from your team' : 'No nominations match the selected filter'} />
-            ) : filtered.map(row => (
+            ) : pg.rows.map(row => (
               <tr key={row.id} className="tr">
                 <td className="td font-medium">{row.employee_name || '—'}</td>
                 <td className="td text-[var(--text-muted)]">{row.employee_empid || '—'}</td>
@@ -1647,7 +1658,7 @@ function SubordinateTrainingTab({ preFill, onClearPreFill }: { preFill?: any; on
         </table>
       </div>
 
-      <TablePagination total={rows.length} filtered={filtered.length} />
+      <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
 
       {/* Assign Training Modal */}
       {open && (

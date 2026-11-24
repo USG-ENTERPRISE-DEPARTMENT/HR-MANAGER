@@ -5,6 +5,7 @@ import { DocumentViewer } from './DocumentViewer';
 import { PageHeader } from './ui/PageHeader';
 import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { RowActions } from './ui/RowActions';
 import api from '../../lib/api';
 import { toast } from 'sonner';
@@ -74,6 +75,7 @@ export function PersonalDocuments() {
   const isShared = activeTab === 'Shared with Me';
   const rows     = isShared ? filteredShared : filteredPersonal;
   const total    = isShared ? sharedDocs.length : personalDocs.length;
+  const pg       = usePaged(rows);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 w-full max-w-[1400px] mx-auto flex flex-col h-full overflow-hidden">
@@ -125,7 +127,7 @@ export function PersonalDocuments() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr><td colSpan={4} className="td text-center py-12 text-[var(--text-muted)]">No shared documents.</td></tr>
-                ) : rows.map((doc: any, i) => (
+                ) : pg.rows.map((doc: any, i) => (
                   <motion.tr key={doc.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * i }}>
                     <td className="td font-medium text-[var(--text-primary)]">
                       <div className="flex items-center gap-2">
@@ -162,7 +164,7 @@ export function PersonalDocuments() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr><td colSpan={6} className="td text-center py-12 text-[var(--text-muted)]">No personal documents on file.</td></tr>
-                ) : rows.map((doc: any, i) => (
+                ) : pg.rows.map((doc: any, i) => (
                   <motion.tr key={doc.id} className="tr" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * i }}>
                     <td className="td font-medium text-[var(--text-primary)]">
                       <div className="flex items-center gap-2">
@@ -196,7 +198,7 @@ export function PersonalDocuments() {
           )}
         </div>
 
-        <TablePagination total={total} filtered={rows.length} />
+        <TablePagination total={total} filtered={rows.length} {...pg.props} />
       </div>
 
       <DocumentViewer document={documentToView} onClose={() => setDocumentToView(null)} allowDownload={allowDownload} />

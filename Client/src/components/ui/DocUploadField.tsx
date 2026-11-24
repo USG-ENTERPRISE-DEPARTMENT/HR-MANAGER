@@ -15,6 +15,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { UploadCloud, Eye, X, FileText, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
+import { ScanDocumentButton } from './ScanDocumentButton';
 
 // ── Preview modal ─────────────────────────────────────────────────────────────
 
@@ -113,6 +114,7 @@ export function DocUploadField({
           <UploadCloud size={13} className={uploading ? 'animate-pulse text-[var(--accent)]' : ''} />
           {uploading ? 'Uploading…' : value ? 'Replace' : 'Choose File'}
         </label>
+        <ScanDocumentButton />
 
         {value && !uploading && (
           <>

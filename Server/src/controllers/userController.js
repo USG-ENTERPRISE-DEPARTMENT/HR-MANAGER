@@ -269,6 +269,8 @@ const registerUser = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────────
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  // "Remember me" extends the session from 7 to 30 days; the lifetime carries over on every rotation.
+  const sessionDays = req.body?.remember === true ? 30 : 7;
 
   // Validate fields
   const validation = helper.checkForNullOrEmpty([
@@ -360,12 +362,12 @@ const loginUser = asyncHandler(async (req, res) => {
   const refreshToken = jwt.sign(
     { id: user.id, email: user.email },
     process.env.REFRESH_TOKEN_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d' }
+    { expiresIn: `${sessionDays}d` }
   );
 
   // ── Store refresh token in DB ──────────────────────────
   const refreshTokenExpiry = new Date();
-  refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 7);
+  refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + sessionDays);
 
   await helper.dynamicInsert('refresh_tokens', {
     user_id:    user.id,
@@ -379,7 +381,7 @@ const loginUser = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge:   7 * 24 * 60 * 60 * 1000,
+    maxAge:   sessionDays * 24 * 60 * 60 * 1000,
   });
 
   const { password: _, ...userWithoutPassword } = user;

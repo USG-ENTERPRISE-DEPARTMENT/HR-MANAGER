@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { FormModal } from './ui/FormModal';
 import { AnimatePresence } from 'motion/react';
 import { SearchSelect } from './ui/SearchSelect';
@@ -262,6 +263,8 @@ export function UserReports() {
     r.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <div className="flex-1 w-full relative h-full flex flex-col">
       <div className="max-w-[1300px] w-full mx-auto px-6 py-8 flex-1 flex flex-col">
@@ -291,7 +294,7 @@ export function UserReports() {
               </thead>
               <tbody>
                 {filtered.length > 0 ? (
-                  filtered.map((row, i) => {
+                  pg.rows.map((row, i) => {
                     const Icon = row.icon;
                     return (
                       <motion.tr
@@ -335,7 +338,7 @@ export function UserReports() {
             </table>
           </div>
 
-          <TablePagination total={reports.length} filtered={filtered.length} />
+          <TablePagination total={reports.length} filtered={filtered.length} {...pg.props} />
         </motion.div>
       </div>
 

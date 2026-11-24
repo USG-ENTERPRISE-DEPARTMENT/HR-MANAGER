@@ -798,9 +798,6 @@ export function System() {
         </div>
 
         {/* ── Pagination footer ────────────────────────────────────────────── */}
-        {activeTab === 'App Setup' && (
-          <TablePagination total={1} filtered={1} />
-        )}
         {activeTab === 'Parameter Creation' && subTab === 'Code Creation' && (
           <TablePagination
             total={codes.length}

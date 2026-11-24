@@ -77,7 +77,7 @@ const MODULE_STAT_TYPOGRAPHY: React.CSSProperties = {
    Hover state driven by direct DOM style mutation — avoids React re-renders
    on every mousemove event tick that setState() would cause.
 ───────────────────────────────────────────────────────────────────────────── */
-function ModuleCard({ key,mod, index, onClick, isSettings, isEnabled, onToggle }) {
+function ModuleCard({ mod, index, onClick, isSettings, isEnabled, onToggle }) {
   const Icon = mod.icon;
   const r = RAMP[mod.ramp];
 

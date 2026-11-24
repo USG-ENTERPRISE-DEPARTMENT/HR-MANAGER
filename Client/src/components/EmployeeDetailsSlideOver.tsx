@@ -24,6 +24,7 @@ import { TransferChangeComparison } from './ui/TransferChangeComparison';
 import { downloadTransferPdf } from './ui/transferPdf';
 
 import { DateInput } from './ui/DateInput';
+import { ScanDocumentButton } from './ui/ScanDocumentButton';
 import { fmtDate as formatDmy, fmtDateTime as formatDmyTime } from '@/lib/dateFormat';
 import { Select } from './ui/Select';
 interface EmployeeDetailsProps {
@@ -1962,6 +1963,7 @@ export function EmployeeDetailsSlideOver({ isOpen, onClose, employee, onRefresh 
                   <UploadCloud className="w-4 h-4 shrink-0" />
                   <span className="truncate">{resignLetterFile ? resignLetterFile.name : 'Click to upload resignation letter'}</span>
                 </button>
+                <div className="mt-1.5 flex justify-end"><ScanDocumentButton label="Scan letter" /></div>
                 {resignLetterFile && (
                   <button type="button" onClick={() => setResignLetterFile(null)}
                     className="mt-1 text-[11px] text-rose-500 hover:underline">

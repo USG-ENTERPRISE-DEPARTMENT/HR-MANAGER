@@ -22,13 +22,13 @@ export function TableToolbar({
 }: TableToolbarProps) {
   return (
     <div className="flex flex-col border-b border-[var(--border)]">
-      <div className="p-4 sm:p-5 flex flex-col sm:flex-row lg:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-4">
         {actions && (
-          <div className="grid grid-cols-3 sm:flex items-center gap-2 w-full sm:w-auto">
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
             {actions}
           </div>
         )}
-        <div className={`search-wrap w-full sm:w-auto ${searchWidth}`}>
+        <div className={`search-wrap w-full sm:w-auto sm:ml-auto ${searchWidth}`}>
           <Search size={14} />
           <input
             type="search"

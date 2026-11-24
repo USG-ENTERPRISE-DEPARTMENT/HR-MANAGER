@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import { DocPreviewModal } from './ui/DocPreviewModal';
 import { CountedTextarea } from './ui/CountedTextarea';
+import { ScanDocumentButton } from './ui/ScanDocumentButton';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { DraftWithAI } from './ai/DraftWithAI';
 
@@ -757,7 +758,9 @@ export function ReviewDetailSlideOver({ reviewId, mode, onClose, readOnly = fals
                                             finally { setGoalDocUploading(prev => ({ ...prev, [gId]: false })); e.target.value = ''; }
                                           }} />
                                       </label>
-                                    ) : (
+                                    ) : null}
+                                    {canEmpEdit && !goalDocRefs[gId] && <div><ScanDocumentButton /></div>}
+                                    {!goalDocRefs[gId] && !canEmpEdit && (
                                       <p className="text-[12px] text-[var(--text-muted)] italic">None</p>
                                     )}
                                   </div>

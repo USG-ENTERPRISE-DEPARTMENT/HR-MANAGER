@@ -9,6 +9,7 @@ import { PageHeader } from './ui/PageHeader';
 import { TabBar } from './ui/TabBar';
 import { TableToolbar } from './ui/TableToolbar';
 import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { FormModal } from './ui/FormModal';
 import { DetailSlideOver } from './ui/DetailSlideOver';
 import { GlFailureCard } from './ui/GlFailureCard';
@@ -418,6 +419,8 @@ const fetchSubordinateEmployees = useCallback(() => {
     JSON.stringify(r).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const pg = usePaged(filtered);
+
   return (
     <div className="p-4 sm:p-6 md:p-6 w-full max-w-[1400px] mx-auto overflow-x-hidden flex flex-col h-full">
       <PageHeader title="Leave" subtitle="Manage leave requests and approvals." />
@@ -747,7 +750,7 @@ const fetchSubordinateEmployees = useCallback(() => {
                   <tr><td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} className="td text-center text-[var(--text-muted)] py-10">No leaves found.</td></tr>
-                ) : filtered.map((row) => (
+                ) : pg.rows.map((row) => (
                   <tr key={row.id} className="tr">
                     <td className="td text-[var(--text-primary)] font-medium">{row.employee_name || row.employee}</td>
                     <td className="td">
@@ -796,7 +799,7 @@ const fetchSubordinateEmployees = useCallback(() => {
             </table>
           </div>
 
-          <TablePagination total={leaves.length} filtered={filtered.length} />
+          <TablePagination total={leaves.length} filtered={filtered.length} {...pg.props} />
         </div>
       )}
 
