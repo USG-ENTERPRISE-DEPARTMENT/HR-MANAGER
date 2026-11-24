@@ -542,6 +542,16 @@ function PostingsSection({
   validateAccounts, setValidateAccounts,
 }: any) {
   const [emailPayslips, setEmailPayslips] = useState<boolean>(() => getSettings().payments.emailPayslips);
+  const [approvalThreshold, setApprovalThreshold] = useState<string>(() => getSettings().payments.approvalThreshold);
+  const saveApprovalThreshold = () => {
+    const clean = approvalThreshold.replace(/,/g, '').trim();
+    const n = Number(clean);
+    // Blank is a valid choice (everything to central approval); anything else must be a non-negative number.
+    const value = clean === '' ? '' : (Number.isFinite(n) && n >= 0 ? String(n) : null);
+    if (value === null) { setApprovalThreshold(getSettings().payments.approvalThreshold); return; }
+    setApprovalThreshold(value);
+    if (value !== getSettings().payments.approvalThreshold) saveSetting('payments', { approvalThreshold: value });
+  };
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-[var(--text-muted)] leading-relaxed max-w-3xl">
@@ -604,6 +614,27 @@ function PostingsSection({
               account the core system does not recognise have to be traced and corrected at the bank.
             </p>
           )}
+        </SectionCard>
+
+        <SectionCard icon={<ShieldCheck size={13} />} title="Central Approval">
+          <div className="px-5 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-[var(--text-primary)]">Central approval threshold</p>
+              <p className="text-[12px] text-[var(--text-muted)] leading-relaxed mt-0.5">
+                Applies to every GL posting. When a journal's total debits are above this amount, it is sent
+                to core banking flagged for central approval (Y). At or below it, it posts without central
+                approval (N). Leave blank to send every posting for central approval.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[13px] text-[var(--text-muted)]">{getSettings().general.currency}</span>
+              <input type="text" inputMode="decimal" placeholder="Not set"
+                className={`${inputClass} w-36 text-right`}
+                value={approvalThreshold}
+                onChange={e => setApprovalThreshold(e.target.value)}
+                onBlur={saveApprovalThreshold} />
+            </div>
+          </div>
         </SectionCard>
       </div>
     </div>

@@ -170,6 +170,9 @@ const CONTROL_KEYS = [
   // Screen every GL account against the core system before posting. '0' = post without checking,
   // for environments whose accounts are not yet registered with the validator.
   'gl_validate_accounts',
+  // Total-debit amount above which a GL posting is flagged for core banking's central approval
+  // (helpers/glHelper.js → approvalThreshold). Blank = every posting goes to central approval.
+  'gl_approval_threshold',
 ];
 
 // GET /settings/controls — flat map of saved keys (client merges over its defaults)

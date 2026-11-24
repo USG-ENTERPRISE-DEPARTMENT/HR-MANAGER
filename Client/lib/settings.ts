@@ -33,6 +33,9 @@ export interface AppSettings {
     payroll: boolean;
     /** Screen every GL account against the core system before posting. Off = post unchecked. */
     validateAccounts: boolean;
+    /** Total-debit amount above which a GL posting is flagged for central approval in core banking.
+     *  Blank = every posting goes to central approval. */
+    approvalThreshold: string;
     /** Email each employee their payslip when a payroll run is completed (sent from a background queue). */
     emailPayslips: boolean;
   };
@@ -78,6 +81,7 @@ const DEFAULTS: AppSettings = {
     medical: true,
     payroll: true,
     validateAccounts: true,
+    approvalThreshold: '',
     emailPayslips: false,
   },
   medicalClaims: {
@@ -154,6 +158,7 @@ const SERVER_KEYS: Record<string, Record<string, string>> = {
     medical: 'medical_payments_enabled',
     payroll: 'payroll_payments_enabled',
     validateAccounts: 'gl_validate_accounts',
+    approvalThreshold: 'gl_approval_threshold',
     emailPayslips: 'payroll_email_payslips',
   },
 };

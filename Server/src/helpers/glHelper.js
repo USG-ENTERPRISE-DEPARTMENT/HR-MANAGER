@@ -36,6 +36,31 @@ async function validationEnabled() {
   return row ? row.value === '1' : true;   // never saved → on
 }
 
+/**
+ * Central-approval threshold (Settings → Controls → Postings, `gl_approval_threshold`).
+ *
+ * Core banking routes a posting into its central approval table only when the payload's approval flag
+ * is 'Y'. A journal whose total debits exceed this amount is flagged 'Y'; at or below it, 'N' (posted
+ * without central approval).
+ *
+ * Returns null when no usable threshold is saved (never set, blank, non-numeric or negative). The
+ * caller then flags EVERY posting 'Y': before this setting existed every posting went to central
+ * approval, so an unconfigured install must keep doing that rather than silently skip approval.
+ */
+async function approvalThreshold() {
+  const row = await prisma.settings
+    .findFirst({ where: { name: 'gl_approval_threshold', category: 'app_controls' }, select: { value: true } })
+    .catch(() => null);
+  const raw = String(row?.value ?? '').replace(/,/g, '').trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+// Payload field core banking reads the approval flag from. GL_APPROVAL_FLAG_KEY overrides it so a
+// rename on the bank's side does not need a code change.
+const APPROVAL_FLAG_KEY = process.env.GL_APPROVAL_FLAG_KEY || 'requireApproval';
+
 // ── GL posting audit log ─────────────────────────────────────────────────────
 // Every GL call (payroll + medical) is appended to Server/logs/gl-postings.log as one pretty-printed
 // block per attempt: the exact JSON sent, then the response or the error. This is a diagnostic aid for
@@ -732,6 +757,19 @@ async function postToGL({
   // to the configured system identifier (gl_extra.posted_by / POSTING_POSTED_BY), then approvedBy.
   const postedBy = await loggedInEmployeeCode()
     || extra.posted_by || process.env.POSTING_POSTED_BY || approvedBy;
+
+  // ── Central-approval flag ────────────────────────────────────────────────────
+  // 'Y' sends the posting to core banking's central approval table; 'N' posts it directly. Decided on
+  // the total DEBITS (drTotal, from the balance gate above): 'Y' only when it is strictly greater than
+  // the configured threshold. With no threshold set, everything is 'Y' (see approvalThreshold).
+  const threshold   = await approvalThreshold();
+  const needsApproval = threshold === null || drTotal > threshold;
+  glLog(`APPROVAL FLAG ${referenceNo}`, {
+    totalDebits: drTotal,
+    threshold:   threshold ?? 'not set — every posting requires central approval',
+    [APPROVAL_FLAG_KEY]: needsApproval ? 'Y' : 'N',
+  });
+
   const payload = {
     approvedBy,
     channelCode:   extra.channel_code || 'HRP',
@@ -743,6 +781,7 @@ async function postToGL({
     creditAccounts,
     referenceNo,
     postedBy,
+    [APPROVAL_FLAG_KEY]: needsApproval ? 'Y' : 'N',
   };
 
   if (cfg.core_api_enabled) {
