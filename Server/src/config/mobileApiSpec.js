@@ -426,6 +426,30 @@ const spec = {
     },
 
     '/medical/enquiry':    { get: op({ tag: 'Medical', summary: 'Own medical limit and utilisation', description: 'Entitlement, amount used and remaining balance.', response: { type: 'object' } }) },
+    '/medical/balance': {
+      get: op({
+        tag: 'Medical', summary: 'Own medical balance',
+        description: 'Balance figures only (no claim history) for the current medical year. Utilisation counts Approved staff + dependent claims and approved hospital-claim items — the same figures as the web Medical Enquiry and the approval SMS. Claims awaiting approval are reported in `pending_amount` and are not deducted from `limit_balance`. For unlimited staff `unlimited` is true and the limit/balance fields are null. `data` is null when the employee has no record.',
+        response: {
+          type: 'object',
+          properties: {
+            employee_empid:          { type: 'string' },
+            employee_name:           { type: 'string' },
+            grade:                   { type: 'string', nullable: true },
+            currency:                { type: 'string', example: 'GHS' },
+            has_limit:               { type: 'boolean', description: 'false when no medical limit is set for the pay grade' },
+            unlimited:               { type: 'boolean' },
+            medical_limit:           { type: 'number', nullable: true },
+            staff_utilized:          { type: 'number' },
+            dep_utilized:            { type: 'number' },
+            total_utilized:          { type: 'number' },
+            limit_balance:           { type: 'number', nullable: true },
+            pending_amount:          { type: 'number' },
+            available_after_pending: { type: 'number', nullable: true },
+          },
+        },
+      }),
+    },
     '/medical/staff': {
       get:  op({ tag: 'Medical', summary: 'List own staff medical claims', response: { type: 'array', items: { type: 'object' } } }),
       post: op({

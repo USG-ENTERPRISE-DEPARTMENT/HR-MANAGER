@@ -43,18 +43,26 @@ async function validationEnabled() {
  * is 'Y'. A journal whose total debits exceed this amount is flagged 'Y'; at or below it, 'N' (posted
  * without central approval).
  *
- * Returns null when no usable threshold is saved (never set, blank, non-numeric or negative). The
- * caller then flags EVERY posting 'Y': before this setting existed every posting went to central
- * approval, so an unconfigured install must keep doing that rather than silently skip approval.
+ * Returns { value, reason }. `value` is null when no usable threshold is available — never set, blank,
+ * non-numeric, negative, or the settings read failed — and the caller then flags EVERY posting 'Y':
+ * before this setting existed every posting went to central approval, so an unconfigured install (or a
+ * database hiccup) must keep doing that rather than silently skip approval. `reason` says which, for
+ * the GL log.
  */
 async function approvalThreshold() {
-  const row = await prisma.settings
-    .findFirst({ where: { name: 'gl_approval_threshold', category: 'app_controls' }, select: { value: true } })
-    .catch(() => null);
+  let row;
+  try {
+    row = await prisma.settings
+      .findFirst({ where: { name: 'gl_approval_threshold', category: 'app_controls' }, select: { value: true } });
+  } catch (e) {
+    return { value: null, reason: `could not read the threshold (${e.message.split('\n').filter(Boolean).pop()}) — every posting requires central approval` };
+  }
   const raw = String(row?.value ?? '').replace(/,/g, '').trim();
-  if (!raw) return null;
+  if (!raw) return { value: null, reason: 'not set — every posting requires central approval' };
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  return Number.isFinite(n) && n >= 0
+    ? { value: n, reason: null }
+    : { value: null, reason: `invalid value "${row.value}" — every posting requires central approval` };
 }
 
 // Payload field core banking reads the approval flag from. GL_APPROVAL_FLAG_KEY overrides it so a
@@ -762,11 +770,11 @@ async function postToGL({
   // 'Y' sends the posting to core banking's central approval table; 'N' posts it directly. Decided on
   // the total DEBITS (drTotal, from the balance gate above): 'Y' only when it is strictly greater than
   // the configured threshold. With no threshold set, everything is 'Y' (see approvalThreshold).
-  const threshold   = await approvalThreshold();
+  const { value: threshold, reason: thresholdNote } = await approvalThreshold();
   const needsApproval = threshold === null || drTotal > threshold;
   glLog(`APPROVAL FLAG ${referenceNo}`, {
     totalDebits: drTotal,
-    threshold:   threshold ?? 'not set — every posting requires central approval',
+    threshold:   threshold ?? thresholdNote,
     [APPROVAL_FLAG_KEY]: needsApproval ? 'Y' : 'N',
   });
 

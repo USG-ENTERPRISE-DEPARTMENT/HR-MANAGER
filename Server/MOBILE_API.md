@@ -182,6 +182,7 @@ curl -X POST http://host:3088/v1/api/hr/me/leave \
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/me/medical/enquiry` | Limit, used, remaining for this employee. |
+| GET | `/me/medical/balance` | Balance figures only: limit, staff/dependent/total used, remaining, pending, available after pending. `unlimited: true` → limit/balance are null. |
 | GET | `/me/medical/staff` | Own staff medical claims. |
 | POST | `/me/medical/staff` | Create a claim. |
 | POST | `/me/medical/staff/:id/submit` | Submit for approval. |

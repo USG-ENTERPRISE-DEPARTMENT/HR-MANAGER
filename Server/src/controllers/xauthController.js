@@ -2,10 +2,11 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('../middleware/asyncHandler');
 const helper = require('../helpers/dbQueryHelper');
+const { roleCodeFor } = require('../helpers/xauthRoleSync');
 
 // Base address of the Staff360 (XAuth) server. The trailing slash is stripped so we can safely
 // append paths like `/api/v1/...` without ending up with a double slash.
-const xauthBaseUrl = () => (process.env.XAUTH_BASE_URL || 'http://10.203.14.15:8080').replace(/\/$/, '');
+const xauthBaseUrl = () => (process.env.XAUTH_BASE_URL || 'http://10.32.11.53:8282').replace(/\/$/, '');
 
 // The XAuth staff identifier is stored in ONE place only: employee.employee_id. We deliberately do
 // NOT keep a copy on the users table — the link from an XAuth login to a local account is resolved
@@ -93,6 +94,56 @@ async function issueLocalSession(res, user) {
   });
 }
 
+// Staff 360 decides which HR-MANAGER roles a staff member holds (decode → currentApplicationAccess).
+// Returns:
+//   { legacy: true }               Staff 360 predates application access (no hasApplicationAccess
+//                                  field): keep the roles assigned locally, as before.
+//   { denied: message }            no access to this app, or none of the granted roles exist here.
+//   { roleIds: [BigInt, ...] }     the local roles to give this user for this session.
+async function resolveApplicationRoles(decoded) {
+  if (decoded?.hasApplicationAccess === undefined && decoded?.currentApplicationAccess === undefined) {
+    console.warn('[xauth] decode response has no application access fields; using locally assigned roles.');
+    return { legacy: true };
+  }
+
+  const appName = decoded.appName || decoded.currentApplicationAccess?.applicationName || 'HR Manager';
+  const noAccess = `You do not have access to ${appName}. Please contact your administrator.`;
+  const granted = Array.isArray(decoded.currentApplicationAccess?.roles) ? decoded.currentApplicationAccess.roles : [];
+  if (!decoded.hasApplicationAccess || granted.length === 0) return { denied: noAccess };
+
+  // We sync our own role ids to Staff 360, so roleId normally matches roles.id. roleCode (derived
+  // from the role name, compared case-insensitively) is the fallback for roles created on the
+  // Staff 360 side with a different id.
+  const local = await helper.selectRecordsWithQuery(`SELECT id, name FROM roles WHERE status = '1'`, []);
+  const byId = new Map((local.data || []).map(r => [String(r.id), r]));
+  const byCode = new Map((local.data || []).map(r => [roleCodeFor(r.name), r]));
+
+  const matched = new Map();
+  for (const g of granted) {
+    const role = byId.get(String(g.roleId ?? '')) || byCode.get(String(g.roleCode || '').toUpperCase());
+    if (role) matched.set(String(role.id), helper.safeBigInt(role.id));
+    else console.warn(`[xauth] Staff 360 granted role ${g.roleId}/${g.roleCode} which does not exist (or is inactive) in HR-MANAGER.`);
+  }
+  if (matched.size === 0) {
+    return { denied: `Your ${appName} role(s) are not set up in this portal yet. Please contact your administrator.` };
+  }
+  return { roleIds: [...matched.values()] };
+}
+
+// Make the user's local role assignments exactly what Staff 360 granted. The rest of the app
+// (checkToken, guards, notifications) reads model_has_roles, so this is what makes the
+// Staff 360 assignment take effect, and also removes roles Staff 360 has since taken away.
+async function applyApplicationRoles(userId, roleIds) {
+  const modelId = String(userId);
+  await helper.prisma.$transaction([
+    helper.prisma.model_has_roles.deleteMany({ where: { model_id: modelId, model_type: 'users' } }),
+    helper.prisma.model_has_roles.createMany({
+      data: roleIds.map(roleId => ({ role_id: roleId, model_id: modelId, model_type: 'users' })),
+      skipDuplicates: true,
+    }),
+  ]);
+}
+
 // STEP 1 of the login flow.
 // Redirect the browser to Staff360's hosted sign-in page. Only the public app key goes in the URL —
 // the app secret never leaves this server.
@@ -130,6 +181,10 @@ const exchange = asyncHandler(async (req, res) => {
     : '';
   if (!staffId) return res.status(401).json({ status: '401', message: 'Staff single sign-on returned no staff ID.' });
 
+  // No access to this application → no session, and no auto-provisioned user row either.
+  const access = await resolveApplicationRoles(decoded);
+  if (access.denied) return res.status(403).json({ status: '403', message: access.denied });
+
   // Resolve the local account by the staff id held ONLY on the employee record: match
   // employee.employee_id, then find the user linked to that employee via users.employeeId.
   // Happy path: the employee already has a local user account.
@@ -163,6 +218,8 @@ const exchange = asyncHandler(async (req, res) => {
 
   // Even a valid Staff360 login is refused if the local account has been disabled.
   if (user.status !== '1') return res.status(403).json({ status: '403', message: 'Account is deactivated. Contact administrator.' });
+  // Re-read on every login: Staff 360 assignments can change at any time.
+  if (access.roleIds) await applyApplicationRoles(user.id, access.roleIds);
   // Identity confirmed — hand over to the shared session builder.
   return issueLocalSession(res, user);
 });

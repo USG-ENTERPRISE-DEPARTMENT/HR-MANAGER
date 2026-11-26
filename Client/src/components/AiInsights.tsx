@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, RefreshCw, AlertTriangle, TrendingDown, X, Info, ListChecks } from 'lucide-react';
 import { PageHeader } from './ui/PageHeader';
+import { TablePagination } from './ui/TablePagination';
+import { usePaged } from '../hooks/usePaged';
 import { aiAttrition } from '../../lib/aiClient';
 
 interface Factor { label: string; points: number; }
@@ -21,6 +23,7 @@ export function AiInsights() {
   const [loading, setLoad]  = useState(true);
   const [error, setError]   = useState<string | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
+  const [query, setQuery]   = useState('');
 
   const load = () => {
     setLoad(true); setError(null);
@@ -32,6 +35,14 @@ export function AiInsights() {
   useEffect(load, []);
 
   const rows: Row[] = data?.employees ?? [];
+  // 900+ employees: search + page instead of rendering every row at once.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r =>
+      [r.name, r.department, r.job_title, r.band].some(v => String(v ?? '').toLowerCase().includes(q)));
+  }, [rows, query]);
+  const pg = usePaged(filtered);
 
   return (
     <div className="p-4 sm:p-6 max-w-[1200px] mx-auto w-full">
@@ -70,6 +81,15 @@ export function AiInsights() {
         <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2">
           <Sparkles size={15} className="text-[var(--purple)]" />
           <h3 className="text-[14px] font-bold text-[var(--text-primary)] syne">Risk scorecard</h3>
+          <div className="search-wrap ml-auto w-full max-w-[260px]">
+            <input
+              type="search"
+              aria-label="Search scorecard"
+              placeholder="Search name, department, risk…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse min-w-[680px]">
@@ -85,7 +105,7 @@ export function AiInsights() {
             <tbody>
               {loading ? (
                 <tr><td className="td text-center text-[var(--text-muted)] py-8" colSpan={5}>Computing…</td></tr>
-              ) : rows.length ? rows.map(r => (
+              ) : pg.rows.length ? pg.rows.map(r => (
                 <tr key={r.employee_id} className="tr cursor-pointer" onClick={() => setSelected(r)}>
                   <td className="td">
                     <p className="font-semibold text-[13px] text-[var(--text-primary)]">{r.name}</p>
@@ -120,6 +140,9 @@ export function AiInsights() {
             </tbody>
           </table>
         </div>
+        {!loading && rows.length > 0 && (
+          <TablePagination total={rows.length} filtered={filtered.length} {...pg.props} />
+        )}
       </div>
 
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}

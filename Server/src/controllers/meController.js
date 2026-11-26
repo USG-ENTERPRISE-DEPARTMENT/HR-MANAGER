@@ -297,6 +297,7 @@ exports.dependentMedicalOwnership = requireOwnership('dependentmedical');
 exports.dependentMedicalDraft     = requireDraft('dependentmedical', 'medical claims');
 
 exports.getMedicalEnquiry = (req, res, next) => med.getMyMedicalEnquiry(req, res, next);
+exports.getMedicalBalance = (req, res, next) => med.getMyMedicalBalance(req, res, next);
 
 // ── Training ─────────────────────────────────────────────────────────────────
 

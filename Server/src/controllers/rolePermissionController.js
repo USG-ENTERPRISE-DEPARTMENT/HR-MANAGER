@@ -1,6 +1,22 @@
 const helper = require('../helpers/dbQueryHelper');
 const asyncHandler = require('../middleware/asyncHandler');
 const { tmsg } = require('../helpers/messageStore');
+const xauthRoles = require('../helpers/xauthRoleSync');
+
+// Mirror a saved role to Staff 360 and describe the outcome for the API response. A sync failure
+// never undoes the local save; it is reported so the admin can retry (POST /roles/xauth-sync).
+async function syncRoleToStaff360(roleId, req, op) {
+  if (!xauthRoles.enabled()) return { xauthSync: { ok: true, skipped: true }, note: '' };
+  const r = await helper.selectRecordsWithCondition('roles', { id: helper.safeBigInt(roleId) });
+  const role = r.data?.[0];
+  if (!role) return { xauthSync: { ok: false, message: 'Role not found after save' }, note: '' };
+  const userName = await xauthRoles.actorStaffId(req.user);
+  const result = op === 'create' ? await xauthRoles.createRole(role, userName) : await xauthRoles.updateRole(role, userName);
+  return {
+    xauthSync: { ok: result.ok, status: result.status, message: result.message },
+    note: result.ok ? '' : ` (Staff 360 sync failed: ${result.message})`,
+  };
+}
 
 // Resolve a mixed array of permission names and/or numeric IDs to a deduped list of
 // numeric permission ID strings. The client sends permission NAMES (e.g. 'manage_roles'),
@@ -333,10 +349,13 @@ const addRole = asyncHandler(async (req, res) => {
   const role = roleResult.data?.[0] ?? { id: newRoleId };
   role.permissions = permResult.data ?? [];
 
+  const sync = await syncRoleToStaff360(newRoleId, req, 'create');
+
   res.status(201).json({
     status: '201',
-    message: 'Role created successfully',
+    message: `Role created successfully${sync.note}`,
     data: role,
+    xauthSync: sync.xauthSync,
   });
 });
 
@@ -430,10 +449,16 @@ const updateRole = asyncHandler(async (req, res) => {
   const updatedRole = updatedRoleResult.data?.[0] ?? { id };
   updatedRole.permissions = updatedPermResult.data ?? [];
 
+  // Staff 360 only holds name/code/status. Permission-only edits don't need a round trip.
+  const sync = (updateData.name !== undefined || updateData.status !== undefined)
+    ? await syncRoleToStaff360(roleIdBig, req, 'update')
+    : { xauthSync: undefined, note: '' };
+
   res.status(200).json({
     status: '200',
-    message: 'Role updated successfully',
+    message: `Role updated successfully${sync.note}`,
     data: updatedRole,
+    xauthSync: sync.xauthSync,
   });
 });
 
@@ -464,6 +489,25 @@ const deleteRole = asyncHandler(async (req, res) => {
     return res.status(403).json({ status: '403', message: 'Cannot delete a system role' });
   }
 
+  // Delete in Staff 360 FIRST. It refuses (409) while the role is still assigned to staff; deleting
+  // locally anyway would leave staff holding a role that maps to nothing here. Any other failure
+  // (404 = never synced, network error) does not block the local delete; a later reconcile reports
+  // the leftover as an orphan.
+  let syncNote = '';
+  let xauthSync;
+  if (xauthRoles.enabled()) {
+    const userName = await xauthRoles.actorStaffId(req.user);
+    const r = await xauthRoles.deleteRole(roleIdBig, userName);
+    if (r.status === 409) {
+      return res.status(409).json({
+        status: '409',
+        message: 'This role is still assigned to staff in Staff 360. Deactivate it instead, or have the Staff 360 administrator remove the assignments first.',
+      });
+    }
+    xauthSync = { ok: r.ok || r.status === 404, status: r.status, message: r.message };
+    if (!xauthSync.ok) syncNote = ` (Staff 360 sync failed: ${r.message})`;
+  }
+
   // Remove all permission assignments for this role first
   await helper.deleteRecordsWithCondition('role_has_permissions', { role_id: roleIdBig });
 
@@ -472,7 +516,7 @@ const deleteRole = asyncHandler(async (req, res) => {
     return res.status(500).json({ status: '500', message: result.message });
   }
 
-  res.status(200).json({ status: '200', message: 'Role deleted successfully' });
+  res.status(200).json({ status: '200', message: `Role deleted successfully${syncNote}`, xauthSync });
 });
 
 // ─────────────────────────────────────────────
@@ -516,7 +560,32 @@ const updateRoleStatus = asyncHandler(async (req, res) => {
   }
 
   const statusText = status === '1' ? 'activated' : 'deactivated';
-  res.status(200).json({ status: '200', message: tmsg('role.status_changed', { status: statusText }), data: result.data });
+  const sync = await syncRoleToStaff360(parseInt(id), req, 'update');
+  res.status(200).json({
+    status: '200',
+    message: `${tmsg('role.status_changed', { status: statusText })}${sync.note}`,
+    data: result.data,
+    xauthSync: sync.xauthSync,
+  });
+});
+
+// ─────────────────────────────────────────────
+// @desc    Push every local role to Staff 360 (initial load, or to repair drift after a failed sync)
+// @route   POST /api/roles/xauth-sync
+// @access  manage_roles
+// ─────────────────────────────────────────────
+const syncRolesToStaff360 = asyncHandler(async (req, res) => {
+  if (!xauthRoles.enabled()) {
+    return res.status(503).json({ status: '503', message: 'Staff 360 role sync is not configured.' });
+  }
+  const userName = await xauthRoles.actorStaffId(req.user);
+  const report = await xauthRoles.reconcileAll(userName);
+  const failed = report.results.filter(r => !r.ok).length;
+  return res.status(report.ok ? 200 : 502).json({
+    status: report.ok ? '200' : '502',
+    message: report.message || (failed ? `${failed} role(s) failed to sync to Staff 360` : 'All roles are in sync with Staff 360'),
+    data: report,
+  });
 });
 
 
@@ -532,4 +601,5 @@ module.exports = {
   deleteRole,
   updateRole,
   updateRoleStatus,
+  syncRolesToStaff360,
 };

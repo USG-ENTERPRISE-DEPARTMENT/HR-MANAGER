@@ -1281,6 +1281,44 @@ exports.getMedicalEnquiryByEmployee = asyncHandler(async (req, res) => {
   }));
 });
 
+// ── PERSONAL MEDICAL BALANCE (mobile: GET /me/medical/balance) ───────────────
+
+// Just the figures for the authenticated employee — no record history. Uses computeMedicalBalance,
+// so it matches the web Medical Enquiry screen and the approval SMS exactly (Approved staff +
+// dependent records + approved hospital-claim items, current medical year). Pending claims are
+// reported separately and are NOT deducted from limit_balance.
+exports.getMyMedicalBalance = asyncHandler(async (req, res) => {
+  const empId = req.self?.id ? String(req.self.id) : (req.user?.employeeId ? String(req.user.employeeId) : null);
+  if (!empId || !toBigInt(empId)) return respond.ok(res, 'My medical balance', null);
+
+  const bal = await computeMedicalBalance(empId);
+  if (!bal) return respond.ok(res, 'My medical balance', null);
+  const { emp, frag, limit, currency, staffUsed, depUsed, utilized, balance } = bal;
+
+  const [staffPending] = await prisma.$queryRaw`SELECT SUM(cost) AS total FROM staffmedical WHERE employee = ${empId} AND status = 'Pending Approval'${Prisma.raw(frag.staff)}`.catch(() => [{ total: 0 }]);
+  const [depPending]   = await prisma.$queryRaw`SELECT SUM(cost) AS total FROM dependentmedical WHERE employee = ${empId} AND status = 'Pending Approval'${Prisma.raw(frag.dep)}`.catch(() => [{ total: 0 }]);
+  const pending = parseFloat(staffPending?.total ?? 0) + parseFloat(depPending?.total ?? 0);
+
+  const unlimited = limit !== null && limit >= UNLIMITED_MEDICAL_LIMIT;
+  const round2 = n => (n == null ? null : Math.round(n * 100) / 100);
+
+  respond.ok(res, 'My medical balance', {
+    employee_empid:   emp.employee_id,
+    employee_name:    `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
+    grade:            emp.pg_name ?? null,
+    currency,
+    has_limit:        limit !== null,
+    unlimited,
+    medical_limit:    unlimited ? null : round2(limit),
+    staff_utilized:   round2(staffUsed),
+    dep_utilized:     round2(depUsed),
+    total_utilized:   round2(utilized),
+    limit_balance:    unlimited || balance === null ? null : round2(Math.max(0, balance)),
+    pending_amount:   round2(pending),
+    available_after_pending: unlimited || balance === null ? null : round2(Math.max(0, balance - pending)),
+  });
+});
+
 // ── PERSONAL MEDICAL ENQUIRY (current user's employee) ───────────────────────
 
 // GET /medical/my-enquiry — return the authenticated user's own medical limit, utilisation, and full record history

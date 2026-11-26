@@ -9,7 +9,7 @@ const realtime = require('../helpers/realtime');
 router.use(realtime.changeBroadcaster);
 const { registerUser, loginUser, logoutUser, getAllUsers, getUserById, updateUser, changePassword, deactivateUser, activateUser,updateUserStatus,getMe,updateUserTheme } = require("../controllers/userController.js");
 const xauth = require('../controllers/xauthController');
-const { assignRoleToUser, revokeRoleFromUser, assignPermissionToUser, revokePermissionFromUser, getAllRoles, getAllPermissions, getUserAccess, addRole, deleteRole, updateRole, updateRoleStatus } = require('../controllers/rolePermissionController');
+const { assignRoleToUser, revokeRoleFromUser, assignPermissionToUser, revokePermissionFromUser, getAllRoles, getAllPermissions, getUserAccess, addRole, deleteRole, updateRole, updateRoleStatus, syncRolesToStaff360 } = require('../controllers/rolePermissionController');
 const roleGuard       = require('../middleware/roleGuard');
 const permissionGuard = require('../middleware/permissionGuard');
 
@@ -216,6 +216,7 @@ router.get   ('/system/code-lists/:code/values',                     getActiveVa
 // ─────────────────────────────────────────────
 router.get('/roles',           permissionGuard.any('view_users','manage_roles'), getAllRoles);
 router.post('/roles',          permissionGuard('manage_roles'), addRole);
+router.post('/roles/xauth-sync', permissionGuard('manage_roles'), syncRolesToStaff360);
 router.post('/roles/assign',   roleGuard('admin','super-admin'), assignRoleToUser);
 router.delete('/roles/revoke', roleGuard('admin','super-admin'), revokeRoleFromUser);
 router.put('/roles/:id',       permissionGuard('manage_roles'), updateRole);

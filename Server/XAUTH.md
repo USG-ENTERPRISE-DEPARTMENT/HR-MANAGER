@@ -14,6 +14,31 @@ For a PostgreSQL deployment, use `src/prisma/manual-migrations/20260728_add_xaut
 
 ---
 
+## Application access and role sync
+
+Staff 360 is the source of truth for **which HR-MANAGER roles a staff member holds** when they sign in through XAuth.
+
+**At login** (`xauthController.exchange`):
+
+- If `/decode` says `hasApplicationAccess: false` (or no roles), the login is refused with *"You do not have access to {appName}…"*. No session is created and no local user row is auto-provisioned.
+- Each role in `currentApplicationAccess.roles` is matched to a local **active** role by `roleId` = `roles.id`, falling back to `roleCode` (case-insensitive). If none match, the login is refused.
+- The user's `model_has_roles` rows are **replaced** by the matched set on every XAuth login, so roles granted or removed in Staff 360 take effect at the next login. Roles assigned locally to a user who signs in via XAuth are overwritten. The local email/password login is unchanged.
+- If the decode response has no application-access fields (older Staff 360), the locally assigned roles are kept as before.
+
+**Role sync** (`helpers/xauthRoleSync.js`): every local role is mirrored to Staff 360's XAuth Roles API using our own id as `roleId` and a code derived from the name (`HR Manager` → `HR-MANAGER`).
+
+| Local action | Staff 360 call |
+|---|---|
+| Create role | `POST /api/v1/xauth/roles` |
+| Rename / activate / deactivate | `PUT /api/v1/xauth/roles/{id}` (creates it if Staff 360 returns 404) |
+| Delete role | `DELETE /api/v1/xauth/roles/{id}`, sent **first**. A `409` (still assigned to staff) blocks the local delete. |
+
+A failed create/update never undoes the local save; the response message ends with *"(Staff 360 sync failed: …)"* and carries an `xauthSync` object. To push every role (initial load, or to repair drift) call **`POST /v1/api/hr/roles/xauth-sync`** (needs `manage_roles`). It creates or updates every role and lists any `orphans` (roles Staff 360 holds that no longer exist here) without deleting them.
+
+`userName` sent to Staff 360 is the actor's `employee.employee_id`, falling back to their username.
+
+---
+
 ## Embedded (no-URL) login — allowing this app to iframe the Staff360 sign-in page
 
 The HR portal shows the Staff360 sign-in **inside a modal iframe** so the user never sees a browser
@@ -85,7 +110,7 @@ They need to do **two** things:
 From a machine that can reach Staff360, check the header:
 
 ```bash
-curl -sI "http://10.203.14.15:8080/api/v1/xauth/signin/initiate?app_key=<APP_KEY>" \
+curl -sI "http://10.32.11.53:8282/api/v1/xauth/signin/initiate?app_key=<APP_KEY>" \
   | grep -iE "x-frame-options|content-security-policy"
 ```
 

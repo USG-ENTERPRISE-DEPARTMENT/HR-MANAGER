@@ -141,6 +141,7 @@ router.get ('/attendance/timesheet', me.getTimesheet);
 // Order of guards matters: ownership first (404 for someone else's record, so the response never
 // confirms it exists), then the Draft check.
 router.get ('/medical/enquiry',   me.getMedicalEnquiry);
+router.get ('/medical/balance',   me.getMedicalBalance);
 router.get ('/medical/staff',     me.getStaffMedical);
 router.post('/medical/staff',     upload.array('attachments', 3), me.createStaffMedical);
 router.put   ('/medical/staff/:id', upload.array('attachments', 3), me.staffMedicalOwnership, me.staffMedicalDraft, me.updateStaffMedical);
