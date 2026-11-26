@@ -188,7 +188,7 @@ async function pushEmployeeToExternalSystem(e) {
     bankName:          '',
     branch:            e.branch?.comp_code         || '',
     check:             1,
-    costCenter:        '',
+    costCenter:        pcCodes.costCenter(e.branch, e.department) || '',
     dateAppiont:       fmtDate(e.hireDate),
     dateOfBirth:       fmtDate(e.dateOfBirth),
     department:        e.department?.comp_code     || '',

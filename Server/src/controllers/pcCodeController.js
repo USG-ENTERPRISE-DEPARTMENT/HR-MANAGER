@@ -532,4 +532,5 @@ module.exports = {
   generateChildCode,
   currentHolderTag,
   openAssignmentForEmployee,
+  costCenter,
 };

@@ -24,6 +24,7 @@ Staff 360 is the source of truth for **which HR-MANAGER roles a staff member hol
 - Each role in `currentApplicationAccess.roles` is matched to a local **active** role by `roleId` = `roles.id`, falling back to `roleCode` (case-insensitive). If none match, the login is refused.
 - The user's `model_has_roles` rows are **replaced** by the matched set on every XAuth login, so roles granted or removed in Staff 360 take effect at the next login. Roles assigned locally to a user who signs in via XAuth are overwritten. The local email/password login is unchanged.
 - If the decode response has no application-access fields (older Staff 360), the locally assigned roles are kept as before.
+- **Accounts with no employee record** (system/admin logins such as `UNIONADMIN`): matched to a local user whose `username` equals the staff ID (case-insensitive) and that is not linked to an employee. If there is none, and Staff 360 granted roles, a username-only user is created. Name and email come from Staff 360. On an older Staff 360 with no access fields these logins are still refused.
 
 **Role sync** (`helpers/xauthRoleSync.js`): every local role is mirrored to Staff 360's XAuth Roles API using our own id as `roleId` and a code derived from the name (`HR Manager` → `HR-MANAGER`).
 

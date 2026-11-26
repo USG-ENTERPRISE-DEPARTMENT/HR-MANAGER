@@ -215,16 +215,45 @@ const exchange = asyncHandler(async (req, res) => {
       SELECT id, email, firstName, lastName, phone FROM employee WHERE employee_id = ? LIMIT 1
     `, [staffId]);
     const employee = employeeResult.data?.[0];
-    // No employee row either: they are a valid Staff360 user but unknown to HR-MANAGER.
-    if (!employee) return res.status(403).json({ status: '403', message: 'Your staff record has not been provisioned for this portal.' });
 
-    // Create the minimal user row and link it to the employee.
-    const created = await helper.dynamicInsert('users', {
-      username: decoded.username || staffId, employeeId: helper.safeBigInt(employee.id), status: '1',
-    });
-    if (created.status === 'error') throw new Error('Unable to create local XAuth user');
-    // Merge in the employee's contact details so the session response looks the same either way.
-    user = { ...created.data, email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone };
+    if (employee) {
+      // Create the minimal user row and link it to the employee.
+      const created = await helper.dynamicInsert('users', {
+        username: decoded.username || staffId, employeeId: helper.safeBigInt(employee.id), status: '1',
+      });
+      if (created.status === 'error') throw new Error('Unable to create local XAuth user');
+      // Merge in the employee's contact details so the session response looks the same either way.
+      user = { ...created.data, email: employee.email, firstName: employee.firstName, lastName: employee.lastName, phone: employee.phone };
+    } else {
+      // No employee record: a system/admin account (e.g. UNIONADMIN), not a staff member. Match a
+      // username-only local user (one not linked to any employee) by the staff id.
+      const byUsername = await helper.selectRecordsWithQuery(`
+        SELECT id, username, status, employeeId, theme FROM users
+        WHERE UPPER(username) = UPPER(?) AND employeeId IS NULL LIMIT 1
+      `, [staffId]);
+      if (byUsername.status === 'error') throw new Error(`Unable to look up XAuth user: ${byUsername.message}`);
+      user = byUsername.data?.[0];
+
+      // Still nothing. Staff 360 has explicitly granted this person roles in our app, so create a
+      // username-only account for them. Without that grant (legacy decode) we keep refusing, so an
+      // unknown identity never gets in on its own.
+      if (!user) {
+        if (!access.roleIds) return res.status(403).json({ status: '403', message: 'Your staff record has not been provisioned for this portal.' });
+        const created = await helper.dynamicInsert('users', { username: staffId, status: '1' });
+        if (created.status === 'error') throw new Error('Unable to create local XAuth user');
+        user = created.data;
+      }
+
+      // No employee to supply contact details; take them from Staff 360.
+      const fullName = String(decoded.fullName || decoded.muFullName || '').trim();
+      user = {
+        ...user,
+        email: decoded.email || decoded.muEmail || null,
+        firstName: decoded.firstName || fullName || user.username,
+        lastName: decoded.lastName || null,
+        phone: decoded.mobilePhone || null,
+      };
+    }
   }
 
   // Even a valid Staff360 login is refused if the local account has been disabled.
