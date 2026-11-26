@@ -111,20 +111,31 @@ async function resolveApplicationRoles(decoded) {
   const granted = Array.isArray(decoded.currentApplicationAccess?.roles) ? decoded.currentApplicationAccess.roles : [];
   if (!decoded.hasApplicationAccess || granted.length === 0) return { denied: noAccess };
 
-  // We sync our own role ids to Staff 360, so roleId normally matches roles.id. roleCode (derived
-  // from the role name, compared case-insensitively) is the fallback for roles created on the
-  // Staff 360 side with a different id.
+  // A failed lookup must not masquerade as "your roles aren't set up": let it surface as a 500.
   const local = await helper.selectRecordsWithQuery(`SELECT id, name FROM roles WHERE status = '1'`, []);
-  const byId = new Map((local.data || []).map(r => [String(r.id), r]));
-  const byCode = new Map((local.data || []).map(r => [roleCodeFor(r.name), r]));
+  if (local.status === 'error') throw new Error(`Unable to load roles for XAuth login: ${local.message}`);
+  const localRoles = local.data || [];
+
+  // Match order: roleId = roles.id (we sync our own ids), then roleCode, then roleName. Codes and
+  // names are compared loosely (case and punctuation ignored) so "super-admin", "SUPER_ADMIN",
+  // "Super Admin" and "superadmin" are the same role; Staff 360 data was not created consistently.
+  const loose = (s) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const byId = new Map(localRoles.map(r => [String(r.id), r]));
+  const byKey = new Map();
+  for (const r of localRoles) {
+    for (const k of [loose(r.name), loose(roleCodeFor(r.name))]) if (k && !byKey.has(k)) byKey.set(k, r);
+  }
 
   const matched = new Map();
   for (const g of granted) {
-    const role = byId.get(String(g.roleId ?? '')) || byCode.get(String(g.roleCode || '').toUpperCase());
+    const role = byId.get(String(g.roleId ?? '')) || byKey.get(loose(g.roleCode)) || byKey.get(loose(g.roleName));
     if (role) matched.set(String(role.id), helper.safeBigInt(role.id));
-    else console.warn(`[xauth] Staff 360 granted role ${g.roleId}/${g.roleCode} which does not exist (or is inactive) in HR-MANAGER.`);
   }
   if (matched.size === 0) {
+    console.warn(
+      `[xauth] ${decoded.staffId || decoded.username}: none of the Staff 360 roles ${JSON.stringify(granted)} match an active local role. `
+      + `Active local roles: ${JSON.stringify(localRoles.map(r => ({ id: String(r.id), name: r.name })))}`,
+    );
     return { denied: `Your ${appName} role(s) are not set up in this portal yet. Please contact your administrator.` };
   }
   return { roleIds: [...matched.values()] };
